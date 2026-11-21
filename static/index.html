@@ -92,14 +92,14 @@
 <body>
 <main>
   <h1>Dream-1 Simulator</h1>
-  <p class="sub">Type a task, press Run, and watch Dream-1 move two robot arms. Then decide what counts as success.</p>
+  <p class="sub">Run a task → set the rules → save labels.</p>
 
-  <div id="keyNotice" class="notice" hidden>No Dream API key found. Put <code>DREAM_API_KEY=...</code> in <code>~/.dreamlabs/credentials</code> and restart (see README).</div>
+  <div id="keyNotice" class="notice" hidden>No API key. See README.</div>
 
   <section class="panel">
     <div class="row">
       <div class="grow"><label for="task">Task</label><input id="task" value="put apple into the bowl"></div>
-      <div><label for="seconds">Time limit (s)</label><input id="seconds" type="number" min="10" max="300" value="60"></div>
+      <div><label for="seconds">Seconds</label><input id="seconds" type="number" min="10" max="300" value="60"></div>
       <button id="run">Run</button>
       <button id="stop" class="stop" hidden>Stop</button>
     </div>
@@ -109,36 +109,35 @@
   <section class="panel">
     <div class="status"><span class="dot" id="dot"></span><strong id="statusText">Ready</strong><span class="muted" id="statusMore"></span></div>
     <img id="live" class="view" alt="Live camera view" hidden>
-    <div id="placeholder" class="view placeholder">The cameras appear here when you press Run.</div>
-    <div class="legend">Left: top camera · Right: left and right wrist cameras</div>
-    <pre id="log" hidden></pre>
+    <div id="placeholder" class="view placeholder">Press Run to start.</div>
+    <details id="logBox" hidden><summary class="legend">Log</summary><pre id="log"></pre></details>
   </section>
 
   <section class="panel">
     <h2>Success rules</h2>
-    <p class="hint">A run is a success when all three rules hold. Change them and every run below is judged again right away.</p>
+    <p class="hint">All 3 must pass.</p>
     <div class="banners">
       <div class="banner">
-        <div class="head"><span class="num">1</span>Distance to target</div>
+        <div class="head"><span class="num">1</span>Distance</div>
         <div class="value"><span id="distanceValue">6.5</span> <small>cm</small></div>
         <input type="range" id="distance" min="1" max="15" step="0.5" value="6.5" aria-label="Distance to target in centimetres">
-        <div class="scale"><span>1 cm · strict</span><span>15 cm · loose</span></div>
-        <p>The object's centre must be within this distance of the bowl's or plate's centre (seen from above), and down at the target, not lifted above it.</p>
+        <div class="scale"><span>strict</span><span>loose</span></div>
+        <p>Object to bowl/plate center</p>
       </div>
       <div class="banner">
-        <div class="head"><span class="num">2</span>Letting go</div>
-        <div class="toggle" role="group" aria-label="Letting go">
-          <button id="releaseYes" aria-pressed="true">Must let go</button>
-          <button id="releaseNo" aria-pressed="false">Holding is OK</button>
+        <div class="head"><span class="num">2</span>Release</div>
+        <div class="toggle" role="group" aria-label="Release">
+          <button id="releaseYes" aria-pressed="true">Must release</button>
+          <button id="releaseNo" aria-pressed="false">Can hold</button>
         </div>
-        <p id="releaseText">The grippers must not touch the object: the robot has to put it down.</p>
+        <p id="releaseText"></p>
       </div>
       <div class="banner">
-        <div class="head"><span class="num">3</span>Time standing still</div>
+        <div class="head"><span class="num">3</span>Still time</div>
         <div class="value"><span id="stillValue">1.0</span> <small>s</small></div>
         <input type="range" id="still" min="0" max="5" step="0.5" value="1" aria-label="Seconds the object must stay still">
-        <div class="scale"><span>0 s · at once</span><span>5 s · long</span></div>
-        <p>After rules 1 and 2 are met, they must keep holding and the object must stay still (moving less than 1 cm) for this long.</p>
+        <div class="scale"><span>0 s</span><span>5 s</span></div>
+        <p>Stays still after 1 and 2</p>
       </div>
     </div>
     <div class="saved-note" id="rulesNote"></div>
@@ -146,17 +145,17 @@
 
   <section class="panel">
     <div class="row" style="justify-content: space-between; align-items: center;">
-      <div><h2>Runs</h2><p class="hint" style="margin:0">Results use the rules above. Click a run to see why.</p></div>
-      <button id="saveLabels" class="ghost">Save labels for all runs</button>
+      <h2>Runs</h2>
+      <button id="saveLabels" class="ghost">Save labels</button>
     </div>
     <table style="margin-top:10px">
-      <thead><tr><th>When</th><th>Task</th><th>Result</th><th class="hide-sm">Why</th><th class="hide-sm">Saved label</th></tr></thead>
-      <tbody id="runs"><tr><td colspan="5" class="muted">No runs yet. Press Run above.</td></tr></tbody>
+      <thead><tr><th>When</th><th>Task</th><th>Result</th><th class="hide-sm">Why</th><th class="hide-sm">Saved</th></tr></thead>
+      <tbody id="runs"><tr><td colspan="5" class="muted">No runs yet.</td></tr></tbody>
     </table>
     <div id="detail" class="detail" hidden>
       <div>
-        <img id="detailImage" class="view" alt="The cameras at the end of the run">
-        <div class="legend">The cameras at the end of the run</div>
+        <img id="detailImage" class="view" alt="Last frame">
+        <div class="legend">Last frame</div>
       </div>
       <div>
         <div id="detailHead"></div>
@@ -165,10 +164,10 @@
       <div style="grid-column: 1 / -1">
         <svg class="chart" id="chart" viewBox="0 0 640 190" role="img" aria-label="Distance from the object to the target over time"></svg>
         <div class="chart-legend">
-          <span><span class="sw" style="background:var(--accent)"></span>distance to target</span>
-          <span><span class="sw" style="background:var(--muted)"></span>rule 1 limit</span>
-          <span><span class="sw" style="background:var(--touch)"></span>gripper touching the object</span>
-          <span><span class="sw" style="background:var(--ok);opacity:.35"></span>success: all rules held</span>
+          <span><span class="sw" style="background:var(--accent)"></span>distance</span>
+          <span><span class="sw" style="background:var(--muted)"></span>limit</span>
+          <span><span class="sw" style="background:var(--touch)"></span>gripping</span>
+          <span><span class="sw" style="background:var(--ok);opacity:.35"></span>success</span>
         </div>
       </div>
     </div>
@@ -180,7 +179,6 @@ const $ = id => document.getElementById(id);
 const STILL_CM = 1;          // rule 3: "still" means moving less than this
 const MAX_ABOVE_CM = 10;     // rule 1: no higher than this above the target's base
 const MIN_ABOVE_CM = -5;     // rule 1: lower than this means it fell off the table
-const NAMES = { apple: "apple", orange: "orange", banana: "banana", water_bottle: "water bottle" };
 
 let rules = { distance_cm: 6.5, release: true, still_seconds: 1.0 };
 let runs = [], trajectories = {}, selected = null, liveTimer = null, lastRunId = null, wasRunning = false;
@@ -209,21 +207,20 @@ function parseTask(task) {
 /** Judge one trajectory with the current rules. */
 function judge(run, traj, r) {
   const parsed = parseTask(run.task);
-  if (!parsed) return { label: "unknown", reason: "Task not understood: use “put <apple|orange|banana|water bottle> into/on the <bowl|plate>”." };
+  if (!parsed) return { label: "unknown", reason: "Unknown task (use: put apple into the bowl)" };
   const t = traj.t, P = traj.positions[parsed.object], T = traj.positions[parsed.target], touch = traj.touching[parsed.object];
   const n = t.length;
-  if (n < 2) return { label: "unknown", reason: "The run is too short to judge." };
-  const obj = NAMES[parsed.object], tgt = parsed.target;
+  if (n < 2) return { label: "unknown", reason: "Too short" };
 
   const dist = [], near = [], ok = [];
-  let closest = Infinity, closestAt = 0, everNear = false, everNearReleased = false;
+  let closest = Infinity, everNear = false, everNearReleased = false;
   for (let i = 0; i < n; i++) {
     const d = Math.hypot(P[i][0] - T[i][0], P[i][1] - T[i][1]) * 100;
     const above = (P[i][2] - T[i][2]) * 100;
     dist.push(d);
     near.push(d <= r.distance_cm && above <= MAX_ABOVE_CM && above >= MIN_ABOVE_CM);
     ok.push(near[i] && (!r.release || !touch[i]));
-    if (d < closest) { closest = d; closestAt = t[i]; }
+    if (d < closest) closest = d;
     everNear ||= near[i];
     everNearReleased ||= ok[i];
   }
@@ -239,17 +236,19 @@ function judge(run, traj, r) {
     if (held >= r.still_seconds - 1e-6) success = { start: t[i], end: t[i] + r.still_seconds };
   }
 
+  // ok: true pass, false fail, null not checked (an earlier rule failed)
   const checks = [
-    { ok: everNear, text: everNear ? `The ${obj} came within ${fmt(r.distance_cm)} cm of the ${tgt}.` : `The ${obj} never came within ${fmt(r.distance_cm)} cm of the ${tgt} (closest ${fmt(closest)} cm at ${fmt(closestAt)} s).` },
-    r.release
-      ? { ok: everNearReleased, text: everNearReleased ? `It was there with the grippers off it.` : (everNear ? `It was there, but the grippers never let go.` : `Not reached: rule 1 failed first.`) }
-      : { ok: true, text: `Holding is allowed.` },
-    { ok: success !== null, text: success ? `It stayed there, still, for ${fmt(r.still_seconds)} s.` : (everNearReleased ? `It never stayed there still for ${fmt(r.still_seconds)} s (longest ${fmt(longest)} s).` : `Not reached: an earlier rule failed.`) },
+    { ok: everNear, text: everNear ? `Distance: OK` : `Distance: closest ${fmt(closest)} cm (limit ${fmt(r.distance_cm)})` },
+    !r.release ? { ok: true, text: `Release: can hold` }
+      : everNearReleased ? { ok: true, text: `Release: OK` }
+      : everNear ? { ok: false, text: `Release: never released` } : { ok: null, text: `Release` },
+    success ? { ok: true, text: `Still: OK` }
+      : everNearReleased ? { ok: false, text: `Still: ${fmt(longest)} s (need ${fmt(r.still_seconds)})` } : { ok: null, text: `Still` },
   ];
-  const failed = checks.find(c => !c.ok);
+  const failed = checks.find(c => c.ok === false);
   return {
     label: success ? "success" : "failure",
-    reason: success ? `In the ${tgt} at ${fmt(success.start)} s` : failed.text,
+    reason: success ? `Placed at ${fmt(success.start)} s` : failed.text,
     success, checks, dist, touch, t, closest,
   };
 }
@@ -262,18 +261,16 @@ function showRules() {
   $("still").value = rules.still_seconds; $("stillValue").textContent = fmt(rules.still_seconds);
   $("releaseYes").classList.toggle("on", rules.release); $("releaseYes").setAttribute("aria-pressed", rules.release);
   $("releaseNo").classList.toggle("on", !rules.release); $("releaseNo").setAttribute("aria-pressed", !rules.release);
-  $("releaseText").textContent = rules.release
-    ? "The grippers must not touch the object: the robot has to put it down."
-    : "The object may still be in the gripper, as long as it is at the target.";
+  $("releaseText").textContent = rules.release ? "Gripper must let go" : "Gripper may still hold it";
 }
 function changeRules(patch) {
   rules = { ...rules, ...patch };
   showRules(); renderRuns();
-  $("rulesNote").textContent = "Saving…";
+  $("rulesNote").textContent = "";
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
-    try { await api("/api/rules", rules); $("rulesNote").textContent = "Rules saved."; }
-    catch (err) { $("rulesNote").textContent = "Could not save the rules: " + err.message; }
+    try { await api("/api/rules", rules); $("rulesNote").textContent = "Saved"; }
+    catch (err) { $("rulesNote").textContent = "Not saved: " + err.message; }
   }, 400);
 }
 $("distance").oninput = e => changeRules({ distance_cm: Number(e.target.value) });
@@ -293,7 +290,7 @@ async function loadRuns() {
 
 function verdict(run) {
   const traj = trajectories[run.id];
-  return traj ? judge(run, traj, rules) : { label: "unknown", reason: "No trajectory saved for this run." };
+  return traj ? judge(run, traj, rules) : { label: "unknown", reason: "No data" };
 }
 
 function renderRuns() {
@@ -302,7 +299,7 @@ function renderRuns() {
     const v = verdict(run), saved = run.label;
     return `<tr data-id="${esc(run.id)}" class="${run.id === selected ? "sel" : ""}">
       <td>${when(run.started_at)}</td>
-      <td>${esc(run.task)}${run.stopped_by_user ? ' <span class="muted">(stopped)</span>' : ""}</td>
+      <td>${esc(run.task)}</td>
       <td>${chip(v.label)}</td>
       <td class="hide-sm">${esc(v.reason)}</td>
       <td class="hide-sm">${saved ? chip(saved.label) : '<span class="muted">—</span>'}</td>
@@ -318,9 +315,9 @@ function renderDetail() {
   if (!run) return;
   const v = verdict(run);
   $("detailImage").src = `/api/runs/${run.id}/last.jpg`;
-  $("detailHead").innerHTML = `${chip(v.label)} <strong>${esc(run.task)}</strong><div class="muted" style="font-size:13px">${when(run.started_at)} · ${fmt(run.sim_seconds || 0)} s simulated</div>`;
+  $("detailHead").innerHTML = `${chip(v.label)} <strong>${esc(run.task)}</strong><div class="muted" style="font-size:13px">${when(run.started_at)} · ${fmt(run.sim_seconds || 0)} s</div>`;
   $("detailChecks").innerHTML = (v.checks || [{ ok: false, text: v.reason }])
-    .map((c, i) => `<li><span class="${c.ok ? "y" : "n"}">${c.ok ? "✓" : "✗"}</span> Rule ${i + 1}: ${esc(c.text)}</li>`).join("");
+    .map(c => `<li><span class="${c.ok ? "y" : c.ok === false ? "n" : "muted"}">${c.ok ? "✓" : c.ok === false ? "✗" : "–"}</span> ${esc(c.text)}</li>`).join("");
   drawChart(v);
 }
 
@@ -362,8 +359,8 @@ $("saveLabels").onclick = async () => {
   }
   try {
     const { saved } = await api("/api/labels", { rules, labels });
-    $("saveLabels").textContent = `Saved ${saved} labels`;
-    setTimeout(() => { $("saveLabels").textContent = "Save labels for all runs"; }, 2500);
+    $("saveLabels").textContent = `Saved ${saved}`;
+    setTimeout(() => { $("saveLabels").textContent = "Save labels"; }, 2500);
     runs = (await api("/api/runs")).runs; renderRuns();
   } catch (err) { alert(err.message); }
 };
@@ -379,7 +376,7 @@ function showLive() {
 async function refresh() {
   let s;
   try { s = await api("/api/status"); }
-  catch { $("statusText").textContent = "Cannot reach app.py. Is it running?"; return; }
+  catch { $("statusText").textContent = "Server is off (run python app.py)"; return; }
 
   $("keyNotice").hidden = s.api_key;
   if (!$("examples").childElementCount) {
@@ -397,10 +394,10 @@ async function refresh() {
     $("statusText").textContent = "Running";
     $("statusMore").textContent = `${s.task} · ${s.elapsed_s} s`;
   } else if (s.task) {
-    $("statusText").textContent = s.exit_code === 0 ? "Finished" : "Stopped with an error";
+    $("statusText").textContent = s.exit_code === 0 ? "Done" : "Error";
     $("statusMore").textContent = `${s.task} · ${s.elapsed_s} s`;
   }
-  $("log").hidden = !s.log.length;
+  $("logBox").hidden = !s.log.length;
   $("log").textContent = s.log.join("\n");
   $("log").scrollTop = $("log").scrollHeight;
 
@@ -416,7 +413,7 @@ $("run").onclick = async () => {
     await api("/api/run", { task: $("task").value, seconds: $("seconds").value });
     $("live").hidden = true;
     $("placeholder").hidden = false;
-    $("placeholder").textContent = "Starting the simulator… (the first picture takes a few seconds)";
+    $("placeholder").textContent = "Starting…";
     refresh();
   } catch (err) { alert(err.message); }
 };
