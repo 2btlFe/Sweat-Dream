@@ -13,6 +13,9 @@ Run modes (KSY: monitor.py, recovery.py, teleop.py, recorder.py):
     python sim.py --resume <run id> --resume-step 120        restart a recorded run at step 120, exactly as it was, with a
                                                              human in control
     python sim.py "put apple into the bowl" --plain          Dream-1 only: no monitor, script or human control
+Data collection options (faster successes): --stall-s 6 (hand over after 6 s without progress), --quick-fail (also a
+missed grasp or an object pushed away), --script-goal finish (the script finishes the task, not only picks it up),
+--script-speed 2 (the script moves twice as fast as Dream-1), --end-on-success (end the run when the task is done).
     (no mode flag: Dream-1, then the recovery script, then a human if the script gives up)
 OpenYAM and custom layouts without all six items always run as --plain (the monitor and teleop need the YAM table).
 
@@ -81,6 +84,7 @@ from sandbox_env import SandboxEnv  # noqa: E402  OpenYAM on the Sandbox table (
 from monitor import Monitor  # noqa: E402  failure monitor (KSY)
 from recorder import BODIES, EPISODES_DIR, PHYSICS, EpisodeRecorder  # noqa: E402  episode recorder (KSY)
 from recovery import Recovery  # noqa: E402  recovery script (KSY)
+import teleop  # noqa: E402
 from teleop import STEP_S, Teleop, camera_position, select  # noqa: E402  human control (KSY)
 
 HERE = Path(__file__).resolve().parent
@@ -481,7 +485,10 @@ def start_ksy(env, args, meta, stop, source_dir):
             tolerance = judge.normalize_rules(saved)["goal"]["tolerance_cm"]
     except (ValueError, OSError, TypeError, KeyError):
         pass
-    MONITOR = Monitor(args.task, env, goal=goal, tolerance_cm=tolerance)
+    quick = COLLECT  # data collection may use the faster failure signals; other modes keep the monitor's defaults
+    MONITOR = Monitor(args.task, env, goal=goal, tolerance_cm=tolerance,
+                      stall_s=args.stall_s if quick and args.stall_s else 12.0,
+                      quick=quick and args.quick_fail, finish=quick and args.script_goal == "finish")
     if goal:
         print("  Goal scene: " + "; ".join(f"{o} {e.get('in') or e.get('near') or 'spot'}" for o, e in goal["objects"].items()),
               flush=True)
@@ -536,7 +543,9 @@ def start_ksy(env, args, meta, stop, source_dir):
         if previous_mode[0] in ("human", "script") and mode in ("returning", "dream"):
             MONITOR.recovered()  # the human or the script gave the arms back: watch Dream-1 again from here
         previous_mode[0] = mode
-        event = MONITOR.update(env, watching=(mode == "dream" and TELEOP.dream_available))
+        # Failures are looked for only once Dream-1 has started acting (its first chunk), so the time without
+        # progress does not include its start-up.
+        event = MONITOR.update(env, watching=(mode == "dream" and TELEOP.dream_available and DREAM_STARTED[0]))
         if event:
             print(f"  Monitor: {event}" + (f" · recovery goal: {MONITOR.status()['goal']}" if MONITOR.goal else ""),
                   flush=True)
@@ -551,6 +560,13 @@ def start_ksy(env, args, meta, stop, source_dir):
             script_result[0] = RECOVERY.result
             if RECORDER is not None and RECOVERY.result:
                 RECORDER.event("script", result=RECOVERY.result)
+        if args.end_on_success and COLLECT and not stop.is_set() and MONITOR.stage == "success":
+            # The task is done (placed, released, at rest): end here, before anything can undo it.
+            print("  Ending the run: the task is done.", flush=True)
+            meta["ended_early"] = "task done"
+            if RECORDER is not None:
+                RECORDER.event("ended", reason="task done")
+            stop.set()
         if COLLECT and not stop.is_set() and (TELEOP.mode == "paused" or event == "off_table"):
             # Data collection asks no human: a failure the script could not recover ends the run here. It is a failure
             # to recover by hand later, from the Recordings panel (it resumes before the model failed).
@@ -626,6 +642,12 @@ def main():
     parser.add_argument("--resume-step", type=int, default=0, help="the step of --resume to start from")
     parser.add_argument("--no-record", action="store_true", help="do not record the run to episodes/")
     parser.add_argument("--plain", action="store_true", help="Dream-1 only: no monitor, recovery script or human control")
+    parser.add_argument("--stall-s", type=float, help="data collection: seconds without progress before the script takes over")
+    parser.add_argument("--quick-fail", action="store_true", help="data collection: a missed grasp or a pushed-away object fails at once")
+    parser.add_argument("--script-goal", choices=("carry", "finish"), default="carry",
+                        help="data collection: the script picks the object up and gives the arms back (carry), or finishes the task")
+    parser.add_argument("--script-speed", type=float, default=1.0, help="data collection: the script's speed, x Dream-1's pace (1 to 3)")
+    parser.add_argument("--end-on-success", action="store_true", help="end the run once the monitor sees the task done")
     scene.add_arguments(parser)  # --seed, --default-scene, --split, --setting, --ood-random
     args = parser.parse_args()
     source_dir = resume_options(args) if args.resume else None
@@ -654,6 +676,10 @@ def main():
     COLLECT = KSY and args.collect and not args.teleop and not args.resume
     if COLLECT:
         args.recover = "script"
+        speed = max(1.0, min(3.0, args.script_speed))
+        for name in ("SCRIPT_SPEED_M_S", "SCRIPT_ACCEL_M_S2", "SCRIPT_MAX_JOINT_RAD_S", "SCRIPT_JOINT_ACCEL_RAD_S2"):
+            setattr(teleop, name, getattr(teleop, name) * speed)
+        teleop.SCRIPT_GRIP_SECONDS /= speed
     mode = ("plain" if not KSY else "resumed" if args.resume else "human" if args.teleop else "collect" if COLLECT
             else "test" if args.recover == "human" else "assist")
     if not openyam:
@@ -701,6 +727,8 @@ def main():
             "mode": mode, "resumed_from": {"run": Path(args.resume).name, "step": args.resume_step} if args.resume else None,
             # A human ends human, test and resumed runs with Stop: that is their normal end, not a cut-short run.
             "stop_ends_run": mode in ("human", "test", "resumed"),
+            "collection": {"stall_s": args.stall_s, "quick_fail": args.quick_fail, "script_goal": args.script_goal,
+                           "script_speed": args.script_speed, "end_on_success": args.end_on_success} if COLLECT else None,
             "ood_random": args.ood_random, "ood": None,
             "started_at": datetime.now().isoformat(timespec="seconds"), "stopped_by_user": False,
             "error": None, "error_type": None, "scene": SCENE or None,

@@ -40,7 +40,23 @@ Open http://localhost:8000.
    rules: changing the rules or **Save labels** never replaces it, and `label.json` keeps the rules' verdict beside
    it (`source: "human"`, `rules_verdict`). The run list marks these runs with ✋, and its filter can show only them
    or only the ones where you and the rules disagree.
-9. **Delete**: **Delete this run** (in a run's detail), **Delete shown** (every run the list shows, e.g. one batch) or
+9. **Datasets**: each row's **+ / −** puts the run in the dataset or takes it out; **+ Add successes** picks every
+   success the list shows (e.g. one batch). **Save dataset…** opens a popup: a name, and the folder on this computer to
+   save in (type a full path, or browse: Project datasets, Home, Desktop, Documents, Downloads, then into folders;
+   the last folder is remembered). It writes `<folder>/<time>-<name>/` (`datasets/` by default): `runs/<id>/` and the
+   recording `episodes/<id>/` of every picked run (hard links on the same disk: no extra space, and they stay if a run
+   is deleted later; copies on another disk),
+   and `manifest.json` with each run's final label (yours first), the rules' verdict, the judge spec, who acted, and
+   its settings. Each run's settings (mode, robot and room, seed or layout, scene settings and the ones drawn from
+   the seed, data collection settings, time limit, batch) show under its task in the list and in full in its detail.
+   With **Dream Labs format** ticked in the popup (the default), the recordings are also written as one LeRobot v2.1 dataset in
+   `dream_format/`, the format Dream Labs fine-tuning uploads, and checked with the Dream Labs checks
+   (`dream.datasets.validate_dataset`, on this computer, nothing sent). One row per camera frame (5 per second):
+   `observation.state` and `action` are 14 values, right arm first (6 joints in rad, gripper 0 closed .. 1 open, then
+   the left arm); cameras `overhead`, `wrist_l`, `wrist_r`. `embodiment.json` holds the config to register the robot
+   with; then `client.upload_dataset("<folder>/dream_format", "<name>", "<embodiment>")` uploads it.
+   Runs without a recording (Plain mode) and recordings shorter than 1.6 s are left out (`lerobot_export.py`).
+10. **Delete**: **Delete this run** (in a run's detail), **Delete shown** (every run the list shows, e.g. one batch) or
    **Delete** in Recordings removes a finished run for good: `runs/<id>` and its recording `episodes/<id>`. The page
    asks first; the run going now is never deleted.
 
@@ -58,7 +74,23 @@ marked random are then not drawn (they need the seed).
 | **Dream-1 only** | No monitor, script or human control. OpenYAM, and custom layouts without all six items, always run this way. |
 
 Failures the monitor sees (pick & place tasks): **dropped** (carried, then fell back outside the target), **stalled**
-(12 s without progress), **off_table** (cannot be recovered). The recovery goal is to pick the object up again, or to
+(12 s without progress), **off_table** (cannot be recovered).
+
+**Data collection settings** (shown in data collection mode, single runs and batches), for faster successes:
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| Hand over after | 6 s | seconds without progress before the script takes over (counted from Dream-1's first move) |
+| Quick signals | on | also hand over at once on a **missed grasp** (gripper closed next to the object, not lifted 2 s later) or an object **pushed away** (slid 6 cm, further from the target) |
+| The script | finishes the task | picks the object up, puts it in the target, lets go; or *picks it up, back to Dream-1* (the old behaviour) |
+| Script speed | Dream-1's pace | 1.5×, 2× or 3× makes recoveries faster, but less like Dream-1's motion |
+| End when done | on | the run ends as soon as the task is done (placed, released, at rest), so nothing undoes it |
+
+Measured (3 real runs at once, same seeds, 60 s): 3 of 3 successes, ended 35-45 s in (Dream-1 handed over at 15-25 s,
+once on a missed grasp); with the old behaviour (12 s, pick up and hand back) 1 of 3.
+
+When Dream-1 is at capacity (`DA-2000 NO_CAPACITY`, shared by everyone), a batch tries that episode again (same seed)
+after 5, 10, 15, ... s, up to 5 times, and drops the attempt. The recovery goal is to pick the object up again, or to
 finish the task if it was already carried; the page turns green when it is reached, and `T` gives the arms back.
 
 **Mouse** on the camera pictures: click an object (the nearer arm moves its hand 10 cm above it; a click in a wrist
@@ -84,7 +116,8 @@ like any other run (Stop is its normal end).
 ### Batch (many episodes in the background)
 
 Switch to **Batch**. Pick what each episode does (**Data collection**: Dream-1, then the recovery script on a
-failure; or **Dream-1 only**), the number of episodes and the seconds per episode, and the seeds: **Seed, Seed + 1, …**
+failure; or **Dream-1 only**), how many run **at once** (1 to 4), the number of episodes and the seconds per
+episode, and the seeds: **Seed, Seed + 1, …**
 (train seeds, from the Seed field) or **Eval set (50)** (the fixed evaluation seeds, easy / medium / hard). Each
 episode starts from its seed's scene, with the scene settings above; the ones marked random are drawn from each
 episode's seed. The cameras are not shown; the page shows progress, success / failure / invalid counts and the time
@@ -99,6 +132,12 @@ target), e.g. "put the apple in the bowl and the banana on the plate" → apple 
 only when every pair holds the rules at the end; otherwise the reason says how many were placed and which object
 failed first (e.g. `1/2 placed; banana: outside_target`). The run's chart has one line per object. Give these
 episodes more time (90–120 s for two objects).
+
+**At once**: each episode is its own simulator process, so several run side by side; episode *i* still gets the
+*i*-th seed and task, whatever order they finish in. On an M3 (8 cores), 3 Dream-1 episodes at once ran as fast as one
+(simulated time, response times) with no session errors; more at once can slow every simulator, and a Dream-1
+session expires after about 10 s without a request, so raise it with care. Each episode's output is kept in a log
+file while the server runs; **Stop batch** stops every episode that is going.
 
 Every run keeps its seed, split, scene settings and the values drawn from the seed in `meta.json`, so its start can
 be made again (`python sim.py "..." --seed N --ood-random ...`). Each batch episode is labeled with the rules as they were when the batch started (`runs/<id>/label.json`, `source: batch`). A batch

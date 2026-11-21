@@ -39,6 +39,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import judge
+import lerobot_export  # the Dream Labs dataset format (LeRobot v2.1) for saved datasets
 import ood
 import seed_web
 import simulator_settings as sim_settings  # the seed (scene.py): seed field, random scene controls
@@ -61,7 +62,31 @@ LIVE = WORK / "live.jpg"
 STOP = WORK / "stop"
 TELEOP_STATE = WORK / "teleop.json"
 EPISODES = HERE / "episodes"  # KSY's recordings (recorder.py), one per run id
+DATASETS = HERE / "datasets"  # datasets saved from the page: chosen runs, their recordings and a manifest
 MODES = ("collect", "test", "human", "plain")
+## Data collection: how fast a failure is handed to the recovery script, and what it does (sim.py's options).
+COLLECTION = {"stall_s": 6.0, "quick_fail": True, "script_goal": "finish", "script_speed": 1.0, "end_on_success": True}
+
+
+def collection_args(given):
+    """sim.py's data collection options from the page's settings (defaults: COLLECTION).
+    @return (the settings, the arguments). @throws ValueError"""
+    c = {**COLLECTION, **(given or {})}
+    try:
+        stall, speed = float(c["stall_s"]), float(c["script_speed"])
+    except (TypeError, ValueError) as error:
+        raise ValueError("Collection settings: numbers expected.") from error
+    if not 2 <= stall <= 30:
+        raise ValueError("Hand over after 2 to 30 s without progress.")
+    if not 1 <= speed <= 3:
+        raise ValueError("The script's speed is 1 to 3 times Dream-1's.")
+    if c["script_goal"] not in ("carry", "finish"):
+        raise ValueError("The script's goal is carry or finish.")
+    c = {"stall_s": stall, "quick_fail": bool(c["quick_fail"]), "script_goal": c["script_goal"],
+         "script_speed": speed, "end_on_success": bool(c["end_on_success"])}
+    args = ["--stall-s", f"{stall:g}", "--script-goal", c["script_goal"], "--script-speed", f"{speed:g}"]
+    args += (["--quick-fail"] if c["quick_fail"] else []) + (["--end-on-success"] if c["end_on_success"] else [])
+    return c, args
 PREVIEW_LOCK = threading.Lock()
 ## Tasks without a bowl or plate are run but not judged (the judge needs an object and a target).
 EXAMPLES = [
@@ -163,7 +188,7 @@ class Runner:
         return self.process is not None and self.process.poll() is None
 
     def start(self, task, seconds, changes=None, seeding=(), scene=None, live=True, extra_env=None, robot=(),
-              mode="plain", record=True, resume=None):
+              mode="plain", record=True, resume=None, collection=()):
         """Start one run of sim.py.
         @param changes Scene settings (ood.validate output).
         @param seeding sim.py's seed arguments (seed_web.seeding_args): --seed, --ood-random.
@@ -179,7 +204,8 @@ class Runner:
             if not has_api_key() and mode != "human" and not resume:  # a human-only run calls no Dream-1 until T
                 raise RuntimeError("Enter your API key first.")
             self.last_start = dict(task=task, seconds=seconds, changes=changes, seeding=seeding, scene=scene,
-                                   live=live, extra_env=extra_env, robot=robot, mode=mode, record=record, resume=resume)
+                                   live=live, extra_env=extra_env, robot=robot, mode=mode, record=record, resume=resume,
+                                   collection=collection)
             TELEOP_STATE.unlink(missing_ok=True)
             STOP.unlink(missing_ok=True)
             LIVE.unlink(missing_ok=True)
@@ -202,8 +228,8 @@ class Runner:
             else:
                 command.extend(seeding)
             if not resume:
-                command += {"collect": ["--collect"], "test": ["--recover", "human"], "human": ["--teleop"],
-                            "plain": ["--plain"]}[mode]
+                command += {"collect": ["--collect", *collection], "test": ["--recover", "human"],
+                            "human": ["--teleop"], "plain": ["--plain"]}[mode]
             if not record:
                 command.append("--no-record")
             self.process = subprocess.Popen(
@@ -364,7 +390,7 @@ def delete_runs(run_ids):
     never deleted. @return (deleted ids, skipped ids)."""
     deleted, skipped = [], []
     for run_id in run_ids:
-        busy = RUNNER.running() and RUNNER.run_id == run_id
+        busy = (RUNNER.running() and RUNNER.run_id == run_id) or run_id in BATCH.active_ids()
         folders = [folder / run_id for folder in (RUNS, EPISODES)]
         if not ID_RE.match(run_id) or busy or not any(f.exists() for f in folders):
             skipped.append(run_id)
@@ -377,6 +403,154 @@ def delete_runs(run_ids):
             VERDICTS.pop(key, None)
         deleted.append(run_id)
     return deleted, skipped
+
+
+SETTING_KEYS = ("mode", "robot", "room", "seed", "split", "setting", "scene_version", "layout", "ood", "ood_random",
+                "scene", "collection", "seconds", "batch_id", "resumed_from")
+
+
+def run_settings(meta):
+    """How a run was set up (what the page shows, and what a dataset's manifest keeps)."""
+    return {key: meta.get(key) for key in SETTING_KEYS}
+
+
+def link_tree(source, target):
+    """Copy a folder as hard links (no extra disk, and it survives deleting the run); plain copies where links fail."""
+    def link(src, dst):
+        try:
+            os.link(src, dst)
+        except OSError:
+            shutil.copy2(src, dst)
+    shutil.copytree(source, target, copy_function=link)
+
+
+def save_dataset(run_ids, name, dream_format=False, location=None):
+    """A dataset of the chosen runs: datasets/<time>-<name>/ with runs/<id>/ (trajectory, labels, meta), episodes/<id>/
+    (recording: steps, physics, cameras) and manifest.json (each run's label, task, judge spec and settings).
+    @param dream_format Also write the recordings in the Dream Labs format (LeRobot v2.1, lerobot_export.py) to
+        dream_format/, with embodiment.json, and run the Dream Labs checks on it.
+    @param location The folder on this computer to save it in (a new <time>-<name>/ inside it); None: datasets/.
+    @return (folder, manifest). @throws ValueError when no chosen run can be saved."""
+    rules = current_rules()
+    slug = re.sub(r"[^A-Za-z0-9_-]+", "-", str(name or "")).strip("-")[:40] or "dataset"
+    folder = save_location(location) / f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{slug}"
+    if folder.exists():
+        raise ValueError(f"{folder} already exists.")
+    entries, skipped = [], []
+    busy = BATCH.active_ids() | ({RUNNER.run_id} if RUNNER.running() else set())
+    for run_id in dict.fromkeys(run_ids):
+        d = run_dir(run_id) if isinstance(run_id, str) else None
+        if not d or run_id in busy:
+            skipped.append(run_id)
+            continue
+        meta = read_json(d / "meta.json", {})
+        verdict, hand = run_verdict(d, rules), read_json(d / "label.json") or {}
+        by_hand = hand.get("source") == "human"
+        link_tree(d, folder / "runs" / run_id)
+        if (EPISODES / run_id).is_dir():
+            link_tree(EPISODES / run_id, folder / "episodes" / run_id)
+        entries.append({
+            "id": run_id, "task": meta.get("task"),
+            "label": hand["label"] if by_hand else verdict["label"],
+            "label_source": "human" if by_hand else "rules",
+            "reason": hand.get("reason") if by_hand else verdict["reason"],
+            "rules_verdict": {"label": verdict["label"], "reason": verdict["reason"]},
+            "judge": verdict.get("spec"), "success_time_s": verdict.get("success_time_s"),
+            "sim_seconds": meta.get("sim_seconds"), "steps_by_source": meta.get("steps_by_source"),
+            "recorded": (EPISODES / run_id).is_dir(), "settings": run_settings(meta),
+        })
+    if not entries:
+        raise ValueError("None of the chosen runs can be saved (still going, or gone).")
+    counts = {label: sum(e["label"] == label for e in entries) for label in LABELS}
+    manifest = {"name": slug, "created_at": datetime.now().isoformat(timespec="seconds"), "rules": rules,
+                "count": len(entries), "labels": counts, "skipped": skipped, "runs": entries,
+                "layout": {"runs/<id>/": "meta.json, trajectory.json (object poses, contacts per step), label.json, last.jpg",
+                           "episodes/<id>/": "steps.npz (states, actions, who sent each step, physics), events.json, "
+                                             "top/left/right.mp4, meta.json, outcome.json (recorded runs only)"}}
+    if dream_format:
+        manifest["dream_format"] = export_dream_format(folder, entries)
+        manifest["layout"]["dream_format/"] = ("the recordings in the Dream Labs format (LeRobot v2.1): upload with "
+                                               "client.upload_dataset(..., embodiment), embodiment.json holds its config")
+    write_json(folder / "manifest.json", manifest)
+    return folder, manifest
+
+
+def export_dream_format(folder, entries):
+    """The dataset's recordings as one LeRobot v2.1 dataset in folder/dream_format/, checked with the Dream Labs checks.
+    Each manifest entry gets its episode_index there. @return What was written, skipped and the checks' report."""
+    recorded = [e for e in entries if e["recorded"]]
+    result = lerobot_export.export([(folder / "episodes" / e["id"], e["task"]) for e in recorded],
+                                   folder / "dream_format", robot_type=(recorded[0]["settings"].get("robot") or "yam")
+                                   if recorded else "yam")
+    by_source = {w["source"]: w["episode_index"] for w in result["episodes"]}
+    for e in entries:
+        e["dream_episode"] = by_source.get(e["id"])
+    skipped = result["skipped"] + [{"source": e["id"], "reason": "not recorded (plain run)"}
+                                   for e in entries if not e["recorded"]]
+    write_json(folder / "embodiment.json", {
+        "note": "client.add_embodiment(<name>, config); then client.upload_dataset(<folder>/dream_format, <dataset "
+                "name>, <embodiment name>). State and action: right arm first, joints in rad, gripper 0 closed .. 1 "
+                "open; 5 frames per second.",
+        "config": lerobot_export.EMBODIMENT})
+    return {"folder": "dream_format/", "format": "LeRobot v2.1", "fps": lerobot_export.FPS,
+            "episodes": len(result["episodes"]), "frames": result["frames"], "skipped": skipped,
+            "check": lerobot_export.validate(folder / "dream_format") if result["episodes"] else
+            {"ok": False, "error": "No recorded run to convert."}}
+
+
+def save_location(location):
+    """The folder a dataset is saved in. @throws ValueError when it is not an existing folder this server can write."""
+    if not location:
+        return DATASETS
+    base = Path(str(location)).expanduser()
+    if not base.is_absolute():
+        raise ValueError("Choose a full path for the save location (e.g. /Users/me/data).")
+    base = base.resolve()
+    if not base.is_dir():
+        raise ValueError(f"{base} is not a folder.")
+    if not os.access(base, os.W_OK):
+        raise ValueError(f"Cannot write in {base}.")
+    return base
+
+
+def shown_path(folder):
+    """A saved dataset's folder as the page shows it: datasets/<name> in this project, else its full path."""
+    try:
+        return str(folder.relative_to(HERE))
+    except ValueError:
+        return str(folder)
+
+
+def folder_listing(path):
+    """The folders inside one folder on this computer, for choosing where to save a dataset (hidden ones left out).
+    @return {path, parent, folders, writable, places}. @throws ValueError when it is not a readable folder."""
+    DATASETS.mkdir(exist_ok=True)
+    folder = Path(str(path or DATASETS)).expanduser()
+    if not folder.is_absolute():
+        raise ValueError("Use a full path.")
+    folder = folder.resolve()
+    if not folder.is_dir():
+        raise ValueError(f"{folder} is not a folder.")
+    try:
+        names = sorted((c.name for c in folder.iterdir() if c.is_dir() and not c.name.startswith(".")), key=str.lower)
+    except OSError as error:
+        raise ValueError(f"Cannot open {folder}: {error.strerror or error}.")
+    home = Path.home()
+    places = [{"name": "Project datasets", "path": str(DATASETS)}, {"name": "Home", "path": str(home)}]
+    places += [{"name": n, "path": str(home / n)} for n in ("Desktop", "Documents", "Downloads") if (home / n).is_dir()]
+    return {"path": str(folder), "parent": str(folder.parent) if folder.parent != folder else None,
+            "folders": names[:500], "more": max(0, len(names) - 500), "writable": os.access(folder, os.W_OK),
+            "places": places}
+
+
+def list_datasets():
+    rows = []
+    for folder in sorted(DATASETS.glob("*"), reverse=True) if DATASETS.is_dir() else []:
+        manifest = read_json(folder / "manifest.json")
+        if manifest:
+            rows.append({"folder": f"datasets/{folder.name}", "count": manifest.get("count"),
+                         "labels": manifest.get("labels"), "created_at": manifest.get("created_at")})
+    return rows
 
 
 def write_label(d, verdict, rules, **extra):
@@ -402,96 +576,180 @@ def write_hand_label(d, label, note, rules):
                                   "saved_at": datetime.now().isoformat(timespec="seconds")})
 
 
+MAX_WORKERS = 4  # episodes at once; 3 at once ran like one at a time on an M3 (8 cores), see README
+NO_CAPACITY_TRIES = 5  # Dream-1 "at max capacity" (DA-2000 NO_CAPACITY): the episode is tried again this many times
+
+
 class Batch:
-    """Many episodes one after another in the background: no camera view, one seed each (its start scene, and the
+    """Many episodes in the background, `workers` at a time: no camera view, one seed each (its start scene, and the
     scene settings marked random drawn from it), and a label from the rules as they were when the batch started.
-    Stops on a run error (such as a rejected API key), after three invalid episodes in a row, or when asked."""
+    Episode i always gets the i-th seed and task, however many run at once. Stops starting new episodes on a run
+    error (such as a rejected API key) or after three invalid episodes in a row; Stop batch stops them all."""
 
     def __init__(self):
         self.thread = None
         self.stop_requested = False
         self.info = None
+        self.lock = threading.Lock()
+        self.active = {}  # run id -> (episode index, process, stop file)
+        self.next = 0
 
     def running(self):
         return self.thread is not None and self.thread.is_alive()
 
-    def start(self, tasks, seeds, seconds, changes, random_names, split, robot=(), mode="plain"):
+    def active_ids(self):
+        with self.lock:
+            return set(self.active)
+
+    def start(self, tasks, seeds, seconds, changes, random_names, split, robot=(), mode="plain", workers=1,
+              collection=None):
         """@param seeds One seed per episode. @param changes, random_names The scene settings, and the ones drawn
-        from each seed. @param split "train" or "eval" (shown on the page)."""
+        from each seed. @param split "train" or "eval" (shown on the page). @param workers Episodes at once."""
         if self.running() or RUNNER.running():
             raise RuntimeError("A run is already going.")
         if not has_api_key():
             raise RuntimeError("Enter your API key first.")
-        self.stop_requested = False
+        workers = max(1, min(MAX_WORKERS, int(workers), len(seeds)))
+        self.stop_requested, self.next, self.active = False, 0, {}
         self.info = {"id": "b" + datetime.now().strftime("%Y%m%d-%H%M%S"), "tasks": tasks, "total": len(seeds),
                      "seconds": seconds, "seeds": seeds, "seed": seeds[0], "split": split, "ood": changes,
                      "ood_random": random_names, "rules": current_rules(), "robot": list(robot), "mode": mode,
-                     "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
-                     "started": time.time(), "ended": None, "current": None, "stopped_reason": None, "durations": []}
-        self.thread = threading.Thread(target=self._loop, daemon=True)
+                     "workers": workers, "collection": collection, "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
+                     "started": time.time(), "ended": None, "current": None, "active": [], "stopped_reason": None,
+                     "durations": [], "invalid_in_a_row": 0}
+        self.thread = threading.Thread(target=self._supervise, daemon=True)
         self.thread.start()
 
     def stop(self):
         if self.running():
             self.stop_requested = True
-            RUNNER.stop()
+            with self.lock:
+                for _index, _process, stop_file in self.active.values():
+                    stop_file.touch()
 
-    def _loop(self):
+    def _supervise(self):
         info = self.info
-        invalid_in_a_row = 0
+        threads = []
         try:
-            for i in range(info["total"]):
-                if self.stop_requested:
-                    break
-                task, seed = info["tasks"][i % len(info["tasks"])], info["seeds"][i]
-                prompt = task["prompt"]
-                info["current"] = {"index": i + 1, "task": prompt, "seed": seed}
-                started = time.time()
-                seeding = ["--seed", str(seed)] + (["--ood-random", ",".join(info["ood_random"])] if info["ood_random"] else [])
-                RUNNER.start(prompt, info["seconds"], info["ood"], seeding, live=False, robot=info["robot"],
-                             mode=info["mode"],
-                             extra_env={"BATCH_ID": info["id"], "JUDGE_SPEC": json.dumps(task["judge"])})
-                run_id, process = RUNNER.run_id, RUNNER.process
-                while process.poll() is None:  # a run that hangs is stopped, then killed
-                    waited = time.time() - started
-                    if waited > info["seconds"] + 180:
-                        RUNNER.stop()
-                    if waited > info["seconds"] + 240:
-                        process.kill()
-                    time.sleep(0.5)
-                d = run_dir(run_id)
-                meta = read_json(d / "meta.json", {}) if d else {}
-                verdict = (judge.evaluate(meta, read_json(d / "trajectory.json", {}), info["rules"]) if d
-                           else judge.invalid("no_result"))
-                if d:
-                    write_label(d, verdict, info["rules"], batch_id=info["id"], source="batch")  # a new run: no hand label yet
-                info["counts"][verdict["label"]] += 1
-                info["done"] += 1
-                info["durations"].append(time.time() - started)
-                invalid_in_a_row = invalid_in_a_row + 1 if verdict["label"] == "invalid" else 0
-                if verdict["reason"] == "execution_error" and not self.stop_requested:
-                    info["stopped_reason"] = f"Run error: {str(meta.get('error') or '')[:160]}"
-                    break
-                if invalid_in_a_row >= 3:
-                    info["stopped_reason"] = "Three invalid episodes in a row."
-                    break
+            for w in range(info["workers"]):
+                if w:
+                    time.sleep(1.0)  # spread the Dream session starts a little
+                thread = threading.Thread(target=self._worker, daemon=True)
+                thread.start()
+                threads.append(thread)
+            for thread in threads:
+                thread.join()
             if self.stop_requested:
                 info["stopped_reason"] = "Stopped by you."
         except Exception as error:  # noqa: BLE001  (shown on the page)
             info["stopped_reason"] = f"Batch error: {error}"
         finally:
-            info["current"] = None
+            info["current"], info["active"] = None, []
             info["ended"] = time.time()
+
+    def _spawn(self, i, run_id, stop_file):
+        """Start episode i's sim.py (no camera view or control state; its output goes to a log file)."""
+        info = self.info
+        task, seed = info["tasks"][i % len(info["tasks"])], info["seeds"][i]
+        env = {**os.environ, "PYTHONUTF8": "1", "PYTHONUNBUFFERED": "1", "PYTHONWARNINGS": "ignore",
+               "STOP_FILE": str(stop_file), "RUN_DIR": str(RUNS / run_id), "BATCH_ID": info["id"],
+               "JUDGE_SPEC": json.dumps(task["judge"])}
+        if PAGE_KEY["value"]:
+            env["DREAM_API_KEY"] = PAGE_KEY["value"]
+        command = [sys.executable, str(HERE / "sim.py"), task["prompt"], "--seconds", str(info["seconds"]),
+                   *info["robot"], "--seed", str(seed), {"collect": "--collect", "plain": "--plain"}[info["mode"]]]
+        if info["mode"] == "collect":
+            command += collection_args(info["collection"])[1]
+        if info["ood"]:
+            command += ["--ood", json.dumps(info["ood"])]
+        if info["ood_random"]:
+            command += ["--ood-random", ",".join(info["ood_random"])]
+        log = open(WORK / f"{run_id}.log", "w", encoding="utf-8")
+        process = subprocess.Popen(command, cwd=str(HERE), env=env, stdin=subprocess.DEVNULL, stdout=log,
+                                   stderr=subprocess.STDOUT)
+        log.close()
+        return process, task["prompt"], seed
+
+    def _worker(self):
+        info = self.info
+        retry = None  # (episode index, tries so far): Dream-1 was at capacity, so the same episode runs again
+        while True:
+            with self.lock:
+                if self.stop_requested or info["stopped_reason"]:
+                    return
+                if retry is None and self.next >= info["total"]:
+                    return
+                if retry is None:
+                    i, tries = self.next, 0
+                    self.next += 1
+                else:
+                    i, tries = retry
+                run_id = datetime.now().strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
+                stop_file = WORK / f"stop-{run_id}"
+            retry = None
+            started = time.time()
+            process, prompt, seed = self._spawn(i, run_id, stop_file)
+            with self.lock:
+                self.active[run_id] = (i, process, stop_file)
+                self._show_active(prompt_of={run_id: (prompt, seed)})
+            while process.poll() is None:  # a run that hangs is stopped, then killed
+                waited = time.time() - started
+                if waited > info["seconds"] + 180:
+                    stop_file.touch()
+                if waited > info["seconds"] + 240:
+                    process.kill()
+                time.sleep(0.5)
+            d = run_dir(run_id)
+            meta = read_json(d / "meta.json", {}) if d else {}
+            if "NO_CAPACITY" in str(meta.get("error") or "") and tries + 1 < NO_CAPACITY_TRIES and not self.stop_requested:
+                # Dream-1 is busy (shared by everyone): not this episode's fault. Drop the attempt, wait, try again.
+                with self.lock:
+                    self.active.pop(run_id, None)
+                    self._show_active()
+                    info["capacity_retries"] = info.get("capacity_retries", 0) + 1
+                delete_runs([run_id])
+                stop_file.unlink(missing_ok=True)
+                time.sleep(5 * (tries + 1))
+                retry = (i, tries + 1)
+                continue
+            verdict = (judge.evaluate(meta, read_json(d / "trajectory.json", {}), info["rules"]) if d
+                       else judge.invalid("no_result"))
+            if d:
+                write_label(d, verdict, info["rules"], batch_id=info["id"], source="batch")  # a new run: no hand label yet
+            with self.lock:
+                self.active.pop(run_id, None)
+                self._show_active()
+                info["counts"][verdict["label"]] += 1
+                info["done"] += 1
+                info["durations"].append(time.time() - started)
+                info["invalid_in_a_row"] = info["invalid_in_a_row"] + 1 if verdict["label"] == "invalid" else 0
+                if verdict["reason"] == "execution_error" and not self.stop_requested and not info["stopped_reason"]:
+                    info["stopped_reason"] = f"Run error: {str(meta.get('error') or '')[:160]}"
+                elif info["invalid_in_a_row"] >= 3 and not info["stopped_reason"]:
+                    info["stopped_reason"] = "Three invalid episodes in a row."
+            stop_file.unlink(missing_ok=True)
+
+    def _show_active(self, prompt_of=None):
+        """The episodes going now, for the page (called with the lock held)."""
+        info = self.info
+        names = getattr(self, "_names", {})
+        names.update(prompt_of or {})
+        self._names = names
+        active = sorted((index, run_id) for run_id, (index, _p, _s) in self.active.items())
+        info["active"] = [{"index": index + 1, "task": names.get(run_id, ("", None))[0],
+                           "seed": names.get(run_id, ("", None))[1]} for index, run_id in active]
+        info["current"] = info["active"][0] if info["active"] else None
 
     def status(self):
         if not self.info:
             return None
-        info = {k: v for k, v in self.info.items() if k not in ("durations", "seeds")}
+        info = {k: v for k, v in self.info.items() if k not in ("durations", "seeds", "invalid_in_a_row")}
         durations = self.info["durations"]
         remaining = info["total"] - info["done"]
         info["running"] = self.running()
         info["elapsed_s"] = round((info["ended"] or time.time()) - info["started"])
-        info["eta_s"] = round(sum(durations) / len(durations) * remaining) if durations and self.running() else None
+        info["eta_s"] = (round(sum(durations) / len(durations) * remaining / info["workers"])
+                         if durations and self.running() else None)
         return info
 
 
@@ -616,6 +874,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(ood.GROUPS)
         if path == "/api/status":
             return self.send_json(RUNNER.status())
+        if path == "/api/datasets":
+            return self.send_json({"datasets": list_datasets()})
+        if path == "/api/folders":  # ?path=/abs/folder: the folders in it, to choose where to save a dataset
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            try:
+                return self.send_json(folder_listing(query.get("path", [""])[0]))
+            except ValueError as error:
+                return self.send_json({"error": str(error)}, 400)
         if path == "/api/episodes":
             return self.send_json({"episodes": list_episodes()})
         m = re.fullmatch(r"/api/episodes/([^/]+)/frame\.jpg", path)
@@ -747,10 +1013,14 @@ class Handler(BaseHTTPRequestHandler):
             if mode == "human" and ("openyam" in robot or (scene and set(scene["items"]) != set(OBJECTS + TARGETS))):
                 return self.send_json({"error": "Human control needs YAM with all six items on the table."}, 400)
             try:
+                _settings, collection = collection_args(body.get("collection"))
+            except ValueError as error:
+                return self.send_json({"error": str(error)}, 400)
+            try:
                 seconds = min(900 if mode in ("human", "test") else 300, max(10, int(float(body.get("seconds") or 60))))
                 RUNNER.start(task, seconds, changes, seeding, scene,
                              extra_env={"JUDGE_SPEC": json.dumps(spec)} if spec else None, robot=robot,
-                             mode=mode, record=body.get("record", True) is not False)
+                             mode=mode, record=body.get("record", True) is not False, collection=collection)
             except (ValueError, TypeError):
                 return self.send_json({"error": "The time limit must be a number."}, 400)
             except RuntimeError as error:
@@ -785,6 +1055,18 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 return self.send_json({"error": "The label must be success, failure or invalid."}, 400)
             return self.send_json({"label": read_json(d / "label.json")})
+        if self.path == "/api/datasets":  # {"run_ids": [...], "name": "..."}: save those runs as a dataset
+            run_ids = body.get("run_ids")
+            if not isinstance(run_ids, list) or not run_ids or any(not isinstance(r, str) for r in run_ids):
+                return self.send_json({"error": "Pick at least one run."}, 400)
+            try:
+                folder, manifest = save_dataset(run_ids, body.get("name"), bool(body.get("dream_format")),
+                                                body.get("location") or None)
+            except ValueError as error:
+                return self.send_json({"error": str(error)}, 400)
+            return self.send_json({"folder": shown_path(folder), "count": manifest["count"],
+                                   "labels": manifest["labels"], "skipped": manifest["skipped"],
+                                   "dream_format": manifest.get("dream_format")})
         if self.path == "/api/runs/delete":  # {"run_ids": [...]}: finished runs and their recordings, for good
             run_ids = body.get("run_ids")
             if not isinstance(run_ids, list) or not run_ids or any(not isinstance(r, str) for r in run_ids):
@@ -839,7 +1121,11 @@ class Handler(BaseHTTPRequestHandler):
                 mode = body.get("mode") or "collect"
                 if mode not in ("collect", "plain"):
                     raise ValueError("A batch runs in data collection or Dream-1 only mode.")
-                BATCH.start(tasks, seeds, seconds, changes, random_names, split, robot, mode)
+                workers = int(body.get("workers") or 1)
+                if not 1 <= workers <= MAX_WORKERS:
+                    raise ValueError(f"Run 1 to {MAX_WORKERS} episodes at once.")
+                collection, _args = collection_args(body.get("collection"))
+                BATCH.start(tasks, seeds, seconds, changes, random_names, split, robot, mode, workers, collection)
             except (ValueError, TypeError, AttributeError) as error:
                 return self.send_json({"error": str(error)}, 400)
             except RuntimeError as error:
