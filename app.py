@@ -518,6 +518,8 @@ def spec_items(spec):
     """The scene items a judge spec needs on the table ("any" object needs none in particular)."""
     if spec["type"] == "pick_place":
         return {name for pair in spec["pairs"] for name in (pair["object"], pair["target"])}
+    if spec["type"] == "goal":  # the objects, and the bowl / plate they go into
+        return set(spec["objects"]) | {e.get("in") or e.get("near") for e in spec["objects"].values()} - {None}
     return set() if spec["object"] == "any" else {spec["object"]}
 
 
@@ -680,6 +682,42 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             PREVIEW_LOCK.release()
 
+    def goal_preview(self, body):
+        """The goal popup: the start scene (or, with "goal" {object: [x, y]}, the scene with those objects let go
+        at their spots and settled) as the top camera sees it, with every item's position and the camera projection.
+        @return JSON {image (data URL), positions, projection (3x4, picture u v 0..1), size}."""
+        import base64
+
+        try:
+            changes, seeding, scene, robot = run_options(body)
+            goal = body.get("goal") or {}
+            if not isinstance(goal, dict) or any(name not in OBJECTS or len(spot) != 2 for name, spot in goal.items()):
+                raise ValueError("The goal must be {object: [x, y]}.")
+            goal = {name: [float(v) for v in spot] for name, spot in goal.items()}
+        except (ValueError, TypeError) as error:
+            return self.send_json({"error": str(error)}, 400)
+        if robot and "openyam" in robot:
+            return self.send_json({"error": "The goal scene is for YAM."}, 400)
+        if RUNNER.running() or BATCH.running() or not PREVIEW_LOCK.acquire(blocking=False):
+            return self.send_json({"error": "The simulator is busy."}, 409)
+        try:
+            env = {**os.environ, "PYTHONWARNINGS": "ignore", **({"SCENE_JSON": json.dumps(scene)} if scene else {})}
+            with tempfile.TemporaryDirectory(prefix="dream-goal-") as folder:
+                result = subprocess.run(
+                    [sys.executable, str(HERE / "sim.py"), "--goal-preview", folder, "--goal", json.dumps(goal),
+                     "--ood", json.dumps(changes), *seeding, *robot], cwd=HERE, env=env, capture_output=True,
+                    text=True, timeout=120)
+                if result.returncode:
+                    error = (result.stderr or result.stdout).strip().splitlines()
+                    return self.send_json({"error": error[-1] if error else "Rendering the goal failed."}, 422)
+                info = json.loads((Path(folder) / "goal.json").read_text())
+                image = base64.b64encode((Path(folder) / "goal.jpg").read_bytes()).decode()
+                return self.send_json({**info, "image": "data:image/jpeg;base64," + image})
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            return self.send_json({"error": "Could not render the goal scene."}, 500)
+        finally:
+            PREVIEW_LOCK.release()
+
     def do_POST(self):
         try:
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
@@ -689,6 +727,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"error": "Expected a JSON object."}, 400)
         if self.path == "/api/preview":
             return self.preview(body)
+        if self.path == "/api/goal-preview":
+            return self.goal_preview(body)
         if self.path == "/api/run":
             task = re.sub(r"\s+", " ", str(body.get("task") or "")).strip()
             if not task:

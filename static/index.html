@@ -38,6 +38,41 @@
   button:disabled { opacity: .45; cursor: default; }
   button.stop { background: var(--danger); color: #441b19; }
   button.ghost { background: transparent; color: var(--muted); border-color: var(--line); font-weight: 500; }
+  /* goal scene popup */
+  .goal-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; font-size: 13px; }
+  .goal-row .goal-note { color: var(--muted); flex: 1 1 200px; }
+  .goal-row .goal-note b { color: var(--accent); }
+  .task-card { margin: 14px 0 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--well); }
+  .task-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .task-card-head label { margin: 0; }
+  .task-prompt { font-weight: 600; margin: 6px 0 2px; word-break: break-word; }
+  .task-dialog-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(260px, 1fr); gap: 16px; padding: 8px 18px 0; }
+  @media (max-width: 820px) { .task-dialog-grid { grid-template-columns: 1fr; } }
+  .task-side h4 { margin: 0 0 6px; font-size: 14px; }
+  .task-side section { margin-bottom: 14px; }
+  .task-side .examples { margin-top: 6px; }
+  .range-row { display: grid; grid-template-columns: 92px 1fr 54px; gap: 8px; align-items: center; font-size: 13px; margin: 6px 0; }
+  .range-row input[type=range] { width: 100%; padding: 0; }
+  dialog#goalDialog { width: min(1180px, 97vw); max-width: 96vw; padding: 0; border: 1px solid var(--line); border-radius: 14px;
+    background: var(--panel); color: var(--text); }
+  dialog#goalDialog::backdrop { background: rgba(0, 0, 0, .6); }
+  .goal-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 16px 18px 6px; }
+  .goal-head h3 { margin: 0; font-size: 18px; }
+  .goal-body { padding: 8px 18px 0; }
+  .goal-stage { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 10px; overflow: hidden; }
+  .goal-stage img, .goal-stage svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .goal-stage svg { touch-action: none; }
+  .goal-stage .busy { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .55);
+    color: #fff; font: 700 20px system-ui, sans-serif; letter-spacing: .01em; text-shadow: 0 2px 6px #000; }
+  .goal-stage .busy[hidden] { display: none; }
+  .goal-stage .busy span { padding: 10px 18px; border-radius: 12px; background: rgba(0, 0, 0, .7); border: 1px solid rgba(255, 255, 255, .25); }
+  .goal-marker { cursor: grab; }
+  .goal-marker:active { cursor: grabbing; }
+  .goal-marker text { font: 600 13px system-ui, sans-serif; fill: #fff; paint-order: stroke; stroke: #000; stroke-width: 3px; }
+  .goal-list { display: grid; gap: 6px; font-size: 13px; color: var(--muted); margin: 10px 0 0; min-height: 1.4em; }
+  .goal-list .goal-rel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .goal-list select { width: auto; padding: 4px 8px; font-size: 13px; }
+  .goal-foot { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 14px 18px 16px; }
   button.small { padding: 4px 9px; font-size: 12px; }
   button.danger { color: var(--bad); border-color: var(--bad-bg); }
   button.danger:hover:not(:disabled) { background: var(--bad-bg); filter: none; }
@@ -247,6 +282,12 @@
     </div>
     <div class="robot-note" id="robotNote"></div>
 
+    <div class="task-card">
+      <div class="task-card-head"><label>Task</label><button id="setTask" class="small">Set task…</button></div>
+      <div class="task-prompt" id="taskPrompt"></div>
+      <div class="muted small" id="taskJudged"></div>
+    </div>
+
     <div class="toggle mode" role="group" aria-label="Mode">
       <button id="modeSingle" class="on" aria-pressed="true">Single run</button>
       <button id="modeBatch" aria-pressed="false">Batch</button>
@@ -254,12 +295,9 @@
     <div id="seedBox"></div>
 
     <div id="singleForm">
-      <div class="row" style="margin-top: 12px">
-        <div><label for="task">Task</label><input id="task" value="put apple into the bowl"></div>
-        <div><label for="seconds">Limit (s)</label><input id="seconds" type="number" min="10" max="900" value="60" title="Up to 300 s, or 900 s in test and human-only runs"></div>
+      <div style="margin-top: 12px; max-width: 160px">
+        <label for="seconds">Limit (s)</label><input id="seconds" type="number" min="10" max="900" value="60" title="Up to 300 s, or 900 s in test and human-only runs">
       </div>
-      <div class="task-note" id="taskNote"></div>
-      <div class="examples" id="examples"></div>
       <div class="modes" role="radiogroup" aria-label="Run mode">
         <label><input type="radio" name="runMode" value="collect" checked><span>Data collection<span class="muted">Dream-1; when it fails, the recovery script takes over. No human: a failure it cannot recover ends the run (recover it later in Recordings).</span></span></label>
         <label><input type="radio" name="runMode" value="test"><span>Test<span class="muted">Dream-1 and you take turns with T; a failure hands the arms to you.</span></span></label>
@@ -291,6 +329,8 @@
         <button id="batchPlain" aria-pressed="false" title="Dream-1 only">Dream-1 only</button>
       </div>
       <p class="muted small" style="margin: 8px 0 12px">Each episode starts from its own seed. The scene settings below apply to every episode; the ones marked <em>random</em> are drawn from each episode's seed. Runs in the background, without the cameras.</p>
+      <p class="small" style="margin: 0 0 4px">Every episode runs <b>the task above</b> (<span id="batchTaskName"></span>).</p>
+      <div id="batchTaskList" hidden>
       <label>Tasks <span class="muted">(taken in turn)</span></label>
       <div class="items" id="batchTasks"></div>
       <div class="hrow" style="margin-top: 10px">
@@ -305,6 +345,7 @@
         </select>
         <span id="pairRows" class="pairs-edit" style="margin: 0"></span>
         <button class="ghost small" id="addPair" title="Judge one more object">+ object</button>
+      </div>
       </div>
       <div class="actions" style="justify-content: space-between">
         <span class="muted small" id="batchEstimate"></span>
@@ -396,8 +437,9 @@
   </section>
 
   <section class="panel">
-    <details class="fold" id="rulesPanel" open>
-      <summary>Success rules</summary>
+    <details class="fold" id="rulesPanel">
+      <summary>Advanced · success rules for tasks without a goal scene</summary>
+      <p class="muted small" style="margin: 0 0 10px">A task with a goal scene is judged by the range set in <b>Set task</b>. These rules judge tasks by their words alone (lift, push, areas), the team's batch task lists, and past runs.</p>
       <div class="toggle types" id="ruleTypes" role="group" aria-label="Task type"></div>
       <p class="hint" id="ruleHint"></p>
       <div class="banners" id="banners"></div>
@@ -481,6 +523,48 @@
   </div>
   </div>
 </main>
+
+<dialog id="goalDialog" aria-labelledby="goalTitle">
+  <div class="goal-head">
+    <h3 id="goalTitle">Task</h3>
+    <span class="muted small">For single runs and batches alike.</span>
+  </div>
+  <div class="task-dialog-grid">
+    <div>
+      <h4 style="margin: 0 0 6px">Goal scene <span class="muted small" style="font-weight: 400">· drag objects to where they should end up (optional)</span></h4>
+      <div class="goal-stage">
+        <img id="goalImg" alt="The robot's top camera: the goal scene">
+        <svg id="goalSvg" viewBox="0 0 640 360" aria-label="Draggable objects and their allowed range"></svg>
+        <div class="busy" id="goalBusy" hidden><span id="goalBusyText">Rendering the scene…</span></div>
+      </div>
+      <div class="goal-list" id="goalList"></div>
+    </div>
+    <div class="task-side">
+      <section>
+        <h4>Language</h4>
+        <label for="task" class="muted small">What Dream-1 is told</label>
+        <input id="task" value="put apple into the bowl" maxlength="300">
+        <div class="task-note" id="taskNote"></div>
+        <div class="examples" id="examples" hidden></div>
+      </section>
+      <section>
+        <h4>Success</h4>
+        <p class="muted small" id="goalRuleNote" style="margin: 0 0 6px"></p>
+        <div class="range-row"><span>Distance</span><input type="range" id="goalTol" min="1" max="15" step="0.5"><b id="goalTolText"></b></div>
+        <div class="range-row"><span>Still time</span><input type="range" id="goalStill" min="0" max="5" step="0.5"><b id="goalStillText"></b></div>
+        <label class="check" style="margin: 6px 0 0"><input type="checkbox" id="goalRelease"> Must let go (released)</label>
+        <p class="muted small" style="margin: 6px 0 0">The shaded areas on the picture are where each moved object may end up.</p>
+      </section>
+    </div>
+  </div>
+  <div class="goal-foot">
+    <span class="hrow"><button id="goalReset" class="ghost small">Clear goal scene</button></span>
+    <span class="hrow">
+      <button id="goalCancel" class="ghost small">Cancel</button>
+      <button id="goalUse">Save task</button>
+    </span>
+  </div>
+</dialog>
 
 <script type="module">
 import { loadOOD, readOOD } from "/ood.js";
@@ -936,6 +1020,7 @@ function drawExamples() {
 function specItems(spec) {
   if (!spec) return [];
   if ((spec.type || "pick_place") === "pick_place") return (spec.pairs || [spec]).flatMap(p => [p.object, p.target]);
+  if (spec.type === "goal") return [...Object.keys(spec.objects || {}), ...Object.values(spec.objects || {}).map(e => e.in || e.near).filter(Boolean)];
   return spec.object === "any" ? [] : [spec.object];
 }
 
@@ -950,7 +1035,10 @@ function checkTask() {
     const note = $("taskNote");
     note.classList.toggle("bad", missing.length > 0);
     note.textContent = missing.length ? `Not on the table: ${missing.map(itemName).join(", ")}`
-      : taskSpec ? `Judged as ${reply.text}` : "Not judged: name an object and a bowl or plate, an area, lift or push.";
+      : taskSpec ? `Judged as ${reply.text}` : "Not judged by its words: set a goal scene, or name an object and a bowl or plate, an area, lift or push.";
+    note.dataset.words = note.textContent;
+    showGoalNote();
+    showTask();
   }, 150);
   return true;
 }
@@ -1015,6 +1103,8 @@ function specText(spec) {
   const kind = spec.type || "pick_place";
   if (kind === "pick_place") return (spec.pairs || [spec]).map(p => `${itemName(p.object)} · ${itemName(p.target)}`).join(", ");
   if (kind === "move_to_area") return `${itemName(spec.object)} → ${spec.area}`;
+  if (kind === "goal") return Object.entries(spec.objects || {}).map(([n, e]) =>
+    `${itemName(n)} ${e.in === "bowl" ? "in the bowl" : e.in === "plate" ? "on the plate" : e.near ? `beside the ${itemName(e.near)}` : "at a table spot"}`).join(", ");
   return `${TYPE_UI[kind]?.label.toLowerCase() || kind} ${itemName(spec.object)}`;
 }
 
@@ -1137,8 +1227,9 @@ $("startBatch").onclick = async () => {
   const count = Number($("batchCount").value);
   if (!confirm(`Run ${count} episodes in the background (about ${estimate()} min of Dream-1 use)?`)) return;
   try {
-    const tasks = taskOptions().filter(o => o.usable && batchTasks.has(o.prompt))
-      .map(({ prompt, judge }) => ({ prompt, judge }));
+    // Every episode runs the task set above (its words, and its goal scene when it has one).
+    if (goalSpec && !goalRelational()) { alert("The task's goal scene has a fixed table spot, which only fits one seed: for batches, tie every object to an item (in the bowl, beside the plate, ...)."); return; }
+    const tasks = [{ prompt: $("task").value.trim(), ...(goalSpec ? { judge: goalSpec } : {}) }];
     const { seed, ood_random } = seeding();
     await api("/api/batch", { tasks, count, seconds: $("batchSeconds").value, split, seed, ood, mode: batchMode,
                               ood_random: isOpenYAM() ? [] : ood_random });
@@ -1364,8 +1455,13 @@ $("run").onclick = async () => {
     clearTimeout(previewTimer);
     $("previewStatus").hidden = true;
     document.activeElement.blur();  // so the keys go to the robot, not to the box last clicked
-    await api("/api/run", { task: $("task").value, seconds: $("seconds").value, ...startScene(ood),
-                            mode: runMode(), record: $("record").checked });
+    const start = startScene(ood);
+    if (goalSpec && !goalRelational() && JSON.stringify(start) !== goalStart) {
+      if (!confirm("The start scene changed since the goal was set (seed, settings or layout). Run without the goal?")) return;
+      clearGoal();
+    }
+    await api("/api/run", { task: $("task").value, seconds: $("seconds").value, ...start,
+                            mode: runMode(), record: $("record").checked, ...(goalSpec ? { judge: goalSpec } : {}) });
     $("live").hidden = true;
     $("placeholder").hidden = false;
     $("placeholder").textContent = "Starting the simulator… (the first picture takes a few seconds)";
@@ -1391,6 +1487,227 @@ $("reset").onclick = async () => {
   } catch (err) { alert(err.message); }
   $("reset").disabled = false;
   refresh();
+};
+
+/* ---------- goal scene: drag objects on the robot's camera picture to the end state ---------- */
+// The server renders the start scene (sim.py --goal-preview) and, after every drop, the scene with the dragged
+// objects let go at their spots and settled by the physics. Its 3x4 projection maps world points to the picture;
+// on the plane of an object's height it is a homography, inverted here to turn the cursor into a table spot.
+const GOAL_ITEMS = { apple: ["#ef4444", 0.040], orange: ["#f97316", 0.033], banana: ["#eab308", 0.050], water_bottle: ["#38bdf8", 0.030] };
+let goalSpec = null, goalStart = null, goalView = null, goalDrag = null, goalPending = {}, goalBase = null;
+let goalChoice = {};  // per moved object: "in:bowl", "near:apple", or "at" (its relation, chosen in the popup)
+const GOAL_REFS = ["bowl", "plate", "apple", "orange", "banana", "water_bottle"];
+// Offset of an object from an item, in the top camera's directions (cm): +left = picture left, +front = toward the arms.
+const offsetCm = (n, ref) => [(goalView.positions[n][0] - goalView.positions[ref][0]) * 100,
+                              (goalView.positions[n][1] - goalView.positions[ref][1]) * 100];
+function offsetWords([left, front], ref) {
+  const parts = [];
+  if (Math.abs(left) >= 1) parts.push(`${fmt(Math.abs(left))} cm ${left > 0 ? "left" : "right"}`);
+  if (Math.abs(front) >= 1) parts.push(`${fmt(Math.abs(front))} cm ${front > 0 ? "forward" : "back"}`);
+  return parts.length ? `${parts.join(" and ")} from the ${itemName(ref)}` : `right at the ${itemName(ref)}`;
+}
+function defaultChoice(n) {  // in the bowl / on the plate when it landed there, else beside the nearest item
+  const inside = goalView.relations?.[n];
+  if (inside) return "in:" + inside;
+  const p = goalView.positions[n];
+  const near = GOAL_REFS.filter(r => r !== n && goalView.positions[r])
+    .sort((a, b) => Math.hypot(...offsetCm(n, a)) - Math.hypot(...offsetCm(n, b)))[0];
+  return near ? "near:" + near : "at";
+}
+function choiceValid(n, c) {
+  if (!c) return false;
+  if (c.startsWith("in:")) return goalView.relations?.[n] === c.slice(3);
+  return c === "at" || (c.startsWith("near:") && c.slice(5) !== n);
+}
+const project = (P, [x, y, z]) => { const h = P.map(r => r[0] * x + r[1] * y + r[2] * z + r[3]); return [h[0] / h[2] * 640, h[1] / h[2] * 360]; };
+function unproject(P, px, py, z) {  // picture pixel -> world (x, y) on the plane at height z
+  const H = [0, 1, 2].map(i => [P[i][0], P[i][1], P[i][2] * z + P[i][3]]);
+  const [a, b, c] = H, inv = [
+    [b[1] * c[2] - b[2] * c[1], a[2] * c[1] - a[1] * c[2], a[1] * b[2] - a[2] * b[1]],
+    [b[2] * c[0] - b[0] * c[2], a[0] * c[2] - a[2] * c[0], a[2] * b[0] - a[0] * b[2]],
+    [b[0] * c[1] - b[1] * c[0], a[1] * c[0] - a[0] * c[1], a[0] * b[1] - a[1] * b[0]]];
+  const u = px / 640, v = py / 360, w = inv.map(r => r[0] * u + r[1] * v + r[2]);
+  return [w[0] / w[2], w[1] / w[2]];
+}
+function svgPoint(e) {
+  const pt = $("goalSvg").createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+  return pt.matrixTransform($("goalSvg").getScreenCTM().inverse());
+}
+function drawGoal() {
+  if (!goalView) return;
+  const P = goalView.projection;
+  for (const n of Object.keys(goalView.goal || {})) if (!choiceValid(n, goalChoice[n])) goalChoice[n] = defaultChoice(n);
+  let out = "";
+  for (const [name, [color, r]] of Object.entries(GOAL_ITEMS)) {
+    const now = goalDrag?.name === name ? goalDrag.world : goalView.positions[name];
+    if (!now) continue;
+    const start = goalBase.positions[name];
+    const [px, py] = project(P, now), [rx] = project(P, [now[0] + r, now[1], now[2]]);
+    const radius = Math.max(12, Math.abs(rx - px) * 1.15);
+    const tie = goalView.goal?.[name] && !goalDrag && goalChoice[name]?.startsWith("near:") ? goalChoice[name].slice(5) : null;
+    if (tie && goalView.positions[tie]) {
+      const [tx, ty] = project(P, goalView.positions[tie]);
+      out += `<line x1="${tx}" y1="${ty}" x2="${px}" y2="${py}" stroke="#fff" stroke-width="2" stroke-dasharray="2 4" opacity=".9"/>`;
+    }
+    if (goalPending[name] || goalView.goal?.[name]) {
+      const [sx, sy] = project(P, start);
+      out += `<line x1="${sx}" y1="${sy}" x2="${px}" y2="${py}" stroke="${color}" stroke-width="2" stroke-dasharray="5 4" opacity=".9"/>
+              <circle cx="${sx}" cy="${sy}" r="5" fill="${color}" opacity=".8"/>`;
+    }
+    out += `<g class="goal-marker" data-goal="${name}">
+      <circle cx="${px}" cy="${py}" r="${radius}" fill="${color}" fill-opacity=".18" stroke="${color}" stroke-width="3"/>
+      <text x="${px}" y="${py - radius - 6}" text-anchor="middle">${itemName(name)}</text></g>`;
+  }
+  // Where each moved object may end up: anywhere in its bowl / on its plate (their size), or within the distance of its
+  // spot beside an item / on the table (drawn on top of the markers).
+  const ring = (cx, cy, z, radius) => Array.from({ length: 40 }, (_, i) => {
+    const a = i / 40 * 2 * Math.PI, [px, py] = project(P, [cx + radius * Math.cos(a), cy + radius * Math.sin(a), z]);
+    return `${i ? "L" : "M"}${px.toFixed(1)},${py.toFixed(1)}`;
+  }).join("") + "Z";
+  const tol = (rules.goal?.tolerance_cm ?? 4) / 100;
+  for (const n of Object.keys(goalView.goal || {})) {
+    if (goalDrag?.name === n) continue;
+    const c = goalChoice[n], color = GOAL_ITEMS[n][0], p = goalView.positions[n];
+    const zone = c.startsWith("in:") ? [...goalView.positions[c.slice(3)].slice(0, 2), goalView.positions[c.slice(3)][2] + 0.02, 0.07]
+      : [p[0], p[1], 0.762, tol];
+    out += `<path d="${ring(...zone)}" fill="${color}" fill-opacity=".18" stroke="#fff" stroke-width="2.5" stroke-dasharray="6 4" pointer-events="none"/>
+            <path d="${ring(...zone)}" fill="none" stroke="${color}" stroke-width="1.5" stroke-dasharray="6 4" pointer-events="none"/>`;
+  }
+  $("goalSvg").innerHTML = out;
+  const moved = Object.keys(goalView.goal || {});
+  for (const n of moved) if (!choiceValid(n, goalChoice[n])) goalChoice[n] = defaultChoice(n);
+  const describe = n => {
+    const c = goalChoice[n];
+    if (c.startsWith("in:")) return `judged: anywhere ${c === "in:bowl" ? "in the bowl" : "on the plate"}, wherever it ends up`;
+    if (c === "at") return `judged: this spot on the table (${goalView.positions[n].slice(0, 2).map(v => fmt(v * 100)).join(", ")} cm) · this seed only`;
+    const ref = c.slice(5);
+    return `judged: ${offsetWords(offsetCm(n, ref), ref)}, wherever it ends up`;
+  };
+  const options = n => [
+    ...(goalView.relations?.[n] ? [[`in:${goalView.relations[n]}`, goalView.relations[n] === "bowl" ? "in the bowl" : "on the plate"]] : []),
+    ...GOAL_REFS.filter(r => r !== n && goalView.positions[r]).map(r => [`near:${r}`, `beside the ${itemName(r)}`]),
+    ["at", "a fixed spot on the table"]];
+  $("goalList").innerHTML = moved.length
+    ? moved.map(n => `<div class="goal-rel"><b style="color:${GOAL_ITEMS[n][0]}">${itemName(n)}</b>
+        <select data-rel="${n}" aria-label="What ${itemName(n)} is judged against">${options(n).map(([v, label]) =>
+          `<option value="${v}" ${v === goalChoice[n] ? "selected" : ""}>${label}</option>`).join("")}</select>
+        <span>${esc(describe(n))}</span></div>`).join("")
+    : "<span>Nothing moved yet: drag an object.</span>";
+  document.querySelectorAll("[data-rel]").forEach(s => s.onchange = () => { goalChoice[s.dataset.rel] = s.value; drawGoal(); });
+  showGoalNote();
+  showGoalRules();
+}
+async function renderGoal(goal) {
+  $("goalBusyText").textContent = Object.keys(goal).length ? "Placing the objects…" : "Rendering the scene…";
+  $("goalBusy").hidden = false;
+  try {
+    const ood = readOOD();
+    if (ood === null) throw new Error("Fix the scene settings first.");
+    const view = await api("/api/goal-preview", { ...startScene(ood), goal });
+    view.goal = goal;
+    goalView = view;
+    if (!Object.keys(goal).length) goalBase = view;
+    $("goalImg").src = view.image;
+    goalPending = {};
+    drawGoal();
+  } catch (err) { alert(err.message); }
+  finally { $("goalBusy").hidden = true; }
+}
+$("goalSvg").addEventListener("pointerdown", e => {
+  const g = e.target.closest("[data-goal]");
+  if (!g || !goalView || !$("goalBusy").hidden) return;
+  const name = g.dataset.goal, z = goalBase.positions[name][2];
+  goalDrag = { name, z, world: [...goalView.positions[name]] };
+  $("goalSvg").setPointerCapture(e.pointerId);
+});
+$("goalSvg").addEventListener("pointermove", e => {
+  if (!goalDrag) return;
+  const p = svgPoint(e), [x, y] = unproject(goalView.projection, p.x, p.y, goalDrag.z);
+  goalDrag.world = [Math.min(0.32, Math.max(-0.32, x)), Math.min(0.2, Math.max(-0.26, y)), goalDrag.z];
+  goalPending[goalDrag.name] = true;
+  drawGoal();
+});
+for (const type of ["pointerup", "pointercancel"]) $("goalSvg").addEventListener(type, () => {
+  if (!goalDrag) return;
+  const { name, world } = goalDrag;
+  goalDrag = null;
+  const goal = { ...(goalView.goal || {}) };
+  goal[name] = world.slice(0, 2).map(v => Math.round(v * 1e4) / 1e4);
+  renderGoal(goal);
+});
+// A goal of relations only (in the bowl, on the plate) means the same for any seed: runs and batches can use it.
+const goalRelational = () => !!goalSpec && Object.values(goalSpec.objects).every(e => !e.at);
+function clearGoal() {
+  goalSpec = null; goalStart = null;
+  showTask();
+}
+// The task card above Single / Batch: what Dream-1 is told and how success is judged.
+function showTask() {
+  $("taskPrompt").textContent = `“${$("task").value.trim() || "(no prompt)"}”`;
+  const r = rules.goal || {};
+  $("taskJudged").textContent = goalSpec
+    ? `Success: goal scene · ${specText(goalSpec)} · within ${fmt(r.tolerance_cm ?? 4)} cm` + (goalRelational() ? " · any seed" : " · this seed only (a fixed spot)")
+    : `Success: ${($("taskNote").textContent || "by the task's words").replace(/^Judged as /, "by its words · ")}`;
+  if ($("batchTaskName")) $("batchTaskName").textContent = $("taskPrompt").textContent + (goalSpec ? " with its goal scene" : "");
+}
+// Under the prompt in the task dialog: a goal scene (objects moved on the picture) decides success, not the words.
+function showGoalNote() {
+  const note = $("taskNote"), moved = Object.keys(goalView?.goal || {});
+  if (!$("goalDialog").open || !moved.length) { if (note.dataset.words) note.textContent = note.dataset.words; note.classList.remove("good"); return; }
+  const draft = moved.map(n => {
+    const c = goalChoice[n] || "";
+    return `${itemName(n)} ${c.startsWith("in:") ? (c === "in:bowl" ? "in the bowl" : "on the plate")
+      : c.startsWith("near:") ? offsetWords(offsetCm(n, c.slice(5)), c.slice(5)) : "at its spot"}`;
+  });
+  note.classList.remove("bad");
+  note.textContent = `Judged by the goal scene: ${draft.join("; ")} (not by the words).`;
+}
+function showGoalRules() {
+  const r = rules.goal || {};
+  $("goalTol").value = r.tolerance_cm ?? 4; $("goalTolText").textContent = `${fmt(r.tolerance_cm ?? 4)} cm`;
+  $("goalStill").value = r.still_seconds ?? 1; $("goalStillText").textContent = `${fmt(r.still_seconds ?? 1)} s`;
+  $("goalRelease").checked = r.release !== false;
+  $("goalRuleNote").textContent = "In the bowl / on the plate: anywhere in it (its own size). Distance: how far from its spot " +
+    "beside an item or on the table. Relations follow their item wherever it ends up (any seed).";
+}
+$("goalTol").oninput = () => { changeRules("goal", { tolerance_cm: Number($("goalTol").value) }); showGoalRules(); drawGoal(); showTask(); };
+$("goalStill").oninput = () => { changeRules("goal", { still_seconds: Number($("goalStill").value) }); showGoalRules(); };
+$("goalRelease").onchange = () => { changeRules("goal", { release: $("goalRelease").checked }); showGoalRules(); };
+let taskBefore = "";
+$("setTask").onclick = async () => {
+  taskBefore = $("task").value;
+  showGoalRules();
+  $("goalDialog").showModal();
+  if (isOpenYAM()) { $("goalList").innerHTML = "<span>The goal scene is for YAM: on OpenYAM the task is judged by its words.</span>"; return; }
+  const ood = readOOD();
+  if (ood === null) return;
+  $("goalImg").removeAttribute("src"); $("goalSvg").innerHTML = ""; goalView = null;
+  goalStart = JSON.stringify(startScene(ood));
+  await renderGoal({});
+  if (goalSpec && goalBase) {
+    goalChoice = Object.fromEntries(Object.entries(goalSpec.objects).map(([n, e]) => [n, e.in ? "in:" + e.in : e.near ? "near:" + e.near : "at"]));
+    await renderGoal(Object.fromEntries(Object.entries(goalSpec.objects).map(([n, e]) => {
+      if (e.in) return [n, goalBase.positions[e.in].slice(0, 2)];
+      if (e.near) return [n, [goalBase.positions[e.near][0] + e.offset_cm[0] / 100, goalBase.positions[e.near][1] + e.offset_cm[1] / 100]];
+      return [n, e.at.slice(0, 2)];
+    })));
+  }
+};
+$("goalReset").onclick = () => { goalChoice = {}; renderGoal({}); };
+$("goalCancel").onclick = () => { $("task").value = taskBefore; $("goalDialog").close(); checkTask(); };
+$("goalUse").onclick = () => {
+  if (!$("task").value.trim()) { alert("Write what Dream-1 should do."); return; }
+  const moved = Object.keys(goalView?.goal || {});
+  if (!moved.length) { goalSpec = null; showTask(); $("goalDialog").close(); return; }  // judged by the words
+  goalSpec = { type: "goal", objects: Object.fromEntries(moved.map(n => {
+    const c = goalChoice[n] || defaultChoice(n);
+    if (c.startsWith("in:")) return [n, { in: c.slice(3) }];
+    if (c.startsWith("near:")) return [n, { near: c.slice(5), offset_cm: offsetCm(n, c.slice(5)).map(v => Math.round(v * 10) / 10), z: goalView.positions[n][2] }];
+    return [n, { at: goalView.positions[n] }];
+  })) };
+  $("goalDialog").close();
+  checkTask();
+  showTask();
 };
 
 /* ---------- human control (KSY: teleop.py, monitor.py, recovery.py) ---------- */

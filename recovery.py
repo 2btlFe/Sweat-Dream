@@ -17,7 +17,7 @@ Recovery goal "carry" (pick the object up again):
     lift      12 cm up
     lifted?   the monitor sees the object lifted in a hand (stage carry)
 Recovery goal "success" (finish the task): the steps above unless the object is already held, then
-    transport above the target (bowl or plate)
+    transport above its goal: the bowl or plate, or its spot beside an item / on the table (goal scene, monitor.spot)
     set_down  down until the object's bottom reaches the target
     open      open the gripper
     retreat   12 cm up (the monitor counts a placed object as done only once the hand has left it)
@@ -110,6 +110,7 @@ class Recovery:
     def start(self, env, event, goal):
         """The monitor reported a failure with a recovery goal: take the arms and start the first attempt."""
         self.event, self.goal = event, goal
+        self.obj = self.monitor.object  # the object this recovery is for (the monitor may move on to the next one)
         self.attempt, self.t, self.result, self.side = 0, 0.0, None, None
         self.other_arm = False
         self.active = True
@@ -191,14 +192,21 @@ class Recovery:
         first = not self.entered
         self.entered = True
         t = self.teleop
-        obj = self.monitor.object
+        obj = self.obj
         with t.lock:
             if name == "prepare":
                 if first:
                     position = env.data.body(obj).xpos
                     nearer = "left" if position[0] > 0 else "right"
-                    # After an attempt the arm could not reach, the next one uses the other arm.
-                    self.side = nearer if not self.other_arm else ("right" if nearer == "left" else "left")
+                    # The arm that can reach both the object and where it goes (its goal may be on the other side:
+                    # the plate, a spot beside an item); the nearer one first. After an attempt the arm could not
+                    # reach, the next one uses the other arm.
+                    order = [nearer, "right" if nearer == "left" else "left"]
+                    if self.monitor.understood():  # also when only picking it up: it goes there next
+                        able = [s for s in order if self._reaches(env, s, position + [0, 0, ABOVE_OBJECT_M])
+                                and self._reaches(env, s, self.monitor.spot(env, obj) + [0, 0, ABOVE_PLACE_M])]
+                        order = able + [s for s in order if s not in able]
+                    self.side = order[0] if not self.other_arm else order[1]
                     t.active = self.side
                     t.grip[self.side] = 1.0
                     hand = t.targets[self.side][0]
@@ -237,7 +245,8 @@ class Recovery:
                 return self._arrived(self.aim, name)
             if name == "transport":
                 if first:
-                    target = env.data.body(self.monitor.target).xpos.copy()
+                    # Its goal: the bowl / plate, or its spot beside an item (as the item is now) or on the table.
+                    target = self.monitor.spot(env, obj)
                     # As a click on the target does (teleop.clicked): set down until the object's bottom reaches it.
                     height = t.grasp_height.get(self.side)
                     self.release = height - 0.02 if height is not None else RELEASE_M
@@ -263,14 +272,23 @@ class Recovery:
                 raise Failed(f"the {obj} was not lifted")
             return False
         if name == "placed?":
-            if self.monitor.stage == "success":
+            if self.monitor.is_done(obj) or self.monitor.stage == "success":
                 return True
             if self._waited(CHECK_S):
-                raise Failed(f"the {obj} is not resting in the {self.monitor.target}")
+                raise Failed(f"the {obj} is not resting at its goal")
             return False
         raise ValueError(name)
 
     # ---- helpers (teleop lock held where they touch teleop) -----------------------------------------------------
+
+    def _reaches(self, env, side, point):
+        """Whether the arm can hold its hand pointing down at a point (IK only, from a few starts)."""
+        t = self.teleop
+        limits = env.model.jnt_range[[env.model.joint(f"{side}_joint{i}").id for i in range(1, 7)]]
+        rng = np.random.default_rng(1)
+        seeds = [t.joints[side]] + [rng.uniform(limits[:, 0], limits[:, 1]) for _ in range(5)]
+        point = clip(point)
+        return any(t._ik(env, side, (point, yaw(turn) @ DOWN), seeds)[1] for turn in (0.0, np.pi / 2))
 
     def _grasp_point(self, env, obj):
         grasp = env.data.body(obj).xpos + [0, 0, grasp_dz(env, obj)]
@@ -355,7 +373,7 @@ class Recovery:
         """The arm whose closed gripper holds the object, or None."""
         if self.monitor.stage not in ("carry", "placed"):
             return None
-        obj = env.data.body(self.monitor.object).xpos
+        obj = env.data.body(self.obj).xpos
         t = self.teleop
         with t.lock:
             closed = [s for s in SIDES if t.grip[s] < 0.5]

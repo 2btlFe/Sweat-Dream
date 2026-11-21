@@ -134,6 +134,17 @@ labels include the rules snapshot, so later rule changes do not silently rewrite
 type's rules (the older single set is read as the pick & place rules). To add a task type: its rules in `judge.RULES`,
 a `judge_<type>` function and a branch in `judge.classify()`, and its controls in the page's `TYPE_UI`.
 
+## Goal scene: set success by dragging objects
+
+Instead of judging by the task's words, you can show what "done" looks like. Under **Run**, press **Set goal scene…**:
+a popup shows the robot's top camera on the start scene (same seed and settings as the run). Drag each object to
+where it should end up; when you let go, the simulator drops it there and lets it settle (into the bowl, onto the
+plate), and the picture shows the result. **Use this goal**, then **Run**: the run is judged on that goal.
+
+Every object you moved must end within the distance of its goal spot (**Success rules › Goal scene**), at its height
+(in the bowl, not beside it), released if required, and still. Objects you did not move are not judged. If the seed
+or the scene settings change after the goal is set, Run asks before dropping the goal.
+
 ## Files
 
 | File | What it does |
