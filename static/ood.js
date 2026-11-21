@@ -1,14 +1,50 @@
 const $ = id => document.getElementById(id);
+let cameraEditor;
+
+function editCameras(form, target, controls) {
+  const saved = new Map();
+  let selected = target.value;
+  const snapshot = () => Object.fromEntries(Array.from(controls, ([name, { input }]) => [
+    name, input.valueAsNumber,
+  ]));
+
+  target.addEventListener("input", () => {
+    if (target.value === selected) return;
+    const invalid = Array.from(controls.values()).find(({ input }) => !input.validity.valid);
+    if (invalid) {
+      target.value = selected;
+      invalid.input.reportValidity();
+      return;
+    }
+    saved.set(selected, snapshot());
+    selected = target.value;
+    const values = saved.get(selected);
+    for (const [name, { input, slider }] of controls) {
+      input.value = values?.[name] ?? input.defaultValue;
+      slider.value = input.value;
+    }
+  });
+  form.addEventListener("reset", () => {
+    saved.clear();
+    selected = Array.from(target.options).find(option => option.defaultSelected).value;
+  });
+
+  return {
+    manages: name => name === target.name || controls.has(name),
+    read: () => Object.fromEntries([...saved, [selected, snapshot()]]),
+  };
+}
 
 export async function loadOOD(api) {
   const form = $("ood");
   form.addEventListener("submit", event => event.preventDefault());
   try {
     const groups = await api("/api/ood");
-    const supported = ["Camera view", "Image effects", "Lighting & surface"];
+    const supported = ["Start camera view", "Left arm · initial angles", "Right arm · initial angles", "Image effects", "Lighting & surface"];
     if (Object.keys(groups).length !== supported.length || supported.some(group => !(group in groups))) {
       throw new Error("Outdated scene settings");
     }
+    const cameraControls = new Map();
     for (const [title, fields] of Object.entries(groups)) {
       const group = document.createElement("fieldset");
       const legend = document.createElement("legend");
@@ -42,12 +78,14 @@ export async function loadOOD(api) {
           const pair = document.createElement("div");
           pair.className = "ood-slider";
           pair.append(slider, control);
+          if (title === "Start camera view") cameraControls.set(name, { input: control, slider });
           fieldRow.append(pair);
         }
         group.append(fieldRow);
       }
       form.append(group);
     }
+    cameraEditor = editCameras(form, $("ood-camera_target"), cameraControls);
     $("oodReset").hidden = false;
     return true;
   } catch (err) {
@@ -60,7 +98,9 @@ export async function loadOOD(api) {
 export function readOOD(report = true) {
   const form = $("ood");
   if (!(report ? form.reportValidity() : form.checkValidity())) return null;
-  return Object.fromEntries(Array.from(form.querySelectorAll("input[name], select[name]"), control => [
-    control.name, control.type === "number" ? control.valueAsNumber : control.value,
-  ]));
+  const values = Object.fromEntries(Array.from(form.querySelectorAll("input[name], select[name]"))
+    .filter(control => !cameraEditor?.manages(control.name))
+    .map(control => [control.name, control.type === "number" ? control.valueAsNumber : control.value]));
+  if (cameraEditor) values.camera_views = cameraEditor.read();
+  return values;
 }

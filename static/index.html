@@ -93,10 +93,10 @@
       <button id="stop" class="stop" hidden>Stop</button>
     </div>
   </section>
-  <section class="panel ood-panel" aria-label="Camera &amp; environment settings">
+  <section class="panel ood-panel" aria-label="Camera, robot &amp; environment settings">
     <details class="ood" open>
-      <summary>Camera &amp; environment settings</summary>
-      <form id="ood" class="ood-grid" aria-label="Camera &amp; environment settings"></form>
+      <summary>Camera, robot &amp; environment settings</summary>
+      <form id="ood" class="ood-grid" aria-label="Camera, robot &amp; environment settings"></form>
       <button id="oodReset" type="reset" form="ood" hidden>Reset scene settings</button>
       <p id="oodError" class="muted" role="status" hidden></p>
     </details>
@@ -109,7 +109,7 @@
     </div>
     <img id="live" class="view" alt="Live camera view" hidden>
     <div id="placeholder" class="view placeholder">Preparing the initial camera view…</div>
-    <div class="legend"><span>Top camera</span><span>Wrist cameras</span></div>
+    <div class="legend"><span>Workspace camera</span><span>Wrist cameras</span></div>
     <p class="muted" id="previewStatus" role="status" hidden></p>
     <p class="muted" id="statusMore"></p>
     <pre id="log" hidden></pre>
@@ -168,7 +168,7 @@ async function renderPreview() {
     $("live").src = previewUrl;
     $("live").hidden = false;
     $("placeholder").hidden = true;
-    note.textContent = "Initial scene · current scene settings";
+    note.textContent = "Initial scene · settings apply on Run";
   } catch (error) {
     if (revision === previewRevision && !running && !starting) {
       note.textContent = "Preview unavailable: " + error.message;
