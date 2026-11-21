@@ -364,7 +364,7 @@ def delete_runs(run_ids):
     never deleted. @return (deleted ids, skipped ids)."""
     deleted, skipped = [], []
     for run_id in run_ids:
-        busy = RUNNER.running() and RUNNER.run_id == run_id
+        busy = (RUNNER.running() and RUNNER.run_id == run_id) or run_id in BATCH.active_ids()
         folders = [folder / run_id for folder in (RUNS, EPISODES)]
         if not ID_RE.match(run_id) or busy or not any(f.exists() for f in folders):
             skipped.append(run_id)
@@ -402,96 +402,158 @@ def write_hand_label(d, label, note, rules):
                                   "saved_at": datetime.now().isoformat(timespec="seconds")})
 
 
+MAX_WORKERS = 4  # episodes at once; 3 at once ran like one at a time on an M3 (8 cores), see README
+
+
 class Batch:
-    """Many episodes one after another in the background: no camera view, one seed each (its start scene, and the
+    """Many episodes in the background, `workers` at a time: no camera view, one seed each (its start scene, and the
     scene settings marked random drawn from it), and a label from the rules as they were when the batch started.
-    Stops on a run error (such as a rejected API key), after three invalid episodes in a row, or when asked."""
+    Episode i always gets the i-th seed and task, however many run at once. Stops starting new episodes on a run
+    error (such as a rejected API key) or after three invalid episodes in a row; Stop batch stops them all."""
 
     def __init__(self):
         self.thread = None
         self.stop_requested = False
         self.info = None
+        self.lock = threading.Lock()
+        self.active = {}  # run id -> (episode index, process, stop file)
+        self.next = 0
 
     def running(self):
         return self.thread is not None and self.thread.is_alive()
 
-    def start(self, tasks, seeds, seconds, changes, random_names, split, robot=(), mode="plain"):
+    def active_ids(self):
+        with self.lock:
+            return set(self.active)
+
+    def start(self, tasks, seeds, seconds, changes, random_names, split, robot=(), mode="plain", workers=1):
         """@param seeds One seed per episode. @param changes, random_names The scene settings, and the ones drawn
-        from each seed. @param split "train" or "eval" (shown on the page)."""
+        from each seed. @param split "train" or "eval" (shown on the page). @param workers Episodes at once."""
         if self.running() or RUNNER.running():
             raise RuntimeError("A run is already going.")
         if not has_api_key():
             raise RuntimeError("Enter your API key first.")
-        self.stop_requested = False
+        workers = max(1, min(MAX_WORKERS, int(workers), len(seeds)))
+        self.stop_requested, self.next, self.active = False, 0, {}
         self.info = {"id": "b" + datetime.now().strftime("%Y%m%d-%H%M%S"), "tasks": tasks, "total": len(seeds),
                      "seconds": seconds, "seeds": seeds, "seed": seeds[0], "split": split, "ood": changes,
                      "ood_random": random_names, "rules": current_rules(), "robot": list(robot), "mode": mode,
-                     "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
-                     "started": time.time(), "ended": None, "current": None, "stopped_reason": None, "durations": []}
-        self.thread = threading.Thread(target=self._loop, daemon=True)
+                     "workers": workers, "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
+                     "started": time.time(), "ended": None, "current": None, "active": [], "stopped_reason": None,
+                     "durations": [], "invalid_in_a_row": 0}
+        self.thread = threading.Thread(target=self._supervise, daemon=True)
         self.thread.start()
 
     def stop(self):
         if self.running():
             self.stop_requested = True
-            RUNNER.stop()
+            with self.lock:
+                for _index, _process, stop_file in self.active.values():
+                    stop_file.touch()
 
-    def _loop(self):
+    def _supervise(self):
         info = self.info
-        invalid_in_a_row = 0
+        threads = []
         try:
-            for i in range(info["total"]):
-                if self.stop_requested:
-                    break
-                task, seed = info["tasks"][i % len(info["tasks"])], info["seeds"][i]
-                prompt = task["prompt"]
-                info["current"] = {"index": i + 1, "task": prompt, "seed": seed}
-                started = time.time()
-                seeding = ["--seed", str(seed)] + (["--ood-random", ",".join(info["ood_random"])] if info["ood_random"] else [])
-                RUNNER.start(prompt, info["seconds"], info["ood"], seeding, live=False, robot=info["robot"],
-                             mode=info["mode"],
-                             extra_env={"BATCH_ID": info["id"], "JUDGE_SPEC": json.dumps(task["judge"])})
-                run_id, process = RUNNER.run_id, RUNNER.process
-                while process.poll() is None:  # a run that hangs is stopped, then killed
-                    waited = time.time() - started
-                    if waited > info["seconds"] + 180:
-                        RUNNER.stop()
-                    if waited > info["seconds"] + 240:
-                        process.kill()
-                    time.sleep(0.5)
-                d = run_dir(run_id)
-                meta = read_json(d / "meta.json", {}) if d else {}
-                verdict = (judge.evaluate(meta, read_json(d / "trajectory.json", {}), info["rules"]) if d
-                           else judge.invalid("no_result"))
-                if d:
-                    write_label(d, verdict, info["rules"], batch_id=info["id"], source="batch")  # a new run: no hand label yet
-                info["counts"][verdict["label"]] += 1
-                info["done"] += 1
-                info["durations"].append(time.time() - started)
-                invalid_in_a_row = invalid_in_a_row + 1 if verdict["label"] == "invalid" else 0
-                if verdict["reason"] == "execution_error" and not self.stop_requested:
-                    info["stopped_reason"] = f"Run error: {str(meta.get('error') or '')[:160]}"
-                    break
-                if invalid_in_a_row >= 3:
-                    info["stopped_reason"] = "Three invalid episodes in a row."
-                    break
+            for w in range(info["workers"]):
+                if w:
+                    time.sleep(1.0)  # spread the Dream session starts a little
+                thread = threading.Thread(target=self._worker, daemon=True)
+                thread.start()
+                threads.append(thread)
+            for thread in threads:
+                thread.join()
             if self.stop_requested:
                 info["stopped_reason"] = "Stopped by you."
         except Exception as error:  # noqa: BLE001  (shown on the page)
             info["stopped_reason"] = f"Batch error: {error}"
         finally:
-            info["current"] = None
+            info["current"], info["active"] = None, []
             info["ended"] = time.time()
+
+    def _spawn(self, i, run_id, stop_file):
+        """Start episode i's sim.py (no camera view or control state; its output goes to a log file)."""
+        info = self.info
+        task, seed = info["tasks"][i % len(info["tasks"])], info["seeds"][i]
+        env = {**os.environ, "PYTHONUTF8": "1", "PYTHONUNBUFFERED": "1", "PYTHONWARNINGS": "ignore",
+               "STOP_FILE": str(stop_file), "RUN_DIR": str(RUNS / run_id), "BATCH_ID": info["id"],
+               "JUDGE_SPEC": json.dumps(task["judge"])}
+        if PAGE_KEY["value"]:
+            env["DREAM_API_KEY"] = PAGE_KEY["value"]
+        command = [sys.executable, str(HERE / "sim.py"), task["prompt"], "--seconds", str(info["seconds"]),
+                   *info["robot"], "--seed", str(seed), {"collect": "--collect", "plain": "--plain"}[info["mode"]]]
+        if info["ood"]:
+            command += ["--ood", json.dumps(info["ood"])]
+        if info["ood_random"]:
+            command += ["--ood-random", ",".join(info["ood_random"])]
+        log = open(WORK / f"{run_id}.log", "w", encoding="utf-8")
+        process = subprocess.Popen(command, cwd=str(HERE), env=env, stdin=subprocess.DEVNULL, stdout=log,
+                                   stderr=subprocess.STDOUT)
+        log.close()
+        return process, task["prompt"], seed
+
+    def _worker(self):
+        info = self.info
+        while True:
+            with self.lock:
+                if self.stop_requested or info["stopped_reason"] or self.next >= info["total"]:
+                    return
+                i = self.next
+                self.next += 1
+                run_id = datetime.now().strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
+                stop_file = WORK / f"stop-{run_id}"
+            started = time.time()
+            process, prompt, seed = self._spawn(i, run_id, stop_file)
+            with self.lock:
+                self.active[run_id] = (i, process, stop_file)
+                self._show_active(prompt_of={run_id: (prompt, seed)})
+            while process.poll() is None:  # a run that hangs is stopped, then killed
+                waited = time.time() - started
+                if waited > info["seconds"] + 180:
+                    stop_file.touch()
+                if waited > info["seconds"] + 240:
+                    process.kill()
+                time.sleep(0.5)
+            d = run_dir(run_id)
+            meta = read_json(d / "meta.json", {}) if d else {}
+            verdict = (judge.evaluate(meta, read_json(d / "trajectory.json", {}), info["rules"]) if d
+                       else judge.invalid("no_result"))
+            if d:
+                write_label(d, verdict, info["rules"], batch_id=info["id"], source="batch")  # a new run: no hand label yet
+            with self.lock:
+                self.active.pop(run_id, None)
+                self._show_active()
+                info["counts"][verdict["label"]] += 1
+                info["done"] += 1
+                info["durations"].append(time.time() - started)
+                info["invalid_in_a_row"] = info["invalid_in_a_row"] + 1 if verdict["label"] == "invalid" else 0
+                if verdict["reason"] == "execution_error" and not self.stop_requested and not info["stopped_reason"]:
+                    info["stopped_reason"] = f"Run error: {str(meta.get('error') or '')[:160]}"
+                elif info["invalid_in_a_row"] >= 3 and not info["stopped_reason"]:
+                    info["stopped_reason"] = "Three invalid episodes in a row."
+            stop_file.unlink(missing_ok=True)
+
+    def _show_active(self, prompt_of=None):
+        """The episodes going now, for the page (called with the lock held)."""
+        info = self.info
+        names = getattr(self, "_names", {})
+        names.update(prompt_of or {})
+        self._names = names
+        active = sorted((index, run_id) for run_id, (index, _p, _s) in self.active.items())
+        info["active"] = [{"index": index + 1, "task": names.get(run_id, ("", None))[0],
+                           "seed": names.get(run_id, ("", None))[1]} for index, run_id in active]
+        info["current"] = info["active"][0] if info["active"] else None
 
     def status(self):
         if not self.info:
             return None
-        info = {k: v for k, v in self.info.items() if k not in ("durations", "seeds")}
+        info = {k: v for k, v in self.info.items() if k not in ("durations", "seeds", "invalid_in_a_row")}
         durations = self.info["durations"]
         remaining = info["total"] - info["done"]
         info["running"] = self.running()
         info["elapsed_s"] = round((info["ended"] or time.time()) - info["started"])
-        info["eta_s"] = round(sum(durations) / len(durations) * remaining) if durations and self.running() else None
+        info["eta_s"] = (round(sum(durations) / len(durations) * remaining / info["workers"])
+                         if durations and self.running() else None)
         return info
 
 
@@ -799,7 +861,10 @@ class Handler(BaseHTTPRequestHandler):
                 mode = body.get("mode") or "collect"
                 if mode not in ("collect", "plain"):
                     raise ValueError("A batch runs in data collection or Dream-1 only mode.")
-                BATCH.start(tasks, seeds, seconds, changes, random_names, split, robot, mode)
+                workers = int(body.get("workers") or 1)
+                if not 1 <= workers <= MAX_WORKERS:
+                    raise ValueError(f"Run 1 to {MAX_WORKERS} episodes at once.")
+                BATCH.start(tasks, seeds, seconds, changes, random_names, split, robot, mode, workers)
             except (ValueError, TypeError, AttributeError) as error:
                 return self.send_json({"error": str(error)}, 400)
             except RuntimeError as error:

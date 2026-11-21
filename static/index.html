@@ -285,10 +285,14 @@
           </div>
         </div>
       </div>
-      <label style="margin-top: 12px">Each episode</label>
-      <div class="toggle" role="group" aria-label="Batch mode" style="max-width: 420px">
-        <button id="batchCollect" class="on" aria-pressed="true" title="Dream-1; when it fails, the recovery script takes over">Data collection</button>
-        <button id="batchPlain" aria-pressed="false" title="Dream-1 only">Dream-1 only</button>
+      <div class="grid2" style="margin: 12px 0 0; grid-template-columns: minmax(0, 2fr) minmax(90px, 1fr)">
+        <div><label>Each episode</label>
+          <div class="toggle" role="group" aria-label="Batch mode">
+            <button id="batchCollect" class="on" aria-pressed="true" title="Dream-1; when it fails, the recovery script takes over">Data collection</button>
+            <button id="batchPlain" aria-pressed="false" title="Dream-1 only">Dream-1 only</button>
+          </div>
+        </div>
+        <div><label for="batchWorkers">At once</label><input id="batchWorkers" type="number" min="1" max="4" value="2" title="Episodes run at the same time (1 to 4)"></div>
       </div>
       <p class="muted small" style="margin: 8px 0 12px">Each episode starts from its own seed. The scene settings below apply to every episode; the ones marked <em>random</em> are drawn from each episode's seed. Runs in the background, without the cameras.</p>
       <label>Tasks <span class="muted">(taken in turn)</span></label>
@@ -1123,12 +1127,14 @@ $("customPrompt").addEventListener("keydown", e => { if (e.key === "Enter") { e.
 
 function estimate() {
   const count = Number($("batchCount").value) || 0, secs = Number($("batchSeconds").value) || 0;
-  const minutes = Math.round(count * (secs + 20) / 60);
+  const workers = Math.max(1, Math.min(4, Number($("batchWorkers").value) || 1, count || 1));
+  const minutes = Math.round(Math.ceil(count / workers) * (secs + 20) / 60);
   const seeds = split === "eval" ? `eval seeds 1-${Math.min(count, 50)}` : `seeds ${$("seed")?.value || "?"}…${(Number($("seed")?.value) || 0) + count - 1}`;
-  $("batchEstimate").textContent = count && secs ? `${count} episodes · ${seeds} · about ${minutes} min · ${batchTasks.size} task${batchTasks.size > 1 ? "s" : ""}` : "";
+  $("batchEstimate").textContent = count && secs ? `${count} episodes · ${workers} at once · ${seeds} · about ${minutes} min · ${batchTasks.size} task${batchTasks.size > 1 ? "s" : ""}` : "";
   return minutes;
 }
 $("batchCount").oninput = estimate;
+$("batchWorkers").oninput = estimate;
 $("batchSeconds").oninput = estimate;
 
 $("startBatch").onclick = async () => {
@@ -1141,6 +1147,7 @@ $("startBatch").onclick = async () => {
       .map(({ prompt, judge }) => ({ prompt, judge }));
     const { seed, ood_random } = seeding();
     await api("/api/batch", { tasks, count, seconds: $("batchSeconds").value, split, seed, ood, mode: batchMode,
+                              workers: Number($("batchWorkers").value) || 1,
                               ood_random: isOpenYAM() ? [] : ood_random });
     followBatch = true;
     refresh();
@@ -1172,7 +1179,8 @@ function showBatch(b) {
   $("batchBar").style.width = `${100 * b.done / b.total}%`;
   $("batchCounts").innerHTML = `${chip("success")} ${b.counts.success} ${chip("failure")} ${b.counts.failure} ${chip("invalid")} ${b.counts.invalid}`
     + (valid ? ` <span class="muted">· ${Math.round(100 * b.counts.success / valid)}% success of valid</span>` : "");
-  $("batchNow").textContent = b.current ? `Now: #${b.current.index} ${b.current.task} (seed ${b.current.seed})`
+  const now = b.active?.length ? b.active : (b.current ? [b.current] : []);
+  $("batchNow").textContent = now.length ? `Now${b.workers > 1 ? ` (${now.length} at once)` : ""}: ` + now.map(e => `#${e.index} ${e.task} (seed ${e.seed})`).join(" · ")
     : `${b.split === "eval" ? "Eval seeds" : `Seeds from ${b.seed}`}${b.ood_random?.length ? ` · random: ${b.ood_random.join(", ")}` : ""} · ${b.seconds} s each · labeled with the rules as at the start`;
   $("batchEnd").textContent = b.running ? "" : b.stopped_reason || "Finished.";
   $("batchEnd").classList.toggle("bad", !b.running && !!b.stopped_reason && b.stopped_reason !== "Stopped by you.");
@@ -1324,7 +1332,9 @@ async function refresh() {
   }
   if (batchRunning) {
     $("statusText").textContent = "Batch running";
-    $("statusMore").textContent = b.current ? `episode ${b.current.index} of ${b.total} · ${b.current.task} · seed ${b.current.seed}` : "";
+    const now = b.active?.length ? b.active : (b.current ? [b.current] : []);
+    $("statusMore").textContent = now.length > 1 ? `episodes ${now.map(e => e.index).join(", ")} of ${b.total} · ${b.workers} at once`
+      : now.length ? `episode ${now[0].index} of ${b.total} · ${now[0].task} · seed ${now[0].seed}` : "";
   } else if (b && mode === "batch") {
     $("statusText").textContent = b.stopped_reason ? "Batch stopped" : "Batch finished";
     $("statusMore").textContent = `${b.done} of ${b.total} episodes`;

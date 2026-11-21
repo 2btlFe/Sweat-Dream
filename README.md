@@ -84,7 +84,8 @@ like any other run (Stop is its normal end).
 ### Batch (many episodes in the background)
 
 Switch to **Batch**. Pick what each episode does (**Data collection**: Dream-1, then the recovery script on a
-failure; or **Dream-1 only**), the number of episodes and the seconds per episode, and the seeds: **Seed, Seed + 1, …**
+failure; or **Dream-1 only**), how many run **at once** (1 to 4), the number of episodes and the seconds per
+episode, and the seeds: **Seed, Seed + 1, …**
 (train seeds, from the Seed field) or **Eval set (50)** (the fixed evaluation seeds, easy / medium / hard). Each
 episode starts from its seed's scene, with the scene settings above; the ones marked random are drawn from each
 episode's seed. The cameras are not shown; the page shows progress, success / failure / invalid counts and the time
@@ -99,6 +100,12 @@ target), e.g. "put the apple in the bowl and the banana on the plate" → apple 
 only when every pair holds the rules at the end; otherwise the reason says how many were placed and which object
 failed first (e.g. `1/2 placed; banana: outside_target`). The run's chart has one line per object. Give these
 episodes more time (90–120 s for two objects).
+
+**At once**: each episode is its own simulator process, so several run side by side; episode *i* still gets the
+*i*-th seed and task, whatever order they finish in. On an M3 (8 cores), 3 Dream-1 episodes at once ran as fast as one
+(simulated time, response times) with no session errors; more at once can slow every simulator, and a Dream-1
+session expires after about 10 s without a request, so raise it with care. Each episode's output is kept in a log
+file while the server runs; **Stop batch** stops every episode that is going.
 
 Every run keeps its seed, split, scene settings and the values drawn from the seed in `meta.json`, so its start can
 be made again (`python sim.py "..." --seed N --ood-random ...`). Each batch episode is labeled with the rules as they were when the batch started (`runs/<id>/label.json`, `source: batch`). A batch
