@@ -18,6 +18,7 @@ import argparse
 import json
 import ast
 import os
+import urllib.parse
 import re
 import secrets
 import subprocess
@@ -82,11 +83,11 @@ def write_json(path, data):
 
 
 def current_rules():
-    saved = read_json(RULES, {})
+    """Every task type's rules (runs/rules.json; types or values not saved keep their defaults)."""
     try:
-        return judge.normalize_rules({**DEFAULT_RULES, **saved})
+        return judge.normalize_rules(read_json(RULES, {}) or {})
     except (TypeError, ValueError):
-        return dict(DEFAULT_RULES)
+        return judge.normalize_rules({})
 
 
 def run_dir(run_id):
@@ -134,7 +135,7 @@ class Runner:
         @param seeding sim.py's seed arguments (seed_web.seeding_args): --seed, --ood-random.
         @param scene A custom layout (parse_scene), which replaces the seed's; seeding is then not used.
         @param live Whether to write the camera view for the page (batches do not).
-        @param extra_env More environment variables for sim.py (BATCH_ID, JUDGE_PAIRS).
+        @param extra_env More environment variables for sim.py (BATCH_ID, JUDGE_SPEC).
         """
         with self.lock:
             if self.running():
@@ -287,7 +288,7 @@ class Batch:
                 started = time.time()
                 seeding = ["--seed", str(seed)] + (["--ood-random", ",".join(info["ood_random"])] if info["ood_random"] else [])
                 RUNNER.start(prompt, info["seconds"], info["ood"], seeding, live=False,
-                             extra_env={"BATCH_ID": info["id"], "JUDGE_PAIRS": json.dumps(task["pairs"])})
+                             extra_env={"BATCH_ID": info["id"], "JUDGE_SPEC": json.dumps(task["judge"])})
                 run_id, process = RUNNER.run_id, RUNNER.process
                 while process.poll() is None:  # a run that hangs is stopped, then killed
                     waited = time.time() - started
@@ -351,11 +352,33 @@ def brief(verdict):
     return {k: v for k, v in verdict.items() if k not in ("dist", "touch", "t", "series")}
 
 
+def spec_items(spec):
+    """The scene items a judge spec needs on the table ("any" object needs none in particular)."""
+    if spec["type"] == "pick_place":
+        return {name for pair in spec["pairs"] for name in (pair["object"], pair["target"])}
+    return set() if spec["object"] == "any" else {spec["object"]}
+
+
+def task_spec(prompt, given, scene):
+    """The spec a task is judged on: the one given (from the page's "judge as"), else the one its words give.
+    @param given A spec, older {"pairs": [...]} / {"object", "target"}, or None.
+    @return The spec, or None when the task is not judged.
+    @throws ValueError When a given spec is not valid or needs an item that is not on the table.
+    """
+    spec = judge.normalize_spec(given) if given else judge.classify(prompt)
+    if given and spec is None:
+        raise ValueError(f"Pick what to judge '{prompt}' on (each object once, at most {judge.MAX_PAIRS} pairs).")
+    if spec:
+        missing = sorted(name for name in spec_items(spec) if name not in scene["items"])
+        if missing:
+            raise ValueError(f"Not on the table for '{prompt}': {', '.join(missing)}")
+    return spec
+
+
 def parse_task_list(tasks, scene):
-    """Check a batch's tasks. Each is a prompt the judge understands ("put apple into the bowl"), or any prompt with
-    the object -> target pairs it is judged on: {"prompt": ..., "pairs": [{"object": "apple", "target": "bowl"}, ...]}
-    (or one {"object", "target"}). Every object at most once, up to judge.MAX_PAIRS pairs, all on the table.
-    @return [{"prompt", "pairs": [{"object", "target"}]}].
+    """Check a batch's tasks: each a prompt, with the spec it is judged on ("judge", or older "pairs" /
+    "object" + "target"), or a prompt alone whose words give the spec. Every batch task must be judged.
+    @return [{"prompt", "judge": spec}].
     @throws ValueError
     """
     if not isinstance(tasks, list) or not tasks:
@@ -366,23 +389,25 @@ def parse_task_list(tasks, scene):
         prompt = re.sub(r"\s+", " ", str(given.get("prompt") or "")).strip()
         if not prompt or len(prompt) > 300:
             raise ValueError("A prompt must be 1 to 300 characters.")
-        if isinstance(given.get("pairs"), list):
-            pairs = [(p.get("object"), p.get("target")) for p in given["pairs"] if isinstance(p, dict)]
-        elif given.get("object") or given.get("target"):
-            pairs = [(given.get("object"), given.get("target"))]
-        else:
-            parsed = judge.parse_task(prompt)
-            pairs = [parsed] if parsed else []
-        objects = [o for o, _ in pairs]
-        if not pairs or any(o not in OBJECTS or g not in TARGETS for o, g in pairs):
-            raise ValueError(f"Pick the objects and targets to judge '{prompt}' on.")
-        if len(pairs) > judge.MAX_PAIRS or len(set(objects)) != len(objects):
-            raise ValueError(f"'{prompt}': each object once, at most {judge.MAX_PAIRS}.")
-        missing = sorted({name for pair in pairs for name in pair if name not in scene["items"]})
-        if missing:
-            raise ValueError(f"Not on the table for '{prompt}': {', '.join(missing)}")
-        clean.append({"prompt": prompt, "pairs": [{"object": o, "target": g} for o, g in pairs]})
+        old = {"pairs": given["pairs"]} if isinstance(given.get("pairs"), list) else \
+            ({"object": given.get("object"), "target": given.get("target")} if given.get("target") else None)
+        spec = task_spec(prompt, given.get("judge") or old, scene)
+        if spec is None:
+            raise ValueError(f"Pick what to judge '{prompt}' on.")
+        clean.append({"prompt": prompt, "judge": spec})
     return clean
+
+
+def spec_text(spec):
+    """A spec in words, for the page."""
+    if not spec:
+        return None
+    name = lambda n: "any object" if n == "any" else n.replace("water_", "")
+    if spec["type"] == "pick_place":
+        return "Pick & place: " + ", ".join(f"{name(p['object'])} → {p['target']}" for p in spec["pairs"])
+    if spec["type"] == "move_to_area":
+        return f"Move to area: {name(spec['object'])} → {spec['area']}"
+    return f"{spec['type'].replace('_', ' ').capitalize()}: {name(spec['object'])}"
 
 
 def run_options(body):
@@ -434,6 +459,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "no frame yet"}, 404)
         if path == "/api/rules":
             return self.send_json(current_rules())
+        if path == "/api/task-types":  # each type's rules: default, minimum, maximum (the page builds its controls)
+            return self.send_json({"rules": judge.RULES, "areas": judge.AREAS})
+        if path == "/api/classify":  # ?task=...: what a task would be judged on
+            task = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get("task", [""])[0]
+            spec = judge.classify(task)
+            return self.send_json({"spec": spec, "text": spec_text(spec)})
         if path == "/api/runs":
             runs = []
             rules = current_rules()
@@ -491,12 +522,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "Describe what to pick up and where to place it."}, 400)
             try:
                 changes, seeding, scene = run_options(body)
-                # Judged on the pairs sent (from the task's words), or on the object and target the task names;
-                # a task with neither runs but is not judged.
-                pairs = body.get("pairs") or ([dict(zip(("object", "target"), judge.parse_task(task)))]
-                                              if judge.parse_task(task) else [])
-                if pairs:
-                    pairs = parse_task_list([{"prompt": task, "pairs": pairs}], scene or FULL_TABLE)[0]["pairs"]
+                # Judged on the spec sent, or the one the task's words give; a task with neither runs, not judged.
+                spec = task_spec(task, body.get("judge"), scene or FULL_TABLE)
             except ValueError as error:
                 return self.send_json({"error": str(error)}, 400)
             if BATCH.running():
@@ -504,7 +531,7 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 seconds = min(300, max(10, int(float(body.get("seconds") or 60))))
                 RUNNER.start(task, seconds, changes, seeding, scene,
-                             extra_env={"JUDGE_PAIRS": json.dumps(pairs)} if pairs else None)
+                             extra_env={"JUDGE_SPEC": json.dumps(spec)} if spec else None)
             except (ValueError, TypeError):
                 return self.send_json({"error": "The time limit must be a number."}, 400)
             except RuntimeError as error:

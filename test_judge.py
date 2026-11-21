@@ -87,5 +87,74 @@ class JudgeTests(unittest.TestCase):
         self.assertEqual(verdict["label"], "invalid")
 
 
+def track(xs, zs=None, touching=None, dt=0.5):
+    """A trace of the apple moving along x (and z), with the other objects resting far away."""
+    n = len(xs)
+    zs = zs or [0.79] * n
+    times = [i * dt for i in range(n)]
+    still = lambda x, y: [[x, y, 0.79] for _ in times]
+    return {"t": times,
+            "positions": {"apple": [[x, -0.02, z] for x, z in zip(xs, zs)], "orange": still(0.25, 0.15),
+                          "banana": still(-0.25, 0.15), "water_bottle": still(0.25, -0.2),
+                          "bowl": still(0, -0.2), "plate": still(-0.2, -0.2)},
+            "touching": {name: (touching or [0] * n) if name == "apple" else [0] * n
+                         for name in ("apple", "orange", "banana", "water_bottle")}}
+
+
+class TaskTypeTests(unittest.TestCase):
+    def test_classify(self):
+        self.assertEqual(judge.classify("put apple in the bowl and banana on the plate"),
+                         {"type": "pick_place", "pairs": [{"object": "apple", "target": "bowl"},
+                                                          {"object": "banana", "target": "plate"}]})
+        self.assertEqual(judge.classify("Move an object to the center of the workspace"),
+                         {"type": "move_to_area", "object": "any", "area": "center"})
+        self.assertEqual(judge.classify("push the apple to the left side"),
+                         {"type": "move_to_area", "object": "apple", "area": "left"})
+        self.assertEqual(judge.classify("lift the orange"), {"type": "lift", "object": "orange"})
+        self.assertEqual(judge.classify("please pick the bottle up"), {"type": "lift", "object": "water_bottle"})
+        self.assertEqual(judge.classify("push the banana"), {"type": "push", "object": "banana"})
+        self.assertIsNone(judge.classify("wave hello"))
+
+    def test_move_to_area_any_object(self):
+        meta = {**META, "task": "Move an object to the left side of the workspace"}
+        moved = judge.evaluate(meta, track([0.0, 0.05, 0.15, 0.15, 0.15]), judge.DEFAULT_RULES)
+        self.assertEqual((moved["label"], moved["reason"]), ("success", "moved_to_area (apple)"))
+        short = judge.evaluate(meta, track([0.0, 0.03, 0.06, 0.06, 0.06]), judge.DEFAULT_RULES)
+        self.assertEqual(short["label"], "failure")
+        wider = judge.evaluate(meta, track([0.0, 0.03, 0.06, 0.06, 0.06]),
+                               {"move_to_area": {"zone_cm": 5, "release": True, "still_seconds": 1}})
+        self.assertEqual(wider["label"], "success")
+
+    def test_already_in_the_area_is_not_a_success(self):
+        meta = {**META, "task": "move the apple to the center"}
+        verdict = judge.evaluate(meta, track([0.0] * 5), judge.DEFAULT_RULES)
+        self.assertEqual(verdict["reason"], "already_there")
+
+    def test_lift_height_and_hold(self):
+        meta = {**META, "task": "lift the apple"}
+        up = track([0.0] * 6, zs=[0.79, 0.85, 0.86, 0.86, 0.86, 0.80])
+        self.assertEqual(judge.evaluate(meta, up, judge.DEFAULT_RULES)["label"], "success")
+        longer = {"lift": {"height_cm": 5, "hold_seconds": 2}}
+        self.assertEqual(judge.evaluate(meta, up, longer)["reason"], "not_held_long_enough")
+        higher = {"lift": {"height_cm": 10, "hold_seconds": 1}}
+        self.assertEqual(judge.evaluate(meta, up, higher)["reason"], "not_high_enough")
+
+    def test_push_distance_and_lifting(self):
+        meta = {**META, "task": "push the apple"}
+        slide = track([0.0, 0.02, 0.04, 0.07, 0.07])
+        self.assertEqual(judge.evaluate(meta, slide, judge.DEFAULT_RULES)["label"], "success")
+        carried = track([0.0, 0.02, 0.04, 0.07, 0.07], zs=[0.79, 0.86, 0.86, 0.79, 0.79])
+        self.assertEqual(judge.evaluate(meta, carried, judge.DEFAULT_RULES)["reason"], "lifted_not_pushed")
+        allowed = {"push": {"distance_cm": 5, "no_lift": False}}
+        self.assertEqual(judge.evaluate(meta, carried, allowed)["label"], "success")
+
+    def test_rules_old_flat_form_is_pick_place(self):
+        rules = judge.normalize_rules({"distance_cm": 9, "release": False, "still_seconds": 2})
+        self.assertEqual(rules["pick_place"], {"distance_cm": 9.0, "release": False, "still_seconds": 2.0})
+        self.assertEqual(rules["lift"], judge.DEFAULT_RULES["lift"])
+        with self.assertRaises(ValueError):
+            judge.normalize_rules({"lift": {"height_cm": 99}})
+
+
 if __name__ == "__main__":
     unittest.main()

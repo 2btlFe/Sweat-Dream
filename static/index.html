@@ -26,7 +26,7 @@
   .panel { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
   .row { display: grid; grid-template-columns: minmax(0, 1fr) 72px; gap: 10px; }
   .hrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .grid3 { display: grid; grid-template-columns: 90px 90px minmax(0, 1fr); gap: 10px; align-items: end; }
+  .grid3 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr); gap: 10px; align-items: start; }
   label, .label { display: block; font-size: 12px; font-weight: 550; color: var(--muted); margin-bottom: 5px; }
   input, select { width: 100%; min-width: 0; padding: 8px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--well); color: var(--text); font: inherit; }
   input[type="number"] { font-variant-numeric: tabular-nums; }
@@ -76,16 +76,18 @@
   .keystate { font-size: 12px; margin: 6px 0 14px; color: var(--ok); }
   .keystate.none { color: var(--warn); }
   .toggle { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-  .toggle button { border-radius: 0; background: var(--well); color: var(--muted); font-weight: 550; padding: 7px 6px; }
+  .toggle button { border-radius: 0; background: var(--well); color: var(--muted); font-weight: 550; padding: 7px 6px; line-height: 1.25; min-width: 0; overflow-wrap: anywhere; }
   .toggle button.on { background: var(--accent); color: var(--accent-text); font-weight: 700; }
   .mode { max-width: 320px; margin-bottom: 4px; }
+  .toggle.types { grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); margin-bottom: 10px; }
+  .toggle.types button { padding: 6px 4px; font-size: 12px; }
   .task-note { font-size: 12px; margin-top: 6px; color: var(--muted); }
   .task-note.bad, .scene-note.bad, .batch-end.bad { color: var(--bad); }
 
   /* chips (objects, batch tasks) */
   .items { display: flex; flex-wrap: wrap; gap: 6px; }
-  .item { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--well); color: var(--text); font-weight: 500; font-size: 12px; }
-  .item i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .item { display: inline-block; max-width: 100%; padding: 4px 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--well); color: var(--text); font-weight: 500; font-size: 12px; line-height: 1.4; text-align: left; overflow-wrap: anywhere; }
+  .item i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: -1px; }
   .item.on { background: var(--accent-soft); border-color: var(--accent); }
   .item.off { opacity: .45; text-decoration: line-through; }
   .item .judge { color: var(--muted); font-weight: 400; }
@@ -117,7 +119,7 @@
   .counts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 13px; }
 
   /* success rules */
-  .banners { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .banners { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
   .banner { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--well); display: flex; flex-direction: column; gap: 8px; }
   .banner .head { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 13px; }
   .banner .num { width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: var(--accent-text); display: grid; place-items: center; font-size: 11px; flex: none; }
@@ -135,9 +137,19 @@
   .chip.failure { background: var(--bad-bg); color: var(--bad); }
   .chip.invalid { background: var(--warn-bg); color: var(--warn); }
   table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
-  th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+  th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: break-word; }
   th { color: var(--muted); font-weight: 550; font-size: 12px; }
-  th:nth-child(1) { width: 17%; } th:nth-child(3) { width: 15%; } th:nth-child(5) { width: 13%; }
+  th:nth-child(1) { width: 17%; } th:nth-child(3) { width: 16%; } th:nth-child(5) { width: 14%; }
+  /* The run list fits its panel's width (not the window's): fewer columns when the panel is narrow. */
+  #runsPanel { container-type: inline-size; }
+  @container (max-width: 560px) {
+    .hide-md { display: none; }
+    th:nth-child(1) { width: 22%; } th:nth-child(3) { width: 21%; }
+  }
+  @container (max-width: 400px) {
+    .hide-sm { display: none; }
+    th:nth-child(1) { width: 28%; } th:nth-child(3) { width: 28%; }
+  }
   tbody tr { cursor: pointer; }
   tbody tr:hover, tbody tr.sel { background: var(--accent-soft); }
   .detail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 14px; }
@@ -154,6 +166,9 @@
   kbd { font: 11px ui-monospace, monospace; padding: 0 4px; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); margin-left: 4px; }
   .by-hand { font-size: 11px; color: var(--accent); margin-left: 4px; }
   svg.chart { width: 100%; height: auto; display: block; margin-top: 6px; }
+  .examples button { max-width: 100%; text-align: left; overflow-wrap: anywhere; }
+  .monitor-header .status { max-width: 100%; }
+  .batch-box .title strong { min-width: 0; overflow-wrap: anywhere; }
   svg.chart text { fill: var(--muted); font-size: 11px; }
   .chart-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: var(--muted); margin-top: 4px; }
   .sw { display: inline-block; width: 12px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
@@ -164,9 +179,11 @@
   @media (max-width: 560px) {
     main { padding-top: 24px; }
     .panel { padding: 14px; }
-    .ood-grid, .banners { grid-template-columns: minmax(0, 1fr); }
-    .hide-sm { display: none; }
-    th:nth-child(1) { width: 26%; } th:nth-child(3) { width: 26%; }
+    .ood-grid { grid-template-columns: minmax(0, 1fr); }
+    .grid3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .grid3 > :last-child { grid-column: 1 / -1; }
+    .keyrow { grid-template-columns: minmax(0, 1fr) auto; }
+    .keyrow #clearKey { grid-column: 2; }
   }
 </style>
 </head>
@@ -213,8 +230,8 @@
         <div><label for="batchSeconds">Seconds each</label><input id="batchSeconds" type="number" min="10" max="300" value="60"></div>
         <div><label>Seeds</label>
           <div class="toggle" role="group" aria-label="Seeds">
-            <button id="splitTrain" class="on" aria-pressed="true">Seed, Seed + 1, …</button>
-            <button id="splitEval" aria-pressed="false">Eval set (50)</button>
+            <button id="splitTrain" class="on" aria-pressed="true" title="Seed, Seed + 1, Seed + 2, …">Seed + i</button>
+            <button id="splitEval" aria-pressed="false" title="The 50 fixed evaluation seeds">Eval set (50)</button>
           </div>
         </div>
       </div>
@@ -227,6 +244,10 @@
       </div>
       <div class="pairs-edit">
         <span class="muted">judge as</span>
+        <select id="draftType" aria-label="Task type" style="width: auto">
+          <option value="pick_place">Pick &amp; place</option><option value="move_to_area">Move to area</option>
+          <option value="lift">Lift</option><option value="push">Push</option>
+        </select>
         <span id="pairRows" class="pairs-edit" style="margin: 0"></span>
         <button class="ghost small" id="addPair" title="Judge one more object">+ object</button>
       </div>
@@ -290,31 +311,9 @@
   <section class="panel">
     <details class="fold" id="rulesPanel" open>
       <summary>Success rules</summary>
-      <p class="hint">At the end, every judged object must be in its target, released if required, and still for the selected time (under 0.05 m/s).</p>
-      <div class="banners">
-        <div class="banner">
-          <div class="head"><span class="num">1</span>Distance</div>
-          <div class="value"><span id="distanceValue">6.5</span> <small>cm</small></div>
-          <input type="range" id="distance" min="1" max="15" step="0.5" value="6.5" aria-label="Distance to target in centimetres">
-          <div class="scale"><span>strict</span><span>loose</span></div>
-          <p>Object to bowl/plate center</p>
-        </div>
-        <div class="banner">
-          <div class="head"><span class="num">2</span>Release</div>
-          <div class="toggle" role="group" aria-label="Release">
-            <button id="releaseYes" aria-pressed="true">Must release</button>
-            <button id="releaseNo" aria-pressed="false">Can hold</button>
-          </div>
-          <p id="releaseText"></p>
-        </div>
-        <div class="banner">
-          <div class="head"><span class="num">3</span>Still time</div>
-          <div class="value"><span id="stillValue">1.0</span> <small>s</small></div>
-          <input type="range" id="still" min="0" max="5" step="0.5" value="1" aria-label="Seconds the object must stay still">
-          <div class="scale"><span>0 s</span><span>5 s</span></div>
-          <p>Final time in target, standing still</p>
-        </div>
-      </div>
+      <div class="toggle types" id="ruleTypes" role="group" aria-label="Task type"></div>
+      <p class="hint" id="ruleHint"></p>
+      <div class="banners" id="banners"></div>
       <div class="saved-note" id="rulesNote"></div>
     </details>
   </section>
@@ -328,7 +327,7 @@
       </div>
       <div class="muted small" id="runSummary" style="margin-top: 8px"></div>
       <table style="margin-top: 8px">
-        <thead><tr><th>When</th><th>Task</th><th>Result</th><th class="hide-sm">Why</th><th class="hide-sm">Label by</th></tr></thead>
+        <thead><tr><th>When</th><th>Task</th><th>Result</th><th class="hide-sm">Why</th><th class="hide-md">Label by</th></tr></thead>
         <tbody id="runs"><tr><td colspan="5" class="muted">No runs yet.</td></tr></tbody>
       </table>
       <div id="detail" class="detail" hidden>
@@ -384,20 +383,64 @@ const chip = label => `<span class="chip ${label}">${label.toUpperCase()}</span>
 // Always English, 24-hour (e.g. "Nov 21, 17:21"), whatever the browser's language.
 const when = iso => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }); };
 const fmt = (x, n = 1) => Number(x).toFixed(n);
+const words = text => String(text ?? "").replace(/_/g, " ");  // reason codes read (and wrap) as words
 
-/* ---------- rules ---------- */
+/* ---------- rules (one set per task type) ---------- */
 
+// How each task type's rules are shown (the ranges are judge.py's RULES; the sliders use a handy part of them).
+const TYPE_UI = {
+  pick_place: { label: "Pick & place", hint: "Put an object into the bowl or on the plate. At the end, every judged object must be in its target, released if required, and still (under 0.05 m/s) for the time below.",
+    fields: [
+      { key: "distance_cm", label: "Distance", unit: "cm", min: 1, max: 15, step: 0.5, scale: ["strict", "loose"], help: "Object to bowl/plate center" },
+      { key: "release", label: "Release", on: "Must release", off: "Can hold", help: ["Gripper must let go", "Gripper may still hold it"] },
+      { key: "still_seconds", label: "Still time", unit: "s", min: 0, max: 5, step: 0.5, scale: ["0 s", "5 s"], help: "Final time in target, standing still" }] },
+  move_to_area: { label: "Move to area", hint: "Move an object (or any object) to the center, left, right, front or back of the workspace. It must have moved, end in the area resting on the table, released if required, and stay still.",
+    fields: [
+      { key: "zone_cm", label: "Area size", unit: "cm", min: 3, max: 25, step: 1, scale: ["small", "large"], help: "Center: radius. Sides: beyond this from the middle" },
+      { key: "release", label: "Release", on: "Must release", off: "Can hold", help: ["Gripper must let go", "Gripper may still hold it"] },
+      { key: "still_seconds", label: "Still time", unit: "s", min: 0, max: 5, step: 0.5, scale: ["0 s", "5 s"], help: "Final time in the area, standing still" }] },
+  lift: { label: "Lift", hint: "Lift an object (or any object). It must rise this high above where it started and stay up there for the time below, in one stretch.",
+    fields: [
+      { key: "height_cm", label: "Height", unit: "cm", min: 1, max: 20, step: 0.5, scale: ["low", "high"], help: "Above where it started" },
+      { key: "hold_seconds", label: "Hold time", unit: "s", min: 0, max: 5, step: 0.5, scale: ["0 s", "5 s"], help: "Up there without coming down" }] },
+  push: { label: "Push", hint: "Push an object (or any object) along the table. It must end this far from where it started, still on the table.",
+    fields: [
+      { key: "distance_cm", label: "Distance", unit: "cm", min: 1, max: 25, step: 0.5, scale: ["short", "far"], help: "From where it started, along the table" },
+      { key: "no_lift", label: "Lifting", on: "Not allowed", off: "Allowed", help: ["Lifting it 3 cm or more fails the run", "Carrying it there also counts"] }] },
+};
+let ruleType = "pick_place";
 let saveTimer = null;
+
 function showRules() {
-  $("distance").value = rules.distance_cm; $("distanceValue").textContent = fmt(rules.distance_cm);
-  $("still").value = rules.still_seconds; $("stillValue").textContent = fmt(rules.still_seconds);
-  $("releaseYes").classList.toggle("on", rules.release); $("releaseYes").setAttribute("aria-pressed", rules.release);
-  $("releaseNo").classList.toggle("on", !rules.release); $("releaseNo").setAttribute("aria-pressed", !rules.release);
-  $("releaseText").textContent = rules.release ? "Gripper must let go" : "Gripper may still hold it";
+  $("ruleTypes").innerHTML = Object.entries(TYPE_UI).map(([kind, ui]) =>
+    `<button data-type="${kind}" class="${kind === ruleType ? "on" : ""}" aria-pressed="${kind === ruleType}">${ui.label}</button>`).join("");
+  document.querySelectorAll("[data-type]").forEach(b => b.onclick = () => { ruleType = b.dataset.type; showRules(); });
+  const ui = TYPE_UI[ruleType], values = rules[ruleType] || {};
+  $("ruleHint").textContent = ui.hint;
+  $("banners").innerHTML = ui.fields.map((f, i) => {
+    const v = values[f.key];
+    const head = `<div class="head"><span class="num">${i + 1}</span>${f.label}</div>`;
+    if (f.on) return `<div class="banner">${head}
+        <div class="toggle" role="group" aria-label="${f.label}">
+          <button data-flag="${f.key}" data-v="1" class="${v ? "on" : ""}" aria-pressed="${!!v}">${f.on}</button>
+          <button data-flag="${f.key}" data-v="0" class="${v ? "" : "on"}" aria-pressed="${!v}">${f.off}</button>
+        </div><p>${v ? f.help[0] : f.help[1]}</p></div>`;
+    return `<div class="banner">${head}
+        <div class="value"><span data-value="${f.key}">${fmt(v)}</span> <small>${f.unit}</small></div>
+        <input type="range" data-rule="${f.key}" min="${f.min}" max="${f.max}" step="${f.step}" value="${v}" aria-label="${f.label} (${f.unit})">
+        <div class="scale"><span>${f.scale[0]}</span><span>${f.scale[1]}</span></div><p>${f.help}</p></div>`;
+  }).join("");
+  document.querySelectorAll("[data-rule]").forEach(input => input.oninput = () => {
+    document.querySelector(`[data-value="${input.dataset.rule}"]`).textContent = fmt(input.value);
+    changeRules(ruleType, { [input.dataset.rule]: Number(input.value) });
+  });
+  document.querySelectorAll("[data-flag]").forEach(b => b.onclick = () => {
+    changeRules(ruleType, { [b.dataset.flag]: b.dataset.v === "1" });
+    showRules();
+  });
 }
-function changeRules(patch) {
-  rules = { ...rules, ...patch };
-  showRules();
+function changeRules(kind, patch) {
+  rules = { ...rules, [kind]: { ...rules[kind], ...patch } };
   $("rulesNote").textContent = "";
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
@@ -405,10 +448,6 @@ function changeRules(patch) {
     catch (err) { $("rulesNote").textContent = "Not saved: " + err.message; }
   }, 400);
 }
-$("distance").oninput = e => changeRules({ distance_cm: Number(e.target.value) });
-$("still").oninput = e => changeRules({ still_seconds: Number(e.target.value) });
-$("releaseYes").onclick = () => changeRules({ release: true });
-$("releaseNo").onclick = () => changeRules({ release: false });
 
 /* ---------- runs ---------- */
 
@@ -461,14 +500,14 @@ function renderRuns() {
   if (!list.length) { $("runs").innerHTML = '<tr><td colspan="5" class="muted">No runs yet.</td></tr>'; $("detail").hidden = true; return; }
   $("runs").innerHTML = list.map(run => {
     const v = verdict(run), hand = handLabel(run);
-    const why = hand ? `${hand.reason}${hand.label !== v.label ? ` (rules: ${v.label})` : ""}` : v.reason;
+    const why = hand ? `${hand.reason}${hand.label !== v.label ? ` (rules: ${v.label})` : ""}` : words(v.reason);
     const by = hand ? "hand" : run.label ? "rules (saved)" : "rules";
     return `<tr data-id="${esc(run.id)}" class="${run.id === selected ? "sel" : ""}">
       <td>${when(run.started_at)}</td>
       <td>${esc(run.task)}</td>
       <td>${chip(finalLabel(run))}${hand ? '<span class="by-hand" title="Labeled by hand">✋</span>' : ""}</td>
       <td class="hide-sm">${esc(why)}</td>
-      <td class="hide-sm"><span class="muted">${by}</span></td>
+      <td class="hide-md"><span class="muted">${by}</span></td>
     </tr>`;
   }).join("");
   for (const tr of $("runs").querySelectorAll("tr")) tr.onclick = () => { selected = tr.dataset.id; renderRuns(); };
@@ -484,12 +523,12 @@ async function renderDetail() {
   const extra = [run.batch_id ? batchName(run.batch_id) : "Single run",
                  run.layout === "custom" ? "custom layout" : run.seed != null ? `seed ${run.seed}${run.split === "eval" ? " (eval)" : ""}` : "",
                  run.ood_random?.length ? `random: ${run.ood_random.join(", ")}` : "",
-                 run.judge ? `judged: ${pairText(run.judge.pairs || [run.judge])}` : ""].filter(Boolean).join(" · ");
+                 (run.judge || v.spec) ? `${TYPE_UI[(run.judge || v.spec).type || "pick_place"]?.label || ""}: ${specText(run.judge || v.spec)}` : "not judged"].filter(Boolean).join(" · ");
   const hand = handLabel(run);
   $("detailHead").innerHTML = `${chip(finalLabel(run))}${hand ? '<span class="by-hand">✋ by hand</span>' : ""} <strong>${esc(run.task)}</strong><div class="muted" style="font-size:13px">${when(run.started_at)} · ${fmt(run.sim_seconds || 0)} s · ${esc(extra)}</div>`;
   for (const b of document.querySelectorAll("[data-hand]")) b.classList.toggle("on", !!hand && b.dataset.hand === hand.label);
   if ($("handNote").dataset.run !== run.id) { $("handNote").value = hand && hand.reason !== "set by hand" ? hand.reason : ""; $("handNote").dataset.run = run.id; }
-  $("handState").innerHTML = `Rules say ${chip(v.label)} ${esc(v.reason)}`
+  $("handState").innerHTML = `Rules say ${chip(v.label)} ${esc(words(v.reason))}`
     + (hand ? ` · you set ${chip(hand.label)} ${when(hand.saved_at)}` : " · not labeled by hand")
     + ` · <kbd>J</kbd>/<kbd>K</kbd> next / previous run`;
   $("detailChecks").innerHTML = (v.checks?.length ? v.checks : [{ ok: false, text: v.reason }])
@@ -507,17 +546,20 @@ function drawChart(v) {
   const series = v.series?.length ? v.series : [{ object: null, dist: v.dist, touch: v.touch }];
   const many = series.length > 1;
   const colour = s => many && ITEMS[s.object] ? ITEMS[s.object].color : "var(--accent)";
-  const W = 640, L = 44, R = 8, TOP = 10, B = 40 + 11 * series.length, H = 150 + B;
+  const W = Math.round(Math.min(640, Math.max(300, svg.clientWidth || 640))), L = 44, R = 8, TOP = 10;
+  const B = 40 + 11 * series.length, H = Math.round(W * 0.23) + 10 + B;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   const tMax = Math.max(v.t[v.t.length - 1], 1);
   const top = Math.max(...series.map(s => Math.max(...s.dist)));
-  const yMax = Math.min(80, Math.max(rules.distance_cm * 2, 10, Math.ceil(top / 10) * 10));
+  const limit = v.chart?.limit ?? rules.pick_place?.distance_cm ?? 0;
+  const yMax = Math.min(80, Math.max(limit * 2, 10, Math.ceil(top / 10) * 10));
   const x = s => L + (s / tMax) * (W - L - R);
   const y = d => TOP + (1 - Math.min(d, yMax) / yMax) * (H - TOP - B);
   let out = "";
   if (v.success) out += `<rect x="${x(v.success.start)}" y="${TOP}" width="${Math.max(2, x(v.success.end) - x(v.success.start))}" height="${H - TOP - B}" fill="var(--ok)" opacity=".25"/>`;
   for (const d of [0, yMax / 2, yMax]) out += `<line x1="${L}" x2="${W - R}" y1="${y(d)}" y2="${y(d)}" stroke="var(--line)"/><text x="${L - 4}" y="${y(d) + 4}" text-anchor="end">${fmt(d, 0)} cm</text>`;
-  out += `<line x1="${L}" x2="${W - R}" y1="${y(rules.distance_cm)}" y2="${y(rules.distance_cm)}" stroke="var(--muted)" stroke-dasharray="5 4"/>`;
+  out += `<line x1="${L}" x2="${W - R}" y1="${y(limit)}" y2="${y(limit)}" stroke="var(--muted)" stroke-dasharray="5 4"/>`;
+  if (v.chart?.y) out += `<text x="${L + 4}" y="${TOP + 10}">${esc(v.chart.y)}</text>`;
   const step = Math.max(1, Math.floor(v.t.length / 600));
   series.forEach((s, k) => {
     let path = "";
@@ -534,11 +576,12 @@ function drawChart(v) {
     }
     out += `<text x="${L - 4}" y="${stripY + 6}" text-anchor="end">${many ? esc(ITEMS[s.object]?.label || s.object) : "grip"}</text>`;
   });
-  for (let s = 0; s <= tMax; s += tMax > 40 ? 10 : 5) out += `<text x="${x(s)}" y="${H - 6}" text-anchor="middle">${s}s</text>`;
+  const every = [1, 2, 5, 10, 20, 30, 60, 120].find(e => tMax / e <= (W - L) / 55) || 120;  // ticks that fit
+  for (let s = 0; s <= tMax; s += every) out += `<text x="${x(s)}" y="${H - 6}" text-anchor="middle">${s}s</text>`;
   svg.innerHTML = out;
   const sw = (c, text, extra = "") => `<span><span class="sw" style="background:${c};${extra}"></span>${text}</span>`;
   $("chartLegend").innerHTML = (many
-    ? series.map(s => sw(colour(s), `${esc(ITEMS[s.object]?.label || s.object)} → ${esc(s.target)}`)).join("") + `<span>strips: gripping</span>`
+    ? series.map(s => sw(colour(s), esc(ITEMS[s.object]?.label || s.object) + (["lift", "push"].includes(s.target) ? "" : ` → ${esc(s.target)}`))).join("") + `<span>strips: gripping</span>`
     : sw("var(--accent)", "distance") + sw("var(--touch)", "gripping"))
     + sw("var(--muted)", "limit") + sw("var(--ok)", "success", "opacity:.35");
 }
@@ -729,42 +772,42 @@ function drawExamples() {
     $("examples").appendChild(b);
   }
   const batchList = [];
-  for (const t of ALL_TARGETS) for (const o of ALL_OBJECTS) batchList.push({ prompt: prompt(o, t), pairs: [{ object: o, target: t }] });
+  for (const t of ALL_TARGETS) for (const o of ALL_OBJECTS)
+    batchList.push({ prompt: prompt(o, t), judge: { type: "pick_place", pairs: [{ object: o, target: t }] } });
   const into = t => t === "bowl" ? "into the bowl" : "on the plate";
   for (const [a, b] of [["apple", "banana"], ["orange", "water_bottle"]]) {
     batchList.unshift({ prompt: `put ${WORDS[a]} ${into("bowl")} and ${WORDS[b]} ${into("plate")}`,
-                        pairs: [{ object: a, target: "bowl" }, { object: b, target: "plate" }] });
+                        judge: { type: "pick_place", pairs: [{ object: a, target: "bowl" }, { object: b, target: "plate" }] } });
   }
+  batchList.push(
+    { prompt: "Move an object to the center of the workspace", judge: { type: "move_to_area", object: "any", area: "center" } },
+    { prompt: "Move an object to the left side of the workspace", judge: { type: "move_to_area", object: "any", area: "left" } },
+    { prompt: "lift the apple", judge: { type: "lift", object: "apple" } },
+    { prompt: "push the orange", judge: { type: "push", object: "orange" } });
   drawBatchTasks(batchList);
 }
 
-/** The object -> target pairs a prompt names: each object goes to the next bowl or plate named after it.
- *  @param available Which items may be used. */
-function derivePairs(text, available = () => true) {
-  const words = [...String(text).toLowerCase().matchAll(/water bottle|bottle|apple|orange|banana|bowl|plate/g)]
-    .map(m => ({ name: m[0].includes("bottle") ? "water_bottle" : m[0], at: m.index }))
-    .filter(w => available(w.name));
-  const targets = words.filter(w => ITEMS[w.name].target);
-  const pairs = [];
-  for (const w of words.filter(w => !ITEMS[w.name].target)) {
-    if (pairs.some(p => p.object === w.name) || pairs.length >= 4 || !targets.length) continue;
-    pairs.push({ object: w.name, target: (targets.find(t => t.at > w.at) || targets[targets.length - 1]).name });
-  }
-  return pairs;
+/** The items a judge spec needs on the table ("any" object: none in particular). */
+function specItems(spec) {
+  if (!spec) return [];
+  if ((spec.type || "pick_place") === "pick_place") return (spec.pairs || [spec]).flatMap(p => [p.object, p.target]);
+  return spec.object === "any" ? [] : [spec.object];
 }
 
-/** Under the task: what the run will be judged on, or why it will not be (and block a task naming an item the
- *  custom layout does not have). @return Whether the task can run. */
+/** Under the task: how it will be judged (the server reads the task's words), or why it will not be. */
+let classifyTimer = null, taskSpec = null;
 function checkTask() {
-  const text = $("task").value;
-  const named = derivePairs(text);
-  const missing = [...new Set(named.flatMap(p => [p.object, p.target]))].filter(n => !onTable(n));
-  const pairs = derivePairs(text, onTable);
-  const note = $("taskNote");
-  note.classList.toggle("bad", missing.length > 0);
-  note.textContent = missing.length ? `Not on the table: ${missing.map(n => ITEMS[n].label).join(", ")}`
-    : pairs.length ? `Judged on: ${pairText(pairs)}` : "Not judged: name an object and a bowl or plate to judge the run.";
-  return !missing.length;
+  clearTimeout(classifyTimer);
+  classifyTimer = setTimeout(async () => {
+    const reply = await api(`/api/classify?task=${encodeURIComponent($("task").value)}`).catch(() => null);
+    taskSpec = reply?.spec || null;
+    const missing = [...new Set(specItems(taskSpec))].filter(n => !onTable(n));
+    const note = $("taskNote");
+    note.classList.toggle("bad", missing.length > 0);
+    note.textContent = missing.length ? `Not on the table: ${missing.map(itemName).join(", ")}`
+      : taskSpec ? `Judged as ${reply.text}` : "Not judged: name an object and a bowl or plate, an area, lift or push.";
+  }, 150);
+  return true;
 }
 $("task").addEventListener("input", checkTask);
 
@@ -813,7 +856,15 @@ function setSplit(next) {
 $("splitTrain").onclick = () => setSplit("train");
 $("splitEval").onclick = () => setSplit("eval");
 
-const pairText = pairs => pairs.map(p => `${ITEMS[p.object]?.label || p.object} · ${ITEMS[p.target]?.label || p.target}`).join(", ");
+const itemName = n => n === "any" ? "any object" : (ITEMS[n]?.label || n);
+/** What a judge spec checks, in words (older specs: {pairs} or {object, target} are pick & place). */
+function specText(spec) {
+  if (!spec) return "";
+  const kind = spec.type || "pick_place";
+  if (kind === "pick_place") return (spec.pairs || [spec]).map(p => `${itemName(p.object)} · ${itemName(p.target)}`).join(", ");
+  if (kind === "move_to_area") return `${itemName(spec.object)} → ${spec.area}`;
+  return `${TYPE_UI[kind]?.label.toLowerCase() || kind} ${itemName(spec.object)}`;
+}
 
 function taskOptions() {
   const examples = exampleList.map(e => ({ ...e, custom: false, usable: true }));
@@ -823,7 +874,7 @@ function taskOptions() {
 
 function drawBatchTasks(list) {
   exampleList = list;
-  drawPairRows();
+  drawDraft();
   renderBatchTasks();
 }
 
@@ -833,7 +884,8 @@ function renderBatchTasks() {
   if (!batchTasks.size && options.some(o => o.usable)) batchTasks.add(options.find(o => o.usable).prompt);
   $("batchTasks").innerHTML = options.map(o => {
     const on = batchTasks.has(o.prompt);
-    const judge = o.custom || o.pairs.length > 1 ? ` <span class="judge">→ ${esc(pairText(o.pairs))}${o.usable ? "" : " (not on the table)"}</span>` : "";
+    const simple = o.judge.type === "pick_place" && o.judge.pairs.length === 1;
+    const judge = o.custom || !simple ? ` <span class="judge">→ ${esc(specText(o.judge))}${o.usable ? "" : " (not on the table)"}</span>` : "";
     const remove = o.custom ? `<span class="remove" data-remove="${esc(o.prompt)}" title="Remove" role="button" aria-label="Remove">×</span>` : "";
     return `<button class="item ${on ? "on" : ""} ${o.usable ? "" : "off"}" data-task="${esc(o.prompt)}" data-usable="${o.usable}" aria-pressed="${on}">${esc(o.prompt)}${judge}${remove}</button>`;
   }).join("");
@@ -850,40 +902,66 @@ function renderBatchTasks() {
   estimate();
 }
 
-/* The "judge as" pairs for the prompt being typed: object -> target, each object at most once. */
-let draftPairs = [];
+/* The "judge as" spec for the prompt being typed: a task type, and its objects (pick & place: object -> target
+   pairs, each object once; move to area: an object or any, and the area; lift, push: an object or any). */
+let draft = { type: "pick_place", pairs: [], object: "any", area: "center" };
 const tableObjects = () => ALL_OBJECTS;  // batches start from seeds: all six items are on the table
 const tableTargets = () => ALL_TARGETS;
+const AREAS = ["center", "left", "right", "front", "back"];
 
-function drawPairRows() {
+function drawDraft() {
   const objects = tableObjects(), targets = tableTargets();
-  if (!draftPairs.length && objects.length && targets.length) draftPairs = [{ object: objects[0], target: targets[0] }];
-  const option = (n, chosen) => `<option value="${n}" ${n === chosen ? "selected" : ""}>${ITEMS[n].label}</option>`;
-  $("pairRows").innerHTML = draftPairs.map((p, i) => `<span class="pair">
-      <select data-pair="${i}" data-field="object" aria-label="Object ${i + 1}">${objects.map(n => option(n, p.object)).join("")}</select>
-      → <select data-pair="${i}" data-field="target" aria-label="Target ${i + 1}">${targets.map(n => option(n, p.target)).join("")}</select>
-      ${draftPairs.length > 1 ? `<span class="remove" data-pair-remove="${i}" title="Remove" role="button" aria-label="Remove">×</span>` : ""}</span>`).join("");
-  document.querySelectorAll("[data-pair]").forEach(sel => sel.onchange = () => { draftPairs[sel.dataset.pair][sel.dataset.field] = sel.value; });
-  document.querySelectorAll("[data-pair-remove]").forEach(x => x.onclick = () => { draftPairs.splice(Number(x.dataset.pairRemove), 1); drawPairRows(); });
-  $("addPair").disabled = draftPairs.length >= Math.min(4, objects.length);
+  const option = (n, chosen, label = itemName(n)) => `<option value="${n}" ${n === chosen ? "selected" : ""}>${label}</option>`;
+  $("draftType").value = draft.type;
+  if (draft.type === "pick_place") {
+    if (!draft.pairs.length) draft.pairs = [{ object: objects[0], target: targets[0] }];
+    $("pairRows").innerHTML = draft.pairs.map((p, i) => `<span class="pair">
+        <select data-pair="${i}" data-field="object" aria-label="Object ${i + 1}">${objects.map(n => option(n, p.object)).join("")}</select>
+        → <select data-pair="${i}" data-field="target" aria-label="Target ${i + 1}">${targets.map(n => option(n, p.target)).join("")}</select>
+        ${draft.pairs.length > 1 ? `<span class="remove" data-pair-remove="${i}" title="Remove" role="button" aria-label="Remove">×</span>` : ""}</span>`).join("");
+    document.querySelectorAll("[data-pair]").forEach(sel => sel.onchange = () => { draft.pairs[sel.dataset.pair][sel.dataset.field] = sel.value; });
+    document.querySelectorAll("[data-pair-remove]").forEach(x => x.onclick = () => { draft.pairs.splice(Number(x.dataset.pairRemove), 1); drawDraft(); });
+  } else {
+    const which = `<select data-draft="object" aria-label="Object">${["any", ...objects].map(n => option(n, draft.object)).join("")}</select>`;
+    const where = draft.type === "move_to_area"
+      ? ` → <select data-draft="area" aria-label="Area">${AREAS.map(a => option(a, draft.area, a)).join("")}</select>` : "";
+    $("pairRows").innerHTML = `<span class="pair">${which}${where}</span>`;
+    document.querySelectorAll("[data-draft]").forEach(sel => sel.onchange = () => { draft[sel.dataset.draft] = sel.value; });
+  }
+  $("addPair").hidden = draft.type !== "pick_place";
+  $("addPair").disabled = draft.pairs.length >= Math.min(4, objects.length);
 }
+$("draftType").onchange = () => { draft.type = $("draftType").value; drawDraft(); };
 $("addPair").onclick = () => {
-  const free = tableObjects().find(n => !draftPairs.some(p => p.object === n));
-  if (free) { draftPairs.push({ object: free, target: draftPairs[draftPairs.length - 1]?.target || tableTargets()[0] }); drawPairRows(); }
+  const free = tableObjects().find(n => !draft.pairs.some(p => p.object === n));
+  if (free) { draft.pairs.push({ object: free, target: draft.pairs[draft.pairs.length - 1]?.target || tableTargets()[0] }); drawDraft(); }
 };
 
-// Fill the pairs from the prompt's words: each object named goes to the next bowl or plate named after it.
+// Fill the editor from the prompt's words, as the server reads them (judge.classify).
+let draftTimer = null;
 $("customPrompt").addEventListener("input", () => {
-  const pairs = derivePairs($("customPrompt").value);
-  if (pairs.length) { draftPairs = pairs; drawPairRows(); }
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(async () => {
+    const reply = await api(`/api/classify?task=${encodeURIComponent($("customPrompt").value)}`).catch(() => null);
+    const spec = reply?.spec;
+    if (!spec) return;
+    draft = { ...draft, ...spec, pairs: spec.pairs ? spec.pairs.map(p => ({ ...p })) : draft.pairs };
+    drawDraft();
+  }, 200);
 });
 function addCustomTask() {
   const prompt = $("customPrompt").value.replace(/\s+/g, " ").trim();
   if (!prompt) return;
-  const pairs = draftPairs.filter(p => p.object && p.target);
-  if (!pairs.length) { alert("Pick an object and a bowl or plate to judge it on."); return; }
-  if (new Set(pairs.map(p => p.object)).size !== pairs.length) { alert("Each object can be judged only once."); return; }
-  customTasks = [{ prompt, pairs: pairs.map(p => ({ ...p })) }, ...customTasks.filter(c => c.prompt !== prompt)];
+  let judge;
+  if (draft.type === "pick_place") {
+    const pairs = draft.pairs.filter(p => p.object && p.target);
+    if (!pairs.length) { alert("Pick an object and a bowl or plate to judge it on."); return; }
+    if (new Set(pairs.map(p => p.object)).size !== pairs.length) { alert("Each object can be judged only once."); return; }
+    judge = { type: "pick_place", pairs: pairs.map(p => ({ ...p })) };
+  } else {
+    judge = { type: draft.type, object: draft.object, ...(draft.type === "move_to_area" ? { area: draft.area } : {}) };
+  }
+  customTasks = [{ prompt, judge }, ...customTasks.filter(c => c.prompt !== prompt)];
   batchTasks.add(prompt);
   $("customPrompt").value = "";
   renderBatchTasks();
@@ -908,7 +986,7 @@ $("startBatch").onclick = async () => {
   if (!confirm(`Run ${count} episodes in the background (about ${estimate()} min of Dream-1 use)?`)) return;
   try {
     const tasks = taskOptions().filter(o => o.usable && batchTasks.has(o.prompt))
-      .map(({ prompt, pairs }) => ({ prompt, pairs }));
+      .map(({ prompt, judge }) => ({ prompt, judge }));
     const { seed, ood_random } = seeding();
     await api("/api/batch", { tasks, count, seconds: $("batchSeconds").value, split, seed, ood, ood_random });
     followBatch = true;
@@ -942,7 +1020,7 @@ function showBatch(b) {
   $("batchCounts").innerHTML = `${chip("success")} ${b.counts.success} ${chip("failure")} ${b.counts.failure} ${chip("invalid")} ${b.counts.invalid}`
     + (valid ? ` <span class="muted">· ${Math.round(100 * b.counts.success / valid)}% success of valid</span>` : "");
   $("batchNow").textContent = b.current ? `Now: #${b.current.index} ${b.current.task} (seed ${b.current.seed})`
-    : `${b.split === "eval" ? "Eval seeds" : `Seeds from ${b.seed}`}${b.ood_random?.length ? ` · random: ${b.ood_random.join(", ")}` : ""} · ${b.seconds} s each · rules: ${fmt(b.rules.distance_cm)} cm, ${b.rules.release ? "must release" : "can hold"}, ${fmt(b.rules.still_seconds)} s`;
+    : `${b.split === "eval" ? "Eval seeds" : `Seeds from ${b.seed}`}${b.ood_random?.length ? ` · random: ${b.ood_random.join(", ")}` : ""} · ${b.seconds} s each · labeled with the rules as at the start`;
   $("batchEnd").textContent = b.running ? "" : b.stopped_reason || "Finished.";
   $("batchEnd").classList.toggle("bad", !b.running && !!b.stopped_reason && b.stopped_reason !== "Stopped by you.");
 }
@@ -1069,13 +1147,12 @@ $("run").onclick = async () => {
     const ood = readOOD();
     if (ood === null) return;
     if (customOn()) { const problem = sceneProblem(); if (problem) { alert(problem); return; } }
-    if (!checkTask()) { alert($("taskNote").textContent); return; }
     starting = true;
     previewRevision++;
     clearTimeout(previewTimer);
     $("previewStatus").hidden = true;
     await api("/api/run", { task: $("task").value, seconds: $("seconds").value, ood, ...seeding(),
-                            scene: customOn() ? sceneForRun() : null, pairs: derivePairs($("task").value, onTable) });
+                            scene: customOn() ? sceneForRun() : null });
     $("live").hidden = true;
     $("placeholder").hidden = false;
     $("placeholder").textContent = "Starting the simulator… (the first picture takes a few seconds)";

@@ -74,15 +74,24 @@ python batch.py --repeats 10 --seconds 60 --budget-minutes 60
 
 The batch uses the default scene, the key in `~/.dreamlabs/credentials` (`DREAM_API_KEY=...`), and a snapshot of the rules saved in the UI. It writes each episode to `runs/<id>/` and stops on an invalid run, such as an API authentication error. Check the API key and endpoint before starting a large batch. `--tasks`, `--seed`, `--repeats`, and `--seconds` are adjustable.
 
-## Rules
+## Rules, by task type
 
-| Rule | Meaning |
-| --- | --- |
-| Distance | Final horizontal distance from the named object to the bowl/plate center. The object's center must also be in the target's fixed height band. |
-| Release | Whether the named object must stop touching a gripper fingertip. |
-| Still time | How long the final placement and release must persist. Maximum object speed in that final window must stay below 0.05 m/s. |
+Each run is judged by its task's type, with that type's rules (the **Success rules** panel has one tab per type).
+The type and its objects come from the task's words, and the note under the task says how it was read; a batch's own
+prompts take them from **judge as** (a type, then its objects). A task that names none of these runs but is not judged.
 
-The current UI exposes distance from 1 to 15 cm and still time from 0 to 5 seconds. The backend accepts 0.5 to 30 cm and 0 to 10 seconds. Target height bands and the 0.05 m/s speed limit are currently fixed. An execution error, user stop, missing model response, or incomplete trajectory is labeled **invalid**, never **failure**. Saved labels include the rules snapshot so later rule changes do not silently rewrite them.
+| Type | Example tasks | Success when, at the end of the run | Rules |
+| --- | --- | --- | --- |
+| Pick & place | `put apple into the bowl`, `put apple in the bowl and banana on the plate` | every named object is in its bowl/plate, released if required, and still | distance to the target's center, release, still time |
+| Move to area | `Move an object to the center of the workspace`, `push the apple to the left` | the object (or, for "an object", any object) has moved, rests in the area, released if required, and still | area size (center: radius; left/right/front/back: beyond this from the middle), release, still time |
+| Lift | `lift the apple`, `pick the bottle up` | the object rose this high above its start and stayed up for the hold time in one stretch | height, hold time |
+| Push | `push the orange` | the object ends this far from its start, on the table (never lifted 3 cm, if lifting is not allowed) | distance, lifting allowed |
+
+"Still" means under 0.05 m/s. Left / right / front / back are as the workspace camera sees the table. An execution
+error, user stop, missing model response, or incomplete trajectory is labeled **invalid**, never **failure**. Saved
+labels include the rules snapshot, so later rule changes do not silently rewrite them. `runs/rules.json` keeps every
+type's rules (the older single set is read as the pick & place rules). To add a task type: its rules in `judge.RULES`,
+a `judge_<type>` function and a branch in `judge.classify()`, and its controls in the page's `TYPE_UI`.
 
 ## Files
 

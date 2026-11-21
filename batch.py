@@ -38,8 +38,8 @@ def main():
     args = parser.parse_args()
     if args.repeats < 1 or args.seconds <= 0 or args.budget_minutes <= 0:
         parser.error("Use positive repeats, seconds, and budget-minutes")
-    if any(judge.parse_task(task) is None for task in args.tasks):
-        parser.error("Tasks must name apple, orange, banana, or bottle and a bowl or plate")
+    if any(judge.classify(task) is None for task in args.tasks):
+        parser.error("Each task must say what to judge: an object and a bowl or plate, an area, lift or push")
     rules = rules_snapshot()
     counts = Counter()
     total = args.repeats * len(args.tasks)

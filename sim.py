@@ -19,8 +19,9 @@ app.py starts this for every run. Environment variables connect it to the websit
   SCENE_JSON  a custom layout: which objects are on the table and where: {"items": {"apple": [x, y], ...}} in
               metres (world frame); objects left out are removed. Without it, the seed's layout is used.
   BATCH_ID    set by a batch: stored in meta.json
-  JUDGE_PAIRS  for a typed prompt: the object -> target pairs it is judged on, as JSON
-               [{"object": "apple", "target": "bowl"}, ...] (meta.json "judge")
+  JUDGE_SPEC  what the run is judged on (judge.py), as JSON, e.g. {"type": "pick_place", "pairs": [{"object":
+              "apple", "target": "bowl"}]} or {"type": "lift", "object": "any"} (meta.json "judge"); without it
+              the task's words give it (JUDGE_PAIRS, the older pairs-only form, is still read)
   LIVE_FRAME  path of a JPEG that is replaced with the latest camera view (top camera + both wrist cameras)
   STOP_FILE   when this file appears, the run stops and the Dream session is released
 """
@@ -249,7 +250,8 @@ def main():
             "started_at": datetime.now().isoformat(timespec="seconds"), "stopped_by_user": False,
             "error": None, "error_type": None, "scene": SCENE or None,
             "batch_id": os.environ.get("BATCH_ID"),
-            "judge": {"pairs": json.loads(os.environ["JUDGE_PAIRS"])} if os.environ.get("JUDGE_PAIRS") else None}
+            "judge": (json.loads(os.environ["JUDGE_SPEC"]) if os.environ.get("JUDGE_SPEC")
+                      else {"pairs": json.loads(os.environ["JUDGE_PAIRS"])} if os.environ.get("JUDGE_PAIRS") else None)}
 
     def save(env=None):
         meta["ended_at"] = datetime.now().isoformat(timespec="seconds")
