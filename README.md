@@ -126,16 +126,15 @@ like any other run (Stop is its normal end).
 
 ### Batch (many episodes in the background)
 
-**Original** (the baseline, in **Each episode**: Data collection / Dream-1 only / **Original**): none of our method.
-Dream-1 runs alone (no failure monitor, recovery script or human), every episode starts from the simulator's default
-scene (the same object layout each time, no seed) with default scene settings; the task, its judge, the episode count
-and the seconds are the ones set above. The seed choice does not apply.
+**Original** (the baseline, in **Each episode**: Data collection / Dream-1 only / **Original**): the seed and the
+environment are fixed. Every episode starts from the simulator's default scene (the same object layout each time, no
+seed) with default scene settings, and Dream-1 runs with the failure monitor and the recovery script, as in Data
+collection (its settings apply). The task, its judge, the episode count and the seconds are the ones set above.
 
-**Run as original**: pick a finished batch in the run list's filter and press **Run as original**. It
-runs as many episodes with the same task, judge and time limit, but none of our method: Dream-1 alone (no failure
-monitor, recovery script or human), and every episode from the simulator's default scene (`--default-scene`: the same
-object layout each time, no seed) with default scene settings. Its runs are named "original of <batch>"
-(`meta.json`: `original_of`), and with either batch picked the summary compares the two success rates.
+**Run as original**: pick a finished batch in the run list's filter and press **Run as original**: as many episodes,
+with that batch's task, judge and time limit, as an Original batch (default scene and settings, recovery script).
+Its runs are named "original of <batch>" (`meta.json`: `original_of`), and with either batch picked the summary
+compares the two success rates.
 
 Switch to **Batch**. Pick what each episode does (**Data collection**: Dream-1, then the recovery script on a
 failure; or **Dream-1 only**), how many run **at once** (1 to 4), the number of episodes and the seconds per
