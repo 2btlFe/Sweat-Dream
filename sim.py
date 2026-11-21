@@ -407,8 +407,8 @@ def all_done():
 def script_only(env, seconds, stop):
     """Rule-based only (--script-only): the recovery script (recovery.py) does the task from the first step, object
     by object, as it finishes a task after a failure in data collection; Dream-1 is never asked (no key, no API use).
-    The time limit is simulated time, run as fast as the computer can (no waiting for the wall clock). Cameras every
-    4 steps (5 per second), as the frames Dream-1 sees. The run ends when the task is done (--end-on-success), the
+    Real time: one step every 50 ms of wall time, as Dream-1's chunks are played and the arms of a real robot move.
+    Cameras every 4 steps (5 per second), as the frames Dream-1 sees. The run ends when the task is done (--end-on-success), the
     script gives up, or the time is up."""
     TELEOP.dream_available = False  # T and clicks hand nothing to Dream-1
     steps, limit = 0, int(round(seconds / STEP_S))
@@ -420,6 +420,7 @@ def script_only(env, seconds, stop):
             if RECORDER is not None:
                 RECORDER.event("script_start", object=MONITOR.object)
             RECOVERY.start(env, "scripted", "success")
+        tick = time.monotonic()
         env.step(None, None)  # the script replaces the action (TELEOP.filter in controlled_step)
         if steps % 4 == 0:
             images = env.images()
@@ -429,6 +430,7 @@ def script_only(env, seconds, stop):
             if RECORDER is not None:
                 RECORDER.on_frame(images)
         steps += 1
+        time.sleep(max(0, STEP_S - (time.monotonic() - tick)))
 
 
 GOAL_DROP_M = 0.06  # a dragged object is let go this far above where it will rest, then physics settles it
