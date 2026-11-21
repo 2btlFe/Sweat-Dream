@@ -161,12 +161,13 @@ def evaluate(meta, trajectory, rules):
     rules = normalize_rules(rules)
     if meta.get("error"):
         return invalid("execution_error", meta.get("error"))
-    if meta.get("stopped_by_user"):
+    if meta.get("stopped_by_user") and not meta.get("stop_ends_run"):  # human runs end with Stop: judge them
         return invalid("user_stopped")
     spec = judged_spec(meta)
     if spec is None:
         return invalid("unsupported_task")
-    if meta.get("model_responses", 0) < 1 or meta.get("model_actions", 0) < 1:
+    by_hand = meta.get("mode") in ("human", "resumed")  # a person drove (part of) it: Dream-1 need not have answered
+    if not by_hand and (meta.get("model_responses", 0) < 1 or meta.get("model_actions", 0) < 1):
         return invalid("no_model_actions")
     positions = trajectory.get("positions", {}) if isinstance(trajectory, dict) else {}
     kind = spec["type"]
@@ -197,7 +198,7 @@ def evaluate(meta, trajectory, rules):
         frame = table_frame(meta)
     except (KeyError, TypeError, ValueError):
         return invalid("invalid_height_band")
-    model = {"model_responses": meta["model_responses"], "model_actions": meta["model_actions"]}
+    model = {"model_responses": meta.get("model_responses", 0), "model_actions": meta.get("model_actions", 0)}
     type_rules = rules[kind]
     if kind == "pick_place":
         results = [judge_pair(t, p, q, touch, obj, target, type_rules, frame)

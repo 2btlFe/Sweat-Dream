@@ -5,6 +5,17 @@
     python sim.py "put apple into the bowl" --seed 42 --ood-random light,table --ood '{"blur_px": 2}'
     python sim.py --preview start.jpg --seed 42                           the start scene as a JPEG (no API call)
 
+Run modes (KSY: monitor.py, recovery.py, teleop.py, recorder.py):
+    python sim.py "put apple into the bowl" --collect        data collection: Dream-1, then the recovery script when it
+                                                             fails; no human. If the script gives up, the run ends there
+    python sim.py "put apple into the bowl" --recover human  test: a failure asks a human at once (T takes over / gives back)
+    python sim.py "put apple into the bowl" --teleop         human only: no Dream-1 until T (no API key or credits)
+    python sim.py --resume <run id> --resume-step 120        restart a recorded run at step 120, exactly as it was, with a
+                                                             human in control
+    python sim.py "put apple into the bowl" --plain          Dream-1 only: no monitor, script or human control
+    (no mode flag: Dream-1, then the recovery script, then a human if the script gives up)
+OpenYAM and custom layouts without all six items always run as --plain (the monitor and teleop need the YAM table).
+
 The start scene comes from the seed (scene.py: object layout, and the scene controls of ood.py marked random); see
 SCENE_SEED.md. A custom layout from the page (SCENE_JSON) replaces the seed's layout and implies --default-scene.
 
@@ -24,6 +35,10 @@ app.py starts this for every run. Environment variables connect it to the websit
               the task's words give it (JUDGE_PAIRS, the older pairs-only form, is still read)
   LIVE_FRAME  path of a JPEG that is replaced with the latest camera view (top camera + both wrist cameras)
   STOP_FILE   when this file appears, the run stops and the Dream session is released
+  TELEOP_STATE  path of a JSON file replaced with the control state (mode, arm, gripper, monitor, recovery script)
+Keyboard and mouse input arrives on stdin, one JSON object per line: {"held": ["w"]}, {"press": "t"}, {"click": [u, v],
+"camera": "top"}, ... (teleop.py). Runs in a KSY mode are also recorded to episodes/<run id>/ (recorder.py: every
+step's source, inputs, cameras and full physics state, for resuming); --no-record skips that.
 """
 
 import argparse
@@ -61,10 +76,23 @@ import scene  # noqa: E402  the seed's start scene; imported before build_xml is
 import simulator_settings as sim_settings  # noqa: E402  robot and room choices
 from local_rooms import desk_texture, themed_xml  # noqa: E402  Sandbox room styling for the YAM table
 from sandbox_env import SandboxEnv  # noqa: E402  OpenYAM on the Sandbox table (needs Node.js to fetch it)
+from monitor import Monitor  # noqa: E402  failure monitor (KSY)
+from recorder import BODIES, EPISODES_DIR, PHYSICS, EpisodeRecorder  # noqa: E402  episode recorder (KSY)
+from recovery import Recovery  # noqa: E402  recovery script (KSY)
+from teleop import STEP_S, Teleop, camera_position, select  # noqa: E402  human control (KSY)
 
 HERE = Path(__file__).resolve().parent
 LIVE_FRAME = os.environ.get("LIVE_FRAME")
 STOP_FILE = os.environ.get("STOP_FILE")
+TELEOP_STATE = os.environ.get("TELEOP_STATE")
+TELEOP = Teleop()
+MONITOR = None  # the failure monitor, set in main() once the task is known (KSY modes)
+RECOVERY = None  # the recovery script; None with --recover human
+RECORDER = None  # the episode recorder (episodes/); None with --no-record or --plain
+COLLECT = False  # --collect: Dream-1, then the recovery script; no human input
+KSY = False  # whether the run goes through teleop / monitor / recovery (not --plain, OpenYAM or a partial table)
+DREAM_STARTED = [False]  # Dream-1 was asked for a real chunk: before that, the loop only fills its camera window
+HOLD_ROWS = 20  # while a human (or the script) has the arms, Dream-1 is not called: the loop gets 1 s of hold rows
 OBJECTS = ["apple", "orange", "banana", "water_bottle"]
 TARGETS = ["bowl", "plate"]
 SCENE = json.loads(os.environ.get("SCENE_JSON") or "{}")
@@ -188,6 +216,8 @@ def capture(env, windows, keep=True):
         last_images.update(original_capture(env, windows, keep))
         if LIVE_FRAME:
             save_jpeg(camera_view(last_images), LIVE_FRAME)
+        if keep and RECORDER is not None:
+            RECORDER.on_frame(last_images)  # the frames the model sees, 5 per second
     return dict(last_images)
 
 
@@ -196,6 +226,15 @@ original_get_action = dream.DreamClient.get_action
 
 
 def get_action(self, *args, **kwargs):
+    # While a human (or the recovery script) has the arms, Dream-1 is not asked: no credits, no waiting, and the loop
+    # keeps running at 20 Hz. The rows returned here are replaced by their actions anyway; a hand-back completes when
+    # Dream-1 is asked again (a fresh chunk).
+    if KSY and not TELEOP.chunk_started():
+        left, right = TELEOP.last_action
+        return {"q_l_chunk": np.tile(left, (HOLD_ROWS, 1)), "q_r_chunk": np.tile(right, (HOLD_ROWS, 1))}
+    DREAM_STARTED[0] = True
+    if RECORDER is not None and RECORDER.model_id is None:
+        RECORDER.model_id = getattr(dream_control, "BETA_MODEL", "dream-1")
     for attempt in range(3):
         try:
             reply = original_get_action(self, *args, **kwargs)
@@ -286,6 +325,212 @@ def workspace_frame(env, camera):
 dream.DreamClient.get_action = get_action
 
 
+def read_keys(env, stop):
+    """Keyboard and mouse input from app.py, one JSON object per line on stdin (KSY)."""
+    for line in sys.stdin:
+        if stop.is_set():
+            return
+        try:
+            message = json.loads(line)
+        except ValueError:
+            continue
+        if COLLECT:
+            continue  # data collection: the model and the recovery script only (a human recovers afterwards)
+        if RECORDER is not None:
+            RECORDER.event("input", **message)  # every key, click, drag and button, for the record
+        if "held" in message:
+            TELEOP.set_held(message["held"])
+        if message.get("press"):
+            TELEOP.press(message["press"], env)
+        if message.get("click"):
+            TELEOP.queue_click(*message["click"], camera=message.get("camera", "top"))
+        if message.get("drag"):
+            TELEOP.queue_drag(*message["drag"])
+        if message.get("wheel"):
+            TELEOP.wheel(message["wheel"])
+
+
+def write_state(stop):
+    """The control state for the page (TELEOP_STATE), five times a second."""
+    while not stop.is_set():
+        try:
+            with open(TELEOP_STATE + ".tmp", "w", encoding="utf-8") as file:
+                json.dump({**TELEOP.status(), "monitor": MONITOR.status() if MONITOR else None, "collecting": COLLECT,
+                           "recording": {"id": RECORDER.id, "steps": len(RECORDER.rows["t"])} if RECORDER else None,
+                           "recovery": RECOVERY.status() if RECOVERY else None}, file)
+            os.replace(TELEOP_STATE + ".tmp", TELEOP_STATE)
+        except OSError:
+            pass
+        time.sleep(0.2)
+
+
+def keyboard_only(env, seconds, stop):
+    """No Dream-1: the human drives the arms from the start, 20 Hz, cameras at 10 Hz (KSY).
+    @return The seconds left when the human handed the arms to Dream-1 (key T), else None."""
+    TELEOP.start_human(env)
+    deadline = time.monotonic() + seconds
+    steps = 0
+    while not stop.is_set() and time.monotonic() < deadline:
+        if TELEOP.mode == "returning":
+            return deadline - time.monotonic()
+        tick = time.monotonic()
+        env.step(None, None)  # the keyboard replaces the action (see controlled_step in main)
+        if steps % 2 == 0:
+            images = env.images()
+            last_images.update(images)  # the run's last picture (runs/<id>/last.jpg)
+            if LIVE_FRAME:
+                save_jpeg(camera_view(images), LIVE_FRAME)
+            if steps % 4 == 0 and RECORDER is not None:
+                RECORDER.on_frame(images)  # 5 per second, as in Dream-1 runs
+        steps += 1
+        time.sleep(max(0, STEP_S - (time.monotonic() - tick)))
+    return None
+
+
+def read_meta(folder):
+    try:
+        return json.loads((Path(folder) / "meta.json").read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def start_ksy(env, args, meta, stop, source_dir):
+    """KSY's control loop on the built scene: every action goes through the human controller (teleop.py), which
+    passes Dream-1's on or replaces them; every step is watched by the failure monitor (monitor.py), which stops
+    Dream-1 when it fails: the recovery script (recovery.py) tries first, then the arms are held for a human (or
+    at once with --recover human). The recorder (recorder.py) keeps every step, under the run's id."""
+    global MONITOR, RECOVERY, RECORDER
+    resume = None
+    if source_dir is not None:
+        # The recorded run, restored exactly: its start (for the home pose and the monitor's resting heights), then
+        # the full physics state before the chosen step.
+        recorded = np.load(source_dir / "steps.npz")
+        step_k = max(0, min(int(args.resume_step), len(recorded["t"]) - 1))
+        resume = {"episode": source_dir.name, "step": step_k, "t": float(recorded["t"][step_k - 1]) if step_k else 0.0}
+        mujoco.mj_setState(env.model, env.data, recorded["physics"][0], PHYSICS)
+        mujoco.mj_forward(env.model, env.data)
+    TELEOP.set_home(env)
+    MONITOR = Monitor(args.task, env)
+    if resume:
+        mujoco.mj_setState(env.model, env.data, recorded["physics"][resume["step"]], PHYSICS)
+        mujoco.mj_forward(env.model, env.data)
+        if resume["step"] > 0:  # the arms hold what they were last commanded, not where gravity has them
+            last = recorded["action"][resume["step"] - 1]
+            TELEOP.last_action = (last[:7].copy(), last[7:].copy())
+    if not args.no_record:
+        RECORDER = EpisodeRecorder(env, args.task, mode="resumed" if resume else "human-only" if args.teleop else "dream",
+                                   extra={"recover": args.recover, "time_limit_s": args.seconds, "resumed_from": resume,
+                                          "run": meta["id"], "seed": meta["seed"], "room": meta["room"]})
+        RECORDER.id, RECORDER.dir = meta["id"], EPISODES_DIR / meta["id"]  # one id: runs/<id> and episodes/<id>
+        if resume:
+            RECORDER.load_prefix(source_dir, resume["step"])  # the new episode starts with the original's steps
+        TELEOP.on_control = lambda mode, reason: RECORDER.event("control", mode=mode, reason=reason)
+        TELEOP.on_grip_hold = lambda side, what, why: RECORDER.event("grip_hold", side=side, what=what, why=why)
+        print(f"  Recording: episodes/{RECORDER.id}", flush=True)
+    if args.recover == "script":
+        RECOVERY = Recovery(TELEOP, MONITOR)
+    if not MONITOR.understood():
+        print("  The failure monitor does not understand this task (pick and place only); it will not ask for help.",
+              flush=True)
+    step = env.step
+    script_result = [None]
+    previous_mode = [TELEOP.mode]
+    frames = [0]
+
+    def controlled_step(left, right):
+        click = TELEOP.take_click()  # mouse input needs the renderer, so it is looked up here, on the main thread
+        if click:
+            u, v, camera = click
+            body, point = select(env, u, v, camera)
+            if body:
+                TELEOP.clicked(env, body, point, camera)
+        drag = TELEOP.take_drag()
+        if drag:
+            body, point = select(env, *drag)
+            if body:
+                TELEOP.dragged(env, camera_position(env), point)
+        mode_before = TELEOP.mode
+        if RECORDER is not None:
+            RECORDER.before_step()
+        sent = TELEOP.filter(env, left, right)
+        result = step(*sent)
+        mode = TELEOP.mode
+        frames[0] += 1
+        # The model's frames are 5 per second; while a human steers, show the picture twice as often.
+        if mode != "dream" and TELEOP.dream_available and LIVE_FRAME and frames[0] % 2 == 0:
+            save_jpeg(camera_view(env.images()), LIVE_FRAME)
+        if previous_mode[0] in ("human", "script") and mode in ("returning", "dream"):
+            MONITOR.recovered()  # the human or the script gave the arms back: watch Dream-1 again from here
+        previous_mode[0] = mode
+        event = MONITOR.update(env, watching=(mode == "dream" and TELEOP.dream_available))
+        if event:
+            print(f"  Monitor: {event}" + (f" · recovery goal: {MONITOR.status()['goal']}" if MONITOR.goal else ""),
+                  flush=True)
+            if event != "off_table":
+                if RECOVERY is not None and MONITOR.goal:
+                    RECOVERY.start(env, event, MONITOR.goal)
+                else:
+                    TELEOP.pause(env, event)
+        elif RECOVERY is not None:
+            RECOVERY.tick(env)
+        if RECOVERY is not None and RECOVERY.result != script_result[0]:
+            script_result[0] = RECOVERY.result
+            if RECORDER is not None and RECOVERY.result:
+                RECORDER.event("script", result=RECOVERY.result)
+        if COLLECT and not stop.is_set() and (TELEOP.mode == "paused" or event == "off_table"):
+            # Data collection asks no human: a failure the script could not recover ends the run here. It is a failure
+            # to recover by hand later, from the Recordings panel (it resumes before the model failed).
+            why = "the object fell off the table" if event == "off_table" else "the recovery script gave up"
+            print(f"  Ending the run: {why}. Recover it later from the Recordings panel.", flush=True)
+            meta["ended_early"] = why
+            if RECORDER is not None:
+                RECORDER.event("ended", reason=why)
+            stop.set()
+        if RECORDER is not None:
+            if event:
+                RECORDER.event("monitor", event=event, goal=MONITOR.status()["goal"])
+            source = ("human" if mode_before == "human" else "script" if mode_before == "script"
+                      else "dream" if mode_before == "dream" and DREAM_STARTED[0] and TELEOP.dream_available
+                      else "hold")
+            hands, grips = TELEOP.record_view()
+            RECORDER.after_step(*sent, source, hands, grips, MONITOR.stage)
+        return result
+
+    env.step = controlled_step
+    if not sys.stdin.isatty():
+        threading.Thread(target=read_keys, args=(env, stop), daemon=True).start()
+    if TELEOP_STATE:
+        threading.Thread(target=write_state, args=(stop,), daemon=True).start()
+    if resume:
+        print(f"  Resuming {resume['episode']} at step {resume['step']} ({resume['t']:.2f} s): you have the arms.",
+              flush=True)
+
+
+def resume_options(args):
+    """--resume: the original run's start options (runs/<id>/meta.json), so the scene is built the same way before
+    its recorded physics state is restored. @return The recorded episode folder."""
+    global SCENE
+    source = EPISODES_DIR / Path(args.resume).name
+    if not (source / "steps.npz").exists():
+        sys.exit(f"Stopped: no recording episodes/{source.name} to resume.")
+    original = json.loads((HERE / "runs" / source.name / "meta.json").read_text()) \
+        if (HERE / "runs" / source.name / "meta.json").exists() else {}
+    recorded = json.loads((source / "meta.json").read_text()) if (source / "meta.json").exists() else {}
+    args.task = original.get("task") or recorded.get("task") or args.task
+    args.teleop = True  # a resumed run starts with a human in control (T hands it to Dream-1)
+    if original.get("robot", "yam") != "yam":
+        sys.exit("Stopped: only YAM runs can be resumed.")
+    args.room = original.get("room", args.room)
+    args.setting = original.get("setting", args.setting)
+    args.ood, args.ood_random = original.get("ood") or {}, []  # the values the original drew, as they were
+    SCENE = original.get("scene") or {}
+    args.seed = original.get("seed") if not SCENE else None
+    args.default_scene = args.seed is None
+    if not os.environ.get("JUDGE_SPEC") and original.get("judge"):
+        os.environ["JUDGE_SPEC"] = json.dumps(original["judge"])
+    return source
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run one Dream-1 task in the simulator")
     parser.add_argument("task", nargs="?", default="put apple into the bowl")
@@ -294,8 +539,18 @@ def main():
     parser.add_argument("--preview", type=Path, help="Render the initial camera view to a JPEG and exit")
     parser.add_argument("--robot", choices=("yam", "openyam"), default="yam", help="The robot (simulator_settings.py)")
     parser.add_argument("--room", choices=sim_settings.ROOMS, default="yam_tabletop", help="The room's styling")
+    parser.add_argument("--teleop", action="store_true", help="human only: no Dream-1 until T")
+    parser.add_argument("--collect", action="store_true",
+                        help="data collection: Dream-1, then the recovery script on a failure; no human input")
+    parser.add_argument("--recover", choices=("script", "human"), default="script",
+                        help="when Dream-1 fails: the recovery script first (script), or a human at once (human)")
+    parser.add_argument("--resume", metavar="RUN", help="restart a recorded run (with --resume-step), a human in control")
+    parser.add_argument("--resume-step", type=int, default=0, help="the step of --resume to start from")
+    parser.add_argument("--no-record", action="store_true", help="do not record the run to episodes/")
+    parser.add_argument("--plain", action="store_true", help="Dream-1 only: no monitor, recovery script or human control")
     scene.add_arguments(parser)  # --seed, --default-scene, --split, --setting, --ood-random
     args = parser.parse_args()
+    source_dir = resume_options(args) if args.resume else None
     openyam = args.robot == "openyam"
     if openyam and (SCENE or args.ood or args.ood_random):
         parser.error("Scene settings, random settings and custom layouts are for YAM; OpenYAM uses the Sandbox table.")
@@ -309,6 +564,20 @@ def main():
         args.default_scene = True
     if not args.default_scene:
         args.seed = scene.pick_seed(args)  # the seed the scene is built from, kept in meta.json
+    # KSY's monitor, recovery script, human control and recorder need the YAM table with all six items.
+    global KSY, COLLECT, MONITOR, RECOVERY, RECORDER
+    partial = bool(SCENE) and set(SCENE.get("items", {})) != set(BODIES)
+    KSY = not (args.plain or openyam or partial)
+    if not KSY and (args.teleop or args.resume):
+        parser.error("Human control and resuming need YAM with all six items on the table.")
+    if not KSY and (args.collect or args.recover == "human") and not args.plain:
+        print("  Monitor, recovery script and human control are for YAM with all six items: running Dream-1 only.",
+              flush=True)
+    COLLECT = KSY and args.collect and not args.teleop and not args.resume
+    if COLLECT:
+        args.recover = "script"
+    mode = ("plain" if not KSY else "resumed" if args.resume else "human" if args.teleop else "collect" if COLLECT
+            else "test" if args.recover == "human" else "assist")
     if not openyam:
         theme_yam_room(args.room)
 
@@ -339,6 +608,9 @@ def main():
             "setting": args.setting, "scene_version": scene.SCENE_VERSION,
             "robot": args.robot, "room": args.room,
             "layout": "sandbox" if openyam else "custom" if SCENE else "default" if args.seed is None else "seed",
+            "mode": mode, "resumed_from": {"run": Path(args.resume).name, "step": args.resume_step} if args.resume else None,
+            # A human ends human, test and resumed runs with Stop: that is their normal end, not a cut-short run.
+            "stop_ends_run": mode in ("human", "test", "resumed"),
             "ood_random": args.ood_random, "ood": None,
             "started_at": datetime.now().isoformat(timespec="seconds"), "stopped_by_user": False,
             "error": None, "error_type": None, "scene": SCENE or None,
@@ -347,6 +619,12 @@ def main():
                       else {"pairs": json.loads(os.environ["JUDGE_PAIRS"])} if os.environ.get("JUDGE_PAIRS") else None)}
 
     def save(env=None):
+        if RECORDER is not None and not RECORDER.closed:
+            saved = RECORDER.close(MONITOR.status() if MONITOR else {}, None if not meta["error"] else meta["error"])
+            if saved:
+                meta["episode"] = RECORDER.id
+                meta["steps_by_source"] = (read_meta(saved) or {}).get("steps_by_source")
+                print(f"  Recorded: episodes/{saved.name} ({len(RECORDER.rows['t'])} steps)", flush=True)
         meta["ended_at"] = datetime.now().isoformat(timespec="seconds")
         meta["sim_seconds"] = TRAJECTORY.t[-1] if TRAJECTORY.t else 0
         meta.update(STATS)
@@ -386,12 +664,25 @@ def main():
                 time.sleep(0.3)
 
         threading.Thread(target=watch, daemon=True).start()
+    if KSY:
+        start_ksy(env, args, meta, stop, source_dir)
 
-    print(f"Starting the simulator: {args.task} ({args.seconds:g} s)", flush=True)
+    print(f"Starting the simulator: {args.task} ({args.seconds:g} s)"
+          + {"human": " · you have the arms (T hands them to Dream-1)", "resumed": " · you have the arms",
+             "collect": " · collecting: Dream-1, then the recovery script; no human",
+             "test": " · press T to take over"}.get(mode, ""), flush=True)
     RECORDING["on"] = True
     try:
-        dream_control.main(["--task", args.task, "--seconds", str(args.seconds), "--headless", "--quiet"],
-                           shared_env=env, stop_event=stop)
+        if args.teleop:
+            left = keyboard_only(env, args.seconds, stop)
+            if left is not None and left > 1 and not stop.is_set():
+                # Hand-off: Dream-1 continues from the scene exactly as the human left it, for the time that is left.
+                print(f"  Handing the arms to Dream-1 ({left:.0f} s left).", flush=True)
+                dream_control.main(["--task", args.task, "--seconds", f"{left:.1f}", "--headless", "--quiet"],
+                                   shared_env=env, stop_event=stop)
+        else:
+            dream_control.main(["--task", args.task, "--seconds", str(args.seconds), "--headless", "--quiet"],
+                               shared_env=env, stop_event=stop)
     except Exception as error:
         meta["error"] = str(error)
         meta["error_type"] = type(error).__name__

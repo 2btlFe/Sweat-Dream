@@ -10,8 +10,14 @@ from a custom layout set on the page. /api/preview renders a start scene without
 The page judges every saved run against the success rules set on it (target distance, release, time standing
 still); the rules are kept in runs/rules.json and each run's label in runs/<id>/label.json. A batch runs many
 episodes in the background (no camera view), one seed each (seed, seed + 1, ... or the fixed eval seeds), and
-labels each one with the rules as they were when the batch started. Standard library only (plus ood.py and
-seed_web.py, which are standard library too).
+labels each one with the rules as they were when the batch started.
+
+Run modes (KSY): data collection (Dream-1, then the recovery script when it fails; no human), test (Dream-1 and a
+human take turns with T), human only, and Dream-1 only. The page sends keys, clicks, drags and the wheel to sim.py
+(stdin), which moves the arms by hand (teleop.py); its control state comes back through TELEOP_STATE. Runs in those
+modes are also recorded to episodes/<run id>/ (recorder.py), and any recording can be resumed at any step with a
+human in control (Recordings). Standard library only, plus numpy, PIL and PyAV (installed with dreamlabs) to show a
+recording's frames.
 """
 
 import argparse
@@ -52,6 +58,9 @@ ID_RE = re.compile(r"^[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$")
 WORK = Path(tempfile.mkdtemp(prefix="dream-web-"))
 LIVE = WORK / "live.jpg"
 STOP = WORK / "stop"
+TELEOP_STATE = WORK / "teleop.json"
+EPISODES = HERE / "episodes"  # KSY's recordings (recorder.py), one per run id
+MODES = ("collect", "test", "human", "plain")
 PREVIEW_LOCK = threading.Lock()
 ## Tasks without a bowl or plate are run but not judged (the judge needs an object and a target).
 EXAMPLES = [
@@ -152,24 +161,31 @@ class Runner:
     def running(self):
         return self.process is not None and self.process.poll() is None
 
-    def start(self, task, seconds, changes=None, seeding=(), scene=None, live=True, extra_env=None, robot=()):
+    def start(self, task, seconds, changes=None, seeding=(), scene=None, live=True, extra_env=None, robot=(),
+              mode="plain", record=True, resume=None):
         """Start one run of sim.py.
         @param changes Scene settings (ood.validate output).
         @param seeding sim.py's seed arguments (seed_web.seeding_args): --seed, --ood-random.
         @param scene A custom layout (parse_scene), which replaces the seed's; seeding is then not used.
         @param live Whether to write the camera view for the page (batches do not).
         @param extra_env More environment variables for sim.py (BATCH_ID, JUDGE_SPEC).
+        @param mode "collect", "test", "human" or "plain" (see sim.py). @param record Record to episodes/ (KSY modes).
+        @param resume (run id, step): restart that recording there with a human in control.
         """
         with self.lock:
             if self.running():
                 raise RuntimeError("A run is already going.")
-            if not has_api_key():
+            if not has_api_key() and mode != "human" and not resume:  # a human-only run calls no Dream-1 until T
                 raise RuntimeError("Enter your API key first.")
+            self.last_start = dict(task=task, seconds=seconds, changes=changes, seeding=seeding, scene=scene,
+                                   live=live, extra_env=extra_env, robot=robot, mode=mode, record=record, resume=resume)
+            TELEOP_STATE.unlink(missing_ok=True)
             STOP.unlink(missing_ok=True)
             LIVE.unlink(missing_ok=True)
             run_id = datetime.now().strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
             env = {**os.environ, "PYTHONUTF8": "1", "PYTHONUNBUFFERED": "1", "PYTHONWARNINGS": "ignore",
-                   "STOP_FILE": str(STOP), "RUN_DIR": str(RUNS / run_id), **(extra_env or {})}
+                   "STOP_FILE": str(STOP), "RUN_DIR": str(RUNS / run_id), "TELEOP_STATE": str(TELEOP_STATE),
+                   **(extra_env or {})}
             if live:
                 env["LIVE_FRAME"] = str(LIVE)
             if PAGE_KEY["value"]:
@@ -177,20 +193,33 @@ class Runner:
             command = [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds), *robot]
             if changes:
                 command.extend(["--ood", json.dumps(changes)])
-            if scene:
+            if resume:  # sim.py builds the original's scene from its runs/<id>/meta.json
+                command = [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds),
+                           "--resume", resume[0], "--resume-step", str(int(resume[1]))]
+            elif scene:
                 env["SCENE_JSON"] = json.dumps(scene)  # sim.py then builds the default scene with this layout
             else:
                 command.extend(seeding)
+            if not resume:
+                command += {"collect": ["--collect"], "test": ["--recover", "human"], "human": ["--teleop"],
+                            "plain": ["--plain"]}[mode]
+            if not record:
+                command.append("--no-record")
             self.process = subprocess.Popen(
-                command, cwd=str(HERE), env=env,
+                command, cwd=str(HERE), env=env, stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
             self.task, self.started, self.ended, self.run_id = task, time.time(), None, run_id
+            self.mode = "resumed" if resume else mode
             self.log.clear()
             threading.Thread(target=self._read, args=(self.process,), daemon=True).start()
 
     def _read(self, process):
         for line in process.stdout:
             line = line.strip()
+            # Sub-0.1 s "RTT" lines are the hold rows sim.py gives the loop while a human has the arms (no API call).
+            hold = re.search(r"Dream · (\d+\.\d+)s RTT", line)
+            if hold and float(hold.group(1)) < 0.1:
+                continue
             if line and "Warning" not in line and "warnings.warn" not in line:
                 self.log.append(line)
         process.wait()
@@ -200,11 +229,50 @@ class Runner:
         if self.running():
             STOP.touch()
 
+    def stop_and_wait(self, timeout=30):
+        """Stop the current run, if any, and wait until it has saved its recording and exited."""
+        process = self.process
+        if process is None or process.poll() is not None:
+            return
+        self.stop()
+        try:
+            process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+
+    def restart(self):
+        """Reset: stop the run (a Dream run first releases its session) and start the same one again from its start."""
+        if not getattr(self, "last_start", None):
+            raise RuntimeError("Nothing to reset: press Run first.")
+        self.stop_and_wait()
+        self.start(**self.last_start)
+
+    def send_keys(self, message):
+        """Pass keyboard and mouse input to the running sim.py (one JSON line on its stdin)."""
+        with self.lock:
+            if not self.running():
+                return False
+            try:
+                self.process.stdin.write(json.dumps(message) + "\n")
+                self.process.stdin.flush()
+                return True
+            except (OSError, ValueError):
+                return False
+
+    def teleop_state(self):
+        try:
+            return json.loads(TELEOP_STATE.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+
     def status(self):
         running = self.running()
         return {
             "running": running,
             "task": self.task,
+            "mode": getattr(self, "mode", None),
+            "teleop": self.teleop_state() if running else None,
             "elapsed_s": round((self.ended or time.time()) - self.started) if self.started else None,
             "exit_code": None if running or self.process is None else self.process.returncode,
             "run_id": self.run_id,
@@ -239,6 +307,55 @@ def parse_scene(scene):
 
 
 LABELS = ("success", "failure", "invalid")
+
+
+def list_episodes():
+    """Recordings (episodes/), newest first: what the page needs to pick one and a step to resume from (KSY)."""
+    rows = []
+    for folder in sorted(EPISODES.glob("*"), reverse=True) if EPISODES.is_dir() else []:
+        if not ID_RE.match(folder.name) or not (folder / "steps.npz").exists():
+            continue
+        meta, outcome = read_json(folder / "meta.json", {}), read_json(folder / "outcome.json", {})
+        events = read_json(folder / "events.json", []) or []
+        rows.append({
+            "id": folder.name, "task": meta.get("task"), "started_as": meta.get("started_as"),
+            "steps": meta.get("steps"), "sim_s": meta.get("sim_s"), "label": outcome.get("label"),
+            "final_stage": outcome.get("final_stage"),
+            "failures": [{"event": f.get("event"), "step": f.get("step")} for f in outcome.get("failures_seen") or []],
+            "steps_by_source": meta.get("steps_by_source"), "resumed_from": meta.get("resumed_from"),
+            "ended": next((e.get("reason") for e in events if e.get("kind") == "ended"), None),
+            "script": [e.get("result") for e in events if e.get("kind") == "script" and e.get("result")],
+        })
+    return rows
+
+
+FRAMES = {}  # episode id -> (frame_t, step times, top camera frames), the last few looked at
+
+
+def episode_frame(episode, step):
+    """The top camera picture at a step of a recording (the last frame at or before it), as JPEG."""
+    import io
+
+    import numpy as np
+    from PIL import Image
+
+    if episode not in FRAMES:
+        import av
+
+        folder = EPISODES / episode
+        data = np.load(folder / "steps.npz")
+        with av.open(str(folder / "top.mp4")) as container:
+            frames = [f.to_ndarray(format="rgb24") for f in container.decode(video=0)]
+        if len(FRAMES) >= 3:
+            FRAMES.pop(next(iter(FRAMES)))
+        FRAMES[episode] = (data["frame_t"], data["t"], frames)
+    frame_t, t, frames = FRAMES[episode]
+    step = max(0, min(int(step), len(t) - 1))
+    before = float(t[step - 1]) if step > 0 else 0.0  # simulated time at the start of the step
+    index = max(0, min(int(np.searchsorted(frame_t, before + 1e-9)) - 1, len(frames) - 1))
+    buffer = io.BytesIO()
+    Image.fromarray(frames[index]).save(buffer, format="JPEG", quality=80)
+    return buffer.getvalue()
 
 
 def write_label(d, verdict, rules, **extra):
@@ -277,7 +394,7 @@ class Batch:
     def running(self):
         return self.thread is not None and self.thread.is_alive()
 
-    def start(self, tasks, seeds, seconds, changes, random_names, split, robot=()):
+    def start(self, tasks, seeds, seconds, changes, random_names, split, robot=(), mode="plain"):
         """@param seeds One seed per episode. @param changes, random_names The scene settings, and the ones drawn
         from each seed. @param split "train" or "eval" (shown on the page)."""
         if self.running() or RUNNER.running():
@@ -287,7 +404,7 @@ class Batch:
         self.stop_requested = False
         self.info = {"id": "b" + datetime.now().strftime("%Y%m%d-%H%M%S"), "tasks": tasks, "total": len(seeds),
                      "seconds": seconds, "seeds": seeds, "seed": seeds[0], "split": split, "ood": changes,
-                     "ood_random": random_names, "rules": current_rules(), "robot": list(robot),
+                     "ood_random": random_names, "rules": current_rules(), "robot": list(robot), "mode": mode,
                      "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
                      "started": time.time(), "ended": None, "current": None, "stopped_reason": None, "durations": []}
         self.thread = threading.Thread(target=self._loop, daemon=True)
@@ -311,6 +428,7 @@ class Batch:
                 started = time.time()
                 seeding = ["--seed", str(seed)] + (["--ood-random", ",".join(info["ood_random"])] if info["ood_random"] else [])
                 RUNNER.start(prompt, info["seconds"], info["ood"], seeding, live=False, robot=info["robot"],
+                             mode=info["mode"],
                              extra_env={"BATCH_ID": info["id"], "JUDGE_SPEC": json.dumps(task["judge"])})
                 run_id, process = RUNNER.run_id, RUNNER.process
                 while process.poll() is None:  # a run that hangs is stopped, then killed
@@ -475,6 +593,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(ood.GROUPS)
         if path == "/api/status":
             return self.send_json(RUNNER.status())
+        if path == "/api/episodes":
+            return self.send_json({"episodes": list_episodes()})
+        m = re.fullmatch(r"/api/episodes/([^/]+)/frame\.jpg", path)
+        if m and ID_RE.match(m.group(1)):
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            try:
+                return self.send(episode_frame(m.group(1), int(query.get("step", ["0"])[0])), "image/jpeg")
+            except (OSError, ValueError, KeyError, IndexError):
+                return self.send_json({"error": "no picture for that recording"}, 404)
         if path == "/api/live.jpg":
             try:
                 return self.send(LIVE.read_bytes(), "image/jpeg")
@@ -553,10 +680,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": str(error)}, 400)
             if BATCH.running():
                 return self.send_json({"error": "A batch is running."}, 409)
+            mode = body.get("mode") or "collect"
+            if mode not in MODES:
+                return self.send_json({"error": "Unknown run mode."}, 400)
+            if mode == "human" and ("openyam" in robot or (scene and set(scene["items"]) != set(OBJECTS + TARGETS))):
+                return self.send_json({"error": "Human control needs YAM with all six items on the table."}, 400)
             try:
-                seconds = min(300, max(10, int(float(body.get("seconds") or 60))))
+                seconds = min(900 if mode in ("human", "test") else 300, max(10, int(float(body.get("seconds") or 60))))
                 RUNNER.start(task, seconds, changes, seeding, scene,
-                             extra_env={"JUDGE_SPEC": json.dumps(spec)} if spec else None, robot=robot)
+                             extra_env={"JUDGE_SPEC": json.dumps(spec)} if spec else None, robot=robot,
+                             mode=mode, record=body.get("record", True) is not False)
             except (ValueError, TypeError):
                 return self.send_json({"error": "The time limit must be a number."}, 400)
             except RuntimeError as error:
@@ -636,9 +769,59 @@ class Handler(BaseHTTPRequestHandler):
                     seeds = list(range(first, first + count))
                 else:
                     raise ValueError("Seeds must be 'train' or 'eval'.")
-                BATCH.start(tasks, seeds, seconds, changes, random_names, split, robot)
+                mode = body.get("mode") or "collect"
+                if mode not in ("collect", "plain"):
+                    raise ValueError("A batch runs in data collection or Dream-1 only mode.")
+                BATCH.start(tasks, seeds, seconds, changes, random_names, split, robot, mode)
             except (ValueError, TypeError, AttributeError) as error:
                 return self.send_json({"error": str(error)}, 400)
+            except RuntimeError as error:
+                return self.send_json({"error": str(error)}, 409)
+            return self.send_json(RUNNER.status())
+        if self.path == "/api/keys":  # keyboard and mouse for the running sim.py (teleop.py)
+            message = {}
+            if isinstance(body.get("held"), list):
+                message["held"] = [str(key)[:8] for key in body["held"]][:12]
+            if body.get("press"):
+                message["press"] = str(body["press"])[:8]  # e.g. space, tab, v, t, home, lower, lift, grip
+            for name in ("click", "drag"):
+                point = body.get(name)
+                if isinstance(point, list) and len(point) == 2:
+                    try:
+                        message[name] = [min(1.0, max(0.0, float(v))) for v in point]
+                    except (TypeError, ValueError):
+                        pass
+            if message.get("click") and body.get("camera") in ("top", "left", "right"):
+                message["camera"] = body["camera"]
+            if body.get("wheel"):
+                try:
+                    message["wheel"] = max(-5.0, min(5.0, float(body["wheel"])))
+                except (TypeError, ValueError):
+                    pass
+            return self.send_json({"sent": RUNNER.send_keys(message)})
+        if self.path == "/api/resume":
+            episode = str(body.get("episode") or "")
+            if not ID_RE.match(episode) or not (EPISODES / episode / "steps.npz").exists():
+                return self.send_json({"error": "No such recording."}, 404)
+            if BATCH.running():
+                return self.send_json({"error": "A batch is running."}, 409)
+            task = (read_json(RUNS / episode / "meta.json", {}) or read_json(EPISODES / episode / "meta.json", {})
+                    or {}).get("task") or "put apple into the bowl"
+            RUNNER.stop_and_wait()  # Resume replaces a run that is going (its recording is saved first)
+            try:
+                seconds = min(900, max(10, int(float(body.get("seconds") or 60))))
+                RUNNER.start(task, seconds, record=body.get("record", True) is not False,
+                             resume=(episode, int(body.get("step") or 0)))
+            except (ValueError, TypeError):
+                return self.send_json({"error": "The step and the time limit must be numbers."}, 400)
+            except RuntimeError as error:
+                return self.send_json({"error": str(error)}, 409)
+            return self.send_json(RUNNER.status())
+        if self.path == "/api/reset":
+            if BATCH.running():
+                return self.send_json({"error": "A batch is running."}, 409)
+            try:
+                RUNNER.restart()
             except RuntimeError as error:
                 return self.send_json({"error": str(error)}, 409)
             return self.send_json(RUNNER.status())

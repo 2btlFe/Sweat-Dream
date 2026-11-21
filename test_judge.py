@@ -164,6 +164,12 @@ class TaskTypeTests(unittest.TestCase):
                       "apple": [[0.4, 0.0, 0.03]] + [[0.4, -0.15, 0.03]] * 4}}
         self.assertEqual(judge.evaluate(area, moved_left, judge.DEFAULT_RULES)["label"], "success")
 
+    def test_human_runs_end_with_stop(self):
+        stopped = {**META, "stopped_by_user": True}
+        self.assertEqual(judge.evaluate(stopped, episode(), judge.DEFAULT_RULES)["reason"], "user_stopped")
+        human = {"task": "put apple into the bowl", "stopped_by_user": True, "stop_ends_run": True, "mode": "human"}
+        self.assertEqual(judge.evaluate(human, episode(), judge.DEFAULT_RULES)["label"], "success")
+
     def test_rules_old_flat_form_is_pick_place(self):
         rules = judge.normalize_rules({"distance_cm": 9, "release": False, "still_seconds": 2})
         self.assertEqual(rules["pick_place"], {"distance_cm": 9.0, "release": False, "still_seconds": 2.0})

@@ -30,7 +30,7 @@
   label, .label { display: block; font-size: 12px; font-weight: 550; color: var(--muted); margin-bottom: 5px; }
   input, select { width: 100%; min-width: 0; padding: 8px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--well); color: var(--text); font: inherit; }
   input[type="number"] { font-variant-numeric: tabular-nums; }
-  input[type="checkbox"] { width: auto; accent-color: var(--accent); }
+  input[type="checkbox"], input[type="radio"] { width: auto; flex: none; accent-color: var(--accent); }
   button, summary, input, select { outline-offset: 3px; }
   :focus-visible { outline: 2px solid var(--accent); }
   button { padding: 8px 14px; border: 1px solid transparent; border-radius: 8px; font: inherit; font-weight: 650; cursor: pointer; background: var(--accent); color: var(--accent-text); }
@@ -105,8 +105,37 @@
   .pair .remove { cursor: pointer; padding: 0 5px; border-radius: 4px; color: var(--muted); font-weight: 700; }
   .pair .remove:hover { background: var(--bad-bg); color: var(--bad); }
 
+  /* run modes, human control and recordings (KSY) */
+  .modes { display: grid; gap: 6px; margin-top: 12px; }
+  .modes label { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--well); color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer; }
+  .modes label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+  .modes input { margin-top: 3px; }
+  .modes span.muted { display: block; font-weight: 400; font-size: 12px; }
+  .help { padding: 10px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); margin-top: 12px; font-weight: 600; font-size: 13px; }
+  .help.ok { background: var(--ok-bg); color: var(--ok); }
+  .control-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-weight: 650; font-size: 12px; border: 1px solid var(--line); }
+  .badge.human { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .badge.returning, .badge.paused { background: var(--warn-bg); color: var(--warn); }
+  .badge.script { background: var(--ok-bg); color: var(--ok); border-color: var(--ok); }
+  .control-buttons { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 6px; }
+  .control-buttons button { padding: 6px 11px; font-size: 12px; }
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 12px; margin: 8px 0 0; }
+  .keys dd { margin: 0; color: var(--muted); }
+  kbd.down { background: var(--accent); color: var(--accent-text); }
+  img.view.control { cursor: crosshair; }
+  .pill { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 11px; border: 1px solid var(--line); }
+  .pill.failure { color: var(--bad); border-color: var(--bad); }
+  .pill.success { color: var(--ok); border-color: var(--ok); }
+  .eps-wrap { max-height: 280px; overflow: auto; }
+  tr.chosen td { background: var(--accent-soft); }
+  .resume { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 14px; }
+  .resume img { width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #080c10; border-radius: 8px; }
+  .resume input[type=range] { padding: 0; border: 0; background: transparent; accent-color: var(--accent); }
+
   /* custom layout */
   .check { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text); margin: 0 0 12px; }
+  .check code { font-size: 12px; }
   #layoutBody { display: flex; flex-direction: column; gap: 12px; }
   #layoutBody.off { opacity: .5; }
   .robot { border: 1px solid var(--line); border-radius: 8px; padding: 7px 11px; background: var(--well); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
@@ -225,12 +254,20 @@
     <div id="singleForm">
       <div class="row" style="margin-top: 12px">
         <div><label for="task">Task</label><input id="task" value="put apple into the bowl"></div>
-        <div><label for="seconds">Limit (s)</label><input id="seconds" type="number" min="10" max="300" value="60"></div>
+        <div><label for="seconds">Limit (s)</label><input id="seconds" type="number" min="10" max="900" value="60" title="Up to 300 s, or 900 s in test and human-only runs"></div>
       </div>
       <div class="task-note" id="taskNote"></div>
       <div class="examples" id="examples"></div>
+      <div class="modes" role="radiogroup" aria-label="Run mode">
+        <label><input type="radio" name="runMode" value="collect" checked><span>Data collection<span class="muted">Dream-1; when it fails, the recovery script takes over. No human: a failure it cannot recover ends the run (recover it later in Recordings).</span></span></label>
+        <label><input type="radio" name="runMode" value="test"><span>Test<span class="muted">Dream-1 and you take turns with T; a failure hands the arms to you.</span></span></label>
+        <label><input type="radio" name="runMode" value="human"><span>Human only<span class="muted">You drive from the start; T hands the arms to Dream-1 (no credits until then).</span></span></label>
+        <label><input type="radio" name="runMode" value="plain"><span>Dream-1 only<span class="muted">No monitor, script or human control (OpenYAM and custom layouts without all six items always run this way).</span></span></label>
+      </div>
+      <label class="check" style="margin: 10px 0 0; align-items: flex-start"><input type="checkbox" id="record" checked style="margin-top: 3px"><span>Record to <code>episodes/</code> <span class="muted">(who controlled each step, inputs, cameras, physics state: needed to resume)</span></span></label>
       <div class="actions">
         <button id="run">Run</button>
+        <button id="reset" class="ghost" hidden title="Start the same run again from the beginning">Reset</button>
         <button id="stop" class="stop" hidden>Stop</button>
       </div>
     </div>
@@ -245,6 +282,11 @@
             <button id="splitEval" aria-pressed="false" title="The 50 fixed evaluation seeds">Eval set (50)</button>
           </div>
         </div>
+      </div>
+      <label style="margin-top: 12px">Each episode</label>
+      <div class="toggle" role="group" aria-label="Batch mode" style="max-width: 420px">
+        <button id="batchCollect" class="on" aria-pressed="true" title="Dream-1; when it fails, the recovery script takes over">Data collection</button>
+        <button id="batchPlain" aria-pressed="false" title="Dream-1 only">Dream-1 only</button>
       </div>
       <p class="muted small" style="margin: 8px 0 12px">Each episode starts from its own seed. The scene settings below apply to every episode; the ones marked <em>random</em> are drawn from each episode's seed. Runs in the background, without the cameras.</p>
       <label>Tasks <span class="muted">(taken in turn)</span></label>
@@ -314,6 +356,38 @@
       <div><button class="ghost small" id="batchShow">Show these runs</button></div>
     </div>
     <div class="legend"><span>Workspace camera</span><span>Wrist cameras</span></div>
+    <div id="controlBox" hidden>
+      <div class="help" id="help" hidden></div>
+      <div class="control-head"><strong>Control</strong><span class="badge" id="controlMode">Dream-1</span><span class="muted small" id="teleopInfo"></span></div>
+      <div class="small" style="color: var(--warn); min-height: 1.2em" id="reach"></div>
+      <div class="muted small" id="message"></div>
+      <div class="muted small" id="stage"></div>
+      <div class="control-buttons" id="controlButtons">
+        <button id="takeBtn">Take over (T)</button>
+        <button class="ghost" data-press="lower">Lower</button>
+        <button class="ghost" data-press="grip">Grip (Space)</button>
+        <button class="ghost" data-press="lift">Lift</button>
+        <button class="ghost" data-press="tab">Switch arm (Tab)</button>
+        <button class="ghost" data-press="home">Home (H)</button>
+        <button class="ghost" data-press="g" id="graspBtn">Grasp: from above (G)</button>
+      </div>
+      <details class="log"><summary>Mouse and keys</summary>
+        <p class="muted small" style="margin: 6px 0 0"><b>Click an object</b> in a camera to move a hand above it (a wrist camera moves its own arm) · <b>drag</b> in the top camera to move the hand along the table · <b>wheel</b> for up / down.</p>
+        <dl class="keys">
+          <dt><kbd data-k="w">W</kbd><kbd data-k="s">S</kbd></dt><dd>hand away from / toward the top camera</dd>
+          <dt><kbd data-k="a">A</kbd><kbd data-k="d">D</kbd></dt><dd>hand left / right in the picture</dd>
+          <dt><kbd data-k="r">R</kbd><kbd data-k="f">F</kbd></dt><dd>hand up / down</dd>
+          <dt><kbd data-k="q">Q</kbd><kbd data-k="e">E</kbd></dt><dd>turn the hand</dd>
+          <dt><kbd data-k="z">Z</kbd><kbd data-k="x">X</kbd></dt><dd>tilt the hand</dd>
+          <dt><kbd>G</kbd></dt><dd>grasp from above ↔ tilted (from the side)</dd>
+          <dt><kbd>Space</kbd></dt><dd>open / close the gripper</dd>
+          <dt><kbd>Tab</kbd></dt><dd>switch arm</dd>
+          <dt><kbd>V</kbd></dt><dd>point the hand straight down</dd>
+          <dt><kbd>H</kbd></dt><dd>arm back to its start pose</dd>
+          <dt><kbd>T</kbd></dt><dd>take the arms from Dream-1 / give them back</dd>
+        </dl>
+      </details>
+    </div>
     <p class="muted" id="previewStatus" role="status" hidden></p>
     <p class="muted" id="statusMore"></p>
     <details class="log" id="logBox" hidden><summary>Log</summary><pre id="log"></pre></details>
@@ -364,6 +438,36 @@
         <div>
           <svg class="chart" id="chart" viewBox="0 0 640 190" role="img" aria-label="Distance from each judged object to its target over time"></svg>
           <div class="chart-legend" id="chartLegend"></div>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <section class="panel">
+    <details class="fold" id="recordingsPanel" open>
+      <summary>Recordings · resume a failure</summary>
+      <div class="hrow" style="justify-content: space-between">
+        <label class="check" style="margin: 0"><input type="checkbox" id="failuresOnly" checked> Failures only</label>
+        <button class="ghost small" id="reloadEps">Refresh</button>
+      </div>
+      <p class="muted small" style="margin: 8px 0">Pick a recorded run and a moment in it: the simulator restarts at exactly that state, with you in control. Recover it by hand (or press T to give it to Dream-1); the result is a new run that starts with the original's steps.</p>
+      <div class="eps-wrap"><table>
+        <thead><tr><th>Recorded</th><th>Task</th><th>Result</th><th class="hide-sm">Failures seen</th><th style="width: 76px"></th></tr></thead>
+        <tbody id="epsBody"></tbody></table></div>
+      <div class="muted small" id="epsEmpty" hidden>No recordings yet: runs in data collection, test or human mode are recorded when Record is ticked.</div>
+      <div class="resume" id="resumeBox" hidden>
+        <img id="resumeImg" alt="Top camera at the chosen step">
+        <div>
+          <div><strong id="resumeTitle"></strong></div>
+          <div class="muted small" id="resumeInfo" style="margin: 4px 0 10px"></div>
+          <label for="resumeStep">Start from step <b id="resumeStepText"></b></label>
+          <input type="range" id="resumeStep" min="0" value="0">
+          <div class="hrow" style="margin: 8px 0">
+            <button class="ghost small" id="toFailure">Failure point</button>
+            <button class="ghost small" id="back1s">− 1 s</button>
+            <button class="ghost small" id="fwd1s">+ 1 s</button>
+          </div>
+          <button id="resumeBtn">Resume here (you control)</button>
         </div>
       </div>
     </details>
@@ -625,7 +729,7 @@ function step(by) {
   document.querySelector("#runs tr.sel")?.scrollIntoView({ block: "nearest" });
 }
 document.addEventListener("keydown", e => {
-  if (e.target.closest("input, textarea, select") || e.metaKey || e.ctrlKey || e.altKey || !selected || $("detail").hidden) return;
+  if (teleopOn || e.target.closest("input, textarea, select") || e.metaKey || e.ctrlKey || e.altKey || !selected || $("detail").hidden) return;
   const key = e.key.toLowerCase();
   if (key in { 1: 1, 2: 1, 3: 1, 0: 1 }) { e.preventDefault(); setHand({ 1: "success", 2: "failure", 3: "invalid", 0: "" }[key]); }
   else if (key === "j") { e.preventDefault(); step(1); }
@@ -866,6 +970,13 @@ function setSplit(next) {
   if (split === "eval" && Number($("batchCount").value) > 50) $("batchCount").value = 50;
   estimate();
 }
+let batchMode = "collect";
+for (const [id, m] of [["batchCollect", "collect"], ["batchPlain", "plain"]]) $(id).onclick = () => {
+  batchMode = m;
+  for (const [other, om] of [["batchCollect", "collect"], ["batchPlain", "plain"]]) {
+    $(other).classList.toggle("on", om === m); $(other).setAttribute("aria-pressed", om === m);
+  }
+};
 $("splitTrain").onclick = () => setSplit("train");
 $("splitEval").onclick = () => setSplit("eval");
 
@@ -1001,7 +1112,7 @@ $("startBatch").onclick = async () => {
     const tasks = taskOptions().filter(o => o.usable && batchTasks.has(o.prompt))
       .map(({ prompt, judge }) => ({ prompt, judge }));
     const { seed, ood_random } = seeding();
-    await api("/api/batch", { tasks, count, seconds: $("batchSeconds").value, split, seed, ood,
+    await api("/api/batch", { tasks, count, seconds: $("batchSeconds").value, split, seed, ood, mode: batchMode,
                               ood_random: isOpenYAM() ? [] : ood_random });
     followBatch = true;
     refresh();
@@ -1169,7 +1280,7 @@ async function refresh() {
   if (running) $("previewStatus").hidden = true;
   if (batchRunning && mode !== "batch") setMode("batch");
   $("modeSingle").disabled = $("modeBatch").disabled = running;
-  $("run").disabled = running || !s.key.source || !robotRunsHere();
+  $("run").disabled = running || (!s.key.source && runMode() !== "human") || !robotRunsHere();  // human only: no key needed
   $("startBatch").disabled = running || !s.key.source || !robotRunsHere();
   $("robot").disabled = $("room").disabled = running;
   $("stop").hidden = !s.running || batchRunning;
@@ -1201,10 +1312,16 @@ async function refresh() {
   $("log").textContent = s.log.join("\n");
   $("log").scrollTop = $("log").scrollHeight;
 
+  showControl(s, batchRunning);
+  $("reset").hidden = !s.task || batchRunning || mode !== "single";
   const live = s.running && !batchRunning && mode === "single";
-  if (live && !liveTimer) liveTimer = setInterval(showLive, 250);
+  const fps = s.mode === "human" || (s.teleop && s.teleop.mode !== "dream") ? 100 : 250;  // smoother while a human steers
+  if (live && liveTimer && liveFps !== fps) { clearInterval(liveTimer); liveTimer = null; }
+  if (live && !liveTimer) { liveTimer = setInterval(showLive, fps); liveFps = fps; }
   if (!live && liveTimer) { clearInterval(liveTimer); liveTimer = null; if (mode === "single") showLive(); }
-  if (wasRunning && !s.running && !batchRunning && !b?.current) { selected = s.run_id; await loadRuns(); }
+  if (wasRunning && !s.running && !batchRunning && !b?.current) {
+    selected = s.run_id; await loadRuns(); setTimeout(loadEpisodes, 1500);  // its recording appears
+  }
   wasRunning = s.running;
 }
 
@@ -1217,7 +1334,9 @@ $("run").onclick = async () => {
     previewRevision++;
     clearTimeout(previewTimer);
     $("previewStatus").hidden = true;
-    await api("/api/run", { task: $("task").value, seconds: $("seconds").value, ...startScene(ood) });
+    document.activeElement.blur();  // so the keys go to the robot, not to the box last clicked
+    await api("/api/run", { task: $("task").value, seconds: $("seconds").value, ...startScene(ood),
+                            mode: runMode(), record: $("record").checked });
     $("live").hidden = true;
     $("placeholder").hidden = false;
     $("placeholder").textContent = "Starting the simulator… (the first picture takes a few seconds)";
@@ -1231,6 +1350,187 @@ $("stop").onclick = async () => {
   await api("/api/stop", {}).catch(() => {});
   $("statusText").textContent = "Stopping…";
   setTimeout(() => { $("stop").disabled = false; }, 2000);
+};
+
+$("reset").onclick = async () => {
+  $("reset").disabled = true;
+  $("statusText").textContent = "Resetting…";
+  try {
+    await api("/api/reset", {});
+    $("live").hidden = true; $("placeholder").hidden = false;
+    $("placeholder").textContent = "Starting again from the beginning…";
+  } catch (err) { alert(err.message); }
+  $("reset").disabled = false;
+  refresh();
+};
+
+/* ---------- human control (KSY: teleop.py, monitor.py, recovery.py) ---------- */
+
+let liveFps = 0, teleopOn = false, teleopOnly = false;
+const runMode = () => document.querySelector("input[name=runMode]:checked")?.value || "collect";
+for (const radio of document.querySelectorAll("input[name=runMode]")) radio.addEventListener("change", refresh);
+const MODE_NAMES = { dream: "Dream-1", paused: "Dream-1 needs help", human: "Human", script: "Script recovering", returning: "Giving back to Dream-1…" };
+const REASONS = { dropped: "Dream-1 dropped the object", stalled: "Dream-1 stopped making progress", off_table: "The object fell off the table (cannot be recovered)" };
+
+/** The control panel under the camera, from sim.py's control state. */
+function showControl(s, batchRunning) {
+  const t = s.teleop;
+  teleopOn = !!(s.running && t && !batchRunning);
+  teleopOnly = s.mode === "human" || s.mode === "resumed";
+  $("controlBox").hidden = !teleopOn;
+  $("live").classList.toggle("control", teleopOn && !t?.collecting);
+  if (!teleopOn) return;
+  $("controlMode").textContent = MODE_NAMES[t.mode] || t.mode;
+  $("controlMode").className = "badge " + t.mode;
+  $("teleopInfo").textContent = `arm: ${t.active} · gripper ${t.grip[t.active]}` + (t.hand[t.active] ? ` · hand at ${t.hand[t.active].join(", ")} m` : "");
+  $("reach").textContent = t.reach_limited ? "The hand cannot go further that way (reach or joint limit)." : "";
+  $("message").textContent = t.message || "";
+  $("graspBtn").textContent = t.grasp_style === "tilted" ? "Grasp: tilted (G)" : "Grasp: from above (G)";
+  const m = t.monitor, r = t.recovery;
+  $("stage").textContent = (m && m.understood ? `Task stage: ${m.stage}` + (t.mode === "dream" && m.seconds_without_progress > 3 ? ` · no progress for ${m.seconds_without_progress} s` : "") : "Monitor: pick and place tasks only")
+    + (t.recording ? ` · ● recording (${t.recording.steps} steps)` : " · not recording");
+  let help = "", ok = false;
+  if (t.mode === "script" && r) help = `${REASONS[r.event] || r.event}. The script is recovering (goal: ${m && m.goal || r.goal}) · step: ${r.step || "—"} · attempt ${r.attempt} of ${r.max_attempts} (${r.arm || "—"} arm).` + (t.collecting ? "" : " Press T or click the picture to take over.");
+  else if (t.mode === "paused" && r && r.result && r.result.startsWith("gave up")) help = `The script ${r.result}. The arms are held. Recovery goal: ${m && m.goal || "—"}. Click the picture or press T to start.`;
+  else if (t.mode === "paused") help = `${REASONS[t.reason] || t.reason}. The arms are held. Recovery goal: ${m && m.goal || "—"}. Click the picture or press T to start.`;
+  else if (t.mode === "human" && m && m.goal) { ok = m.goal_reached; help = ok ? `Recovery goal reached (${m.goal}). Press T to give the arms back to Dream-1.` : `Recovery goal: ${m.goal}.`; }
+  else if (t.mode === "returning") help = "Giving the arms back: Dream-1 starts a fresh chunk…";
+  $("help").hidden = !help;
+  $("help").textContent = help;
+  $("help").classList.toggle("ok", ok);
+  // In a human-only run T hands the arms to Dream-1 (once); after that it works as in a Dream-1 run.
+  $("takeBtn").textContent = t.mode === "human" ? (teleopOnly && !t.dream_available ? "Hand to Dream-1 (T)" : "Give back (T)") : "Take over (T)";
+  // Data collection: the model and the recovery script only; the human controls come back in a resumed run.
+  $("controlButtons").hidden = !!t.collecting;
+  if (t.collecting) {
+    $("controlMode").textContent = t.mode === "script" ? "Collecting · recovery script" : "Collecting · Dream-1";
+    $("message").textContent = "Data collection: no human input. A failure the script cannot recover ends the run; recover it later in Recordings.";
+  }
+}
+
+$("takeBtn").onclick = () => api("/api/keys", { press: "t" }).then(refresh).catch(() => {});
+for (const b of document.querySelectorAll("[data-press]")) b.onclick = () => api("/api/keys", { press: b.dataset.press }).then(refresh).catch(() => {});
+
+// Keyboard: held direction keys are sent whenever the set changes; Space, Tab, V, T, H and G are single presses.
+// Keys by their place on the keyboard (e.code), so a Korean input source still works (H types "ㅗ").
+const HELD = new Set(["w", "a", "s", "d", "r", "f", "q", "e", "z", "x"]);
+const PRESS = { " ": "space", "tab": "tab", "v": "v", "t": "t", "h": "home", "g": "g" };
+const held = new Set();
+const typing = e => e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT" || (e.target.tagName === "INPUT" && !["checkbox", "radio", "button", "submit", "range"].includes(e.target.type));
+function sendHeld() {
+  document.querySelectorAll("kbd[data-k]").forEach(k => k.classList.toggle("down", held.has(k.dataset.k)));
+  api("/api/keys", { held: [...held] }).catch(() => {});
+}
+function keyName(e) {
+  if (e.code && e.code.startsWith("Key")) return e.code.slice(3).toLowerCase();
+  if (e.code === "Space") return " ";
+  if (e.code === "Tab") return "tab";
+  return (e.key || "").toLowerCase();
+}
+document.addEventListener("keydown", e => {
+  if (!teleopOn || typing(e) || e.metaKey || e.ctrlKey || e.altKey) return;
+  const key = keyName(e);
+  if (HELD.has(key)) { e.preventDefault(); if (!held.has(key)) { held.add(key); sendHeld(); } }
+  else if (PRESS[key] && !e.repeat) { e.preventDefault(); api("/api/keys", { press: PRESS[key] }).then(refresh).catch(() => {}); }
+});
+document.addEventListener("keyup", e => { if (held.delete(keyName(e))) sendHeld(); });
+window.addEventListener("blur", () => { if (held.size) { held.clear(); sendHeld(); } });  // never leave a key stuck down
+
+// Mouse on the live picture (720 x 270): the top camera fills the left 480 x 270, the left wrist camera the top right
+// 240 x 135, the right wrist camera the bottom right. u, v are 0..1 within that camera's part.
+function view(e) {
+  const r = $("live").getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width * 720, y = (e.clientY - r.top) / r.height * 270;
+  if (x < 0 || y < 0 || x > 720 || y > 270) return null;
+  if (x < 480) return { camera: "top", uv: [x / 480, y / 270] };
+  return y < 135 ? { camera: "left", uv: [(x - 480) / 240, y / 135] } : { camera: "right", uv: [(x - 480) / 240, (y - 135) / 135] };
+}
+const topCamera = e => { const v = view(e); return v && v.camera === "top" ? v.uv : null; };
+let down = null, draggingHand = false, lastDrag = 0;
+$("live").addEventListener("mousedown", e => {
+  if (!teleopOn) return;
+  e.preventDefault(); document.activeElement.blur();
+  down = view(e) && [e.clientX, e.clientY]; draggingHand = false;
+});
+window.addEventListener("mousemove", e => {
+  if (!down || !teleopOn) return;
+  if (!draggingHand && Math.hypot(e.clientX - down[0], e.clientY - down[1]) < 5) return;
+  if (!topCamera({ clientX: down[0], clientY: down[1] })) return;  // drag only in the top camera
+  draggingHand = true;
+  const uv = topCamera(e);
+  if (uv && Date.now() - lastDrag > 50) { lastDrag = Date.now(); api("/api/keys", { drag: uv }).catch(() => {}); }
+});
+window.addEventListener("mouseup", e => {
+  if (down && !draggingHand && teleopOn) { const v = view(e); if (v) api("/api/keys", { click: v.uv, camera: v.camera }).then(refresh).catch(() => {}); }
+  down = null; draggingHand = false;
+});
+$("live").addEventListener("wheel", e => {
+  if (!teleopOn) return;
+  e.preventDefault();
+  api("/api/keys", { wheel: Math.sign(e.deltaY) * -1 }).catch(() => {});
+}, { passive: false });
+
+/* ---------- recordings: pick a recorded run and a step, restart it there with a human in control ---------- */
+
+let episodes = [], chosen = null, frameTimer = null;
+const recorded = id => { const m = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})/.exec(id); return m ? when(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`) : id; };
+async function loadEpisodes() {
+  try { episodes = (await api("/api/episodes")).episodes; } catch { return; }
+  const list = $("failuresOnly").checked ? episodes.filter(e => e.label !== "success") : episodes;
+  $("epsEmpty").hidden = list.length > 0;
+  $("epsBody").innerHTML = "";
+  for (const e of list) {
+    const tr = document.createElement("tr");
+    if (chosen && chosen.id === e.id) tr.className = "chosen";
+    const fails = e.failures.length ? e.failures.map(f => `${f.event} @ step ${f.step}`).join(", ") : (e.label === "success" ? "—" : `none flagged · ended at "${esc(e.final_stage)}"`);
+    const extra = (e.script?.length ? `<div class="muted">script: ${esc(e.script.join("; "))}</div>` : "") + (e.ended ? `<div class="muted">run ended: ${esc(e.ended)}</div>` : "");
+    const origin = e.resumed_from ? ` · resumed from ${esc(String(e.resumed_from.episode || "").slice(9))} @ ${e.resumed_from.step}` : "";
+    tr.innerHTML = `<td>${recorded(e.id)}<div class="muted">${esc(e.started_as || "")}${origin}</div></td><td>${esc(e.task || "")}</td>
+      <td><span class="pill ${esc(e.label || "")}">${esc(e.label || "")}</span><div class="muted">${e.steps} steps</div></td>
+      <td class="hide-sm">${fails}${extra}</td><td><button class="ghost small">Choose</button></td>`;
+    tr.querySelector("button").onclick = () => choose(e);
+    $("epsBody").appendChild(tr);
+  }
+}
+function choose(e) {
+  chosen = e;
+  const failure = e.failures.length ? e.failures[0].step : null;
+  chosen.defaultStep = failure !== null ? Math.max(0, failure - 20) : Math.max(0, e.steps - 40);  // 1 s before the failure
+  $("resumeBox").hidden = false;
+  $("resumeTitle").textContent = `${recorded(e.id)} · ${e.task}`;
+  $("resumeInfo").textContent = failure !== null ? `The monitor saw "${e.failures[0].event}" at step ${failure}. Starting 1 s before it.`
+    : `No failure flagged; it ended at stage "${e.final_stage}". Starting 2 s before the end.`;
+  $("resumeStep").max = e.steps - 1;
+  setStep(chosen.defaultStep);
+  loadEpisodes();
+}
+function setStep(k) {
+  k = Math.max(0, Math.min(chosen.steps - 1, Math.round(k)));
+  $("resumeStep").value = k;
+  $("resumeStepText").textContent = `${k} (${(k * 0.05).toFixed(2)} s)`;
+  clearTimeout(frameTimer);
+  frameTimer = setTimeout(() => { $("resumeImg").src = `/api/episodes/${chosen.id}/frame.jpg?step=${k}`; }, 120);
+}
+$("resumeStep").oninput = () => setStep(+$("resumeStep").value);
+$("toFailure").onclick = () => setStep(chosen.failures.length ? chosen.failures[0].step : chosen.steps - 1);
+$("back1s").onclick = () => setStep(+$("resumeStep").value - 20);
+$("fwd1s").onclick = () => setStep(+$("resumeStep").value + 20);
+$("failuresOnly").onchange = loadEpisodes;
+$("reloadEps").onclick = loadEpisodes;
+$("resumeBtn").onclick = async () => {
+  if (running && !confirm("A run is going. Stop it (its recording is saved) and resume this one?")) return;
+  $("resumeBtn").disabled = true;
+  $("resumeBtn").textContent = running ? "Stopping the current run…" : "Restoring…";
+  try {
+    if (mode !== "single") setMode("single");
+    await api("/api/resume", { episode: chosen.id, step: +$("resumeStep").value, seconds: $("seconds").value, record: $("record").checked });
+    $("live").hidden = true; $("placeholder").hidden = false;
+    $("placeholder").textContent = "Restoring the recorded moment…";
+    $("placeholder").scrollIntoView({ behavior: "smooth", block: "center" });
+    refresh();
+  } catch (err) { alert(err.message); }
+  $("resumeBtn").disabled = false;
+  $("resumeBtn").textContent = "Resume here (you control)";
 };
 
 $("ood").addEventListener("input", schedulePreview);
@@ -1252,6 +1552,7 @@ $("ood").addEventListener("reset", schedulePreview);
     estimate();
   }
   await loadRuns().catch(() => {});
+  loadEpisodes();
   await refresh();
   if (ready) schedulePreview();
   else $("placeholder").textContent = "Restart app.py to load the current scene settings.";
