@@ -63,7 +63,8 @@ STOP = WORK / "stop"
 TELEOP_STATE = WORK / "teleop.json"
 EPISODES = HERE / "episodes"  # KSY's recordings (recorder.py), one per run id
 DATASETS = HERE / "datasets"  # datasets saved from the page: chosen runs, their recordings and a manifest
-MODES = ("collect", "test", "human", "plain")
+MODES = ("collect", "script", "test", "human", "plain")  # script: rule-based only (sim.py --script-only), no Dream-1
+NO_KEY_MODES = ("human", "script")  # runs that do not call Dream-1 (a human-only run calls it only after T)
 ## Data collection: how fast a failure is handed to the recovery script, and what it does (sim.py's options).
 COLLECTION = {"stall_s": 6.0, "quick_fail": True, "script_goal": "finish", "script_speed": 1.0, "end_on_success": True}
 
@@ -195,13 +196,13 @@ class Runner:
         @param scene A custom layout (parse_scene), which replaces the seed's; seeding is then not used.
         @param live Whether to write the camera view for the page (batches do not).
         @param extra_env More environment variables for sim.py (BATCH_ID, JUDGE_SPEC).
-        @param mode "collect", "test", "human" or "plain" (see sim.py). @param record Record to episodes/ (KSY modes).
+        @param mode "collect", "script", "test", "human" or "plain" (see sim.py). @param record Record to episodes/ (KSY modes).
         @param resume (run id, step): restart that recording there with a human in control.
         """
         with self.lock:
             if self.running():
                 raise RuntimeError("A run is already going.")
-            if not has_api_key() and mode != "human" and not resume:  # a human-only run calls no Dream-1 until T
+            if not has_api_key() and mode not in NO_KEY_MODES and not resume:
                 raise RuntimeError("Enter your API key first.")
             self.last_start = dict(task=task, seconds=seconds, changes=changes, seeding=seeding, scene=scene,
                                    live=live, extra_env=extra_env, robot=robot, mode=mode, record=record, resume=resume,
@@ -228,7 +229,8 @@ class Runner:
             else:
                 command.extend(seeding)
             if not resume:
-                command += {"collect": ["--collect", *collection], "test": ["--recover", "human"],
+                command += {"collect": ["--collect", *collection], "script": ["--script-only", *collection],
+                            "test": ["--recover", "human"],
                             "human": ["--teleop"], "plain": ["--plain"]}[mode]
             if not record:
                 command.append("--no-record")
@@ -607,7 +609,7 @@ class Batch:
         from each seed. @param split "train" or "eval" (shown on the page). @param workers Episodes at once."""
         if self.running() or RUNNER.running():
             raise RuntimeError("A run is already going.")
-        if not has_api_key():
+        if not has_api_key() and mode not in NO_KEY_MODES:
             raise RuntimeError("Enter your API key first.")
         workers = max(1, min(MAX_WORKERS, int(workers), len(seeds)))
         self.stop_requested, self.next, self.active = False, 0, {}
@@ -657,8 +659,9 @@ class Batch:
         if PAGE_KEY["value"]:
             env["DREAM_API_KEY"] = PAGE_KEY["value"]
         command = [sys.executable, str(HERE / "sim.py"), task["prompt"], "--seconds", str(info["seconds"]),
-                   *info["robot"], "--seed", str(seed), {"collect": "--collect", "plain": "--plain"}[info["mode"]]]
-        if info["mode"] == "collect":
+                   *info["robot"], "--seed", str(seed),
+                   {"collect": "--collect", "script": "--script-only", "plain": "--plain"}[info["mode"]]]
+        if info["mode"] in ("collect", "script"):
             command += collection_args(info["collection"])[1]
         if info["ood"]:
             command += ["--ood", json.dumps(info["ood"])]
@@ -1010,8 +1013,10 @@ class Handler(BaseHTTPRequestHandler):
             mode = body.get("mode") or "collect"
             if mode not in MODES:
                 return self.send_json({"error": "Unknown run mode."}, 400)
-            if mode == "human" and ("openyam" in robot or (scene and set(scene["items"]) != set(OBJECTS + TARGETS))):
-                return self.send_json({"error": "Human control needs YAM with all six items on the table."}, 400)
+            if mode in ("human", "script") and ("openyam" in robot
+                                                or (scene and set(scene["items"]) != set(OBJECTS + TARGETS))):
+                return self.send_json({"error": ("Human control" if mode == "human" else "The rule-based script")
+                                       + " needs YAM with all six items on the table."}, 400)
             try:
                 _settings, collection = collection_args(body.get("collection"))
             except ValueError as error:
@@ -1119,8 +1124,10 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     raise ValueError("Seeds must be 'train' or 'eval'.")
                 mode = body.get("mode") or "collect"
-                if mode not in ("collect", "plain"):
-                    raise ValueError("A batch runs in data collection or Dream-1 only mode.")
+                if mode not in ("collect", "script", "plain"):
+                    raise ValueError("A batch runs in data collection, rule-based only or Dream-1 only mode.")
+                if mode == "script" and "openyam" in robot:
+                    raise ValueError("The rule-based script needs YAM.")
                 workers = int(body.get("workers") or 1)
                 if not 1 <= workers <= MAX_WORKERS:
                     raise ValueError(f"Run 1 to {MAX_WORKERS} episodes at once.")
