@@ -287,7 +287,8 @@ async function api(path, body) {
 }
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const chip = label => `<span class="chip ${label}">${label.toUpperCase()}</span>`;
-const when = iso => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); };
+// Always English, 24-hour (e.g. "Nov 21, 17:21"), whatever the browser's language.
+const when = iso => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }); };
 const fmt = (x, n = 1) => Number(x).toFixed(n);
 
 /* ---------- rules ---------- */
