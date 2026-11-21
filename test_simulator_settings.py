@@ -58,5 +58,13 @@ class SettingsTests(unittest.TestCase):
                 app.RUNS, app.SETTINGS = previous
 
 
+class KeyTests(unittest.TestCase):
+    def test_only_dream_keys_are_taken(self):
+        self.assertIsNone(app.key_problem("dl_live_" + "a1B2_c3-D4e5F6g7h8"))
+        for bad in ["--default-scene", "default-scene", "sk-abc123456789012345678", "dl_short",
+                    "dl_live_abc def ghi jkl mno", "dl_live_abc$%^&*()1234567890", "put apple into the bowl"]:
+            self.assertIsNotNone(app.key_problem(bad), bad)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -164,6 +164,19 @@ def run_dir(run_id):
 ## The API key typed on the page: the only key the website uses. Kept in this process's memory only (never written
 ## to disk or logged) and handed to each run as DREAM_API_KEY. Clear on the page removes it.
 PAGE_KEY = {"value": None}
+KEY_RE = re.compile(r"^dl_[A-Za-z0-9_-]{16,500}$")  # Dream API keys: dl_live_..., letters, digits, _ and -
+
+
+def key_problem(key):
+    """Why a value typed into the API key box is not a Dream API key (None when it looks like one). Catches pastes
+    of something else, such as a command-line option, before a run or batch is refused with UNAUTHORIZED."""
+    if not key.startswith("dl_"):
+        return "That is not a Dream API key: keys start with dl_ (for example dl_live_…)."
+    if any(c.isspace() for c in key):
+        return "That is not a Dream API key: it has spaces or line breaks in it."
+    if not KEY_RE.match(key):
+        return "That is not a Dream API key: it is too short or has characters a key does not have."
+    return None
 
 
 def key_status():
@@ -1141,8 +1154,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"saved": saved, "kept": kept})
         if self.path == "/api/key":
             key = str(body.get("key") or "").strip()
-            if key and (len(key) > 512 or any(c.isspace() for c in key)):
-                return self.send_json({"error": "That does not look like an API key."}, 400)
+            problem = key and key_problem(key)
+            if problem:  # the key in use (if any) stays as it was
+                return self.send_json({"error": problem}, 400)
             PAGE_KEY["value"] = key or None
             return self.send_json(key_status())
         if self.path == "/api/batch" and body.get("original_of"):

@@ -1422,7 +1422,7 @@ function showKey(key) {
 $("keyForm").onsubmit = async e => {
   e.preventDefault();
   if (!$("apiKey").value.trim()) return;
-  try { showKey(await api("/api/key", { key: $("apiKey").value })); $("apiKey").value = ""; refresh(); }
+  try { showKey(await api("/api/key", { key: $("apiKey").value })); $("apiKey").value = ""; clearError(); refresh(); }
   catch (err) { showError(err); }
 };
 $("clearKey").onclick = async () => { $("apiKey").value = ""; showKey(await api("/api/key", { key: "" })); refresh(); };
@@ -1681,6 +1681,7 @@ function refreshBatchLive() {
 
 // Known errors in plain words: [pattern, title, hint, setup problem?]. Anything else shows its own message.
 const ERRORS = [
+  [/not a Dream API key/i, "That is not a Dream API key", "Paste the key from platform.dreamlabs.ai (it starts with dl_), then press Use key. The key in use did not change.", false],
   [/UNAUTHORIZED|api key|401|403/i, "The Dream API rejected the key", "Paste a valid key and press Use key.", false],
   [/busy/i, "The simulator is busy", "A run, batch or preview is going. Wait for it to finish, then try again.", false],
   [/Initial arm pose overlaps/i, "The arms' start pose collides with the scene", "The joint angles put an arm into the table, an object or the other arm. Change them, or draw again / go back to the defaults.", true],
