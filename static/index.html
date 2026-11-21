@@ -73,8 +73,15 @@
   .row { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
   .row .grow { flex: 1 1 260px; }
   label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
-  input[type=text], input[type=number], input:not([type]) { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
+  input[type=text], input[type=number], input:not([type]), select { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
   #seconds { width: 110px; }
+  .settings-fields { display: grid; gap: 12px; }
+  .settings-fields .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .settings-fields input[type=number] { width: 100%; }
+  .settings-note { font-size: 13px; color: var(--muted); margin: 12px 0 0; }
+  .settings-note a { color: var(--accent); }
+  .settings-note.remote { color: var(--warn); }
+  @media (max-width: 600px) { .settings-fields .field-row { grid-template-columns: 1fr; } }
   button { padding: 9px 20px; border: 0; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; background: var(--accent); color: var(--accent-text); }
   button.stop { background: var(--stop); color: #fff; }
   button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); font-weight: 500; }
@@ -162,7 +169,23 @@
   </section>
   </div>
 
-  <aside class="sidebar" aria-label="Success rules and runs">
+  <aside class="sidebar" aria-label="Simulator settings, success rules, and runs">
+  <details class="panel" id="settingsPanel" open>
+    <summary>Simulation setup</summary>
+    <div class="panel-content">
+      <div class="settings-fields">
+        <div><label for="robotSelect">Robot</label><select id="robotSelect"></select></div>
+        <div><label for="roomSelect">Room / scene</label><select id="roomSelect"></select></div>
+        <div class="field-row">
+          <div><label for="layoutSelect">Starting layout</label><select id="layoutSelect"></select></div>
+          <div><label for="seedInput">Seed (blank = random)</label><input id="seedInput" type="number" min="0" max="4294967295" step="1" placeholder="Random"></div>
+        </div>
+        <div><label for="lightingSelect">Local lighting</label><select id="lightingSelect"></select></div>
+      </div>
+      <p id="settingsNote" class="settings-note"></p>
+    </div>
+  </details>
+
   <details class="panel" id="rulesPanel" open>
     <summary>Success rules</summary>
     <div class="panel-content">
@@ -233,6 +256,8 @@
 <script>
 const $ = id => document.getElementById(id);
 let rules = { distance_cm: 6.5, release: true, still_seconds: 1.0 };
+let settings = { robot: "yam", room: "yam_tabletop", layout: "varied", seed: null, lighting: "standard" };
+let catalog = null, settingsTimer = null;
 let runs = [], selected = null, liveTimer = null, wasRunning = false;
 
 async function api(path, body) {
@@ -246,6 +271,47 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "
 const chip = label => `<span class="chip ${label}">${label.toUpperCase()}</span>`;
 const when = iso => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); };
 const fmt = (x, n = 1) => Number(x).toFixed(n);
+
+/* ---------- simulation setup ---------- */
+
+const localSupported = () => settings.robot === "yam" && settings.room === "yam_tabletop";
+function fillOptions(id, entries, suffix = () => "") {
+  $(id).innerHTML = Object.entries(entries).map(([value, label]) =>
+    `<option value="${esc(value)}">${esc(label + suffix(value))}</option>`).join("");
+}
+function showSettings() {
+  if (!catalog) return;
+  $("robotSelect").value = settings.robot;
+  $("roomSelect").value = settings.room;
+  $("layoutSelect").value = settings.layout;
+  $("lightingSelect").value = settings.lighting;
+  $("seedInput").value = settings.seed ?? "";
+  const local = localSupported();
+  $("layoutSelect").disabled = !local;
+  $("lightingSelect").disabled = !local;
+  $("seedInput").disabled = !local || settings.layout !== "varied";
+  $("run").disabled = !local || wasRunning;
+  $("settingsNote").classList.toggle("remote", !local);
+  $("settingsNote").innerHTML = local
+    ? "Local YAM tabletop: the starting layout and lighting affect the next run. The table contains apple, orange, banana, bottle, bowl, and plate."
+    : `This robot or room is available in Dream Labs Sandbox. Local run and MuJoCo labeling require YAM tabletop. <a href="${esc(catalog.sandbox_url)}" target="_blank" rel="noopener noreferrer">Open Sandbox ↗</a>`;
+}
+function changeSettings(patch) {
+  settings = { ...settings, ...patch };
+  if (patch.room === "yam_tabletop") settings.robot = "yam";
+  else if (patch.robot && settings.robot !== "yam" && settings.room === "yam_tabletop") settings.room = "kitchen";
+  showSettings();
+  clearTimeout(settingsTimer);
+  settingsTimer = setTimeout(async () => {
+    try { const data = await api("/api/simulator-settings", settings); settings = data.settings; showSettings(); }
+    catch (err) { $("settingsNote").textContent = "Settings not saved: " + err.message; }
+  }, 300);
+}
+$("robotSelect").onchange = e => changeSettings({ robot: e.target.value });
+$("roomSelect").onchange = e => changeSettings({ room: e.target.value });
+$("layoutSelect").onchange = e => changeSettings({ layout: e.target.value });
+$("lightingSelect").onchange = e => changeSettings({ lighting: e.target.value });
+$("seedInput").oninput = e => changeSettings({ seed: e.target.value === "" ? null : Number(e.target.value) });
 
 /* ---------- rules ---------- */
 
@@ -303,7 +369,7 @@ function renderDetail() {
   if (!run) return;
   const v = verdict(run);
   $("detailImage").src = `/api/runs/${run.id}/last.jpg`;
-  $("detailHead").innerHTML = `${chip(v.label)} <strong>${esc(run.task)}</strong><div class="muted" style="font-size:13px">${when(run.started_at)} · ${fmt(run.sim_seconds || 0)} s</div>`;
+  $("detailHead").innerHTML = `${chip(v.label)} <strong>${esc(run.task)}</strong><div class="muted" style="font-size:13px">${when(run.started_at)} · ${fmt(run.sim_seconds || 0)} s · ${esc(run.robot || "yam")} / ${esc(run.room || "yam_tabletop")} · ${esc(run.lighting || "standard")}${run.seed == null ? "" : ` · seed ${esc(run.seed)}`}</div>`;
   $("detailChecks").innerHTML = (v.checks || [{ ok: false, text: v.reason }])
     .map(c => `<li><span class="${c.ok ? "y" : c.ok === false ? "n" : "muted"}">${c.ok ? "✓" : c.ok === false ? "✗" : "–"}</span> ${esc(c.text)}</li>`).join("");
   drawChart(v);
@@ -372,7 +438,7 @@ async function refresh() {
       $("examples").appendChild(b);
     }
   }
-  $("run").disabled = s.running;
+  $("run").disabled = s.running || !localSupported();
   $("stop").hidden = !s.running;
   $("dot").classList.toggle("on", s.running);
   if (s.running) {
@@ -394,6 +460,10 @@ async function refresh() {
 
 $("run").onclick = async () => {
   try {
+    if (!localSupported()) throw new Error("This combination runs in Dream Labs Sandbox, not the local simulator.");
+    clearTimeout(settingsTimer);
+    const saved = await api("/api/simulator-settings", settings);
+    settings = saved.settings;
     const started = await api("/api/run", { task: $("task").value, seconds: $("seconds").value });
     $("live").hidden = true;
     $("placeholder").hidden = false;
@@ -409,6 +479,15 @@ $("stop").onclick = async () => {
 };
 
 (async () => {
+  try {
+    const data = await api("/api/simulator-settings");
+    settings = data.settings; catalog = data.catalog;
+    fillOptions("robotSelect", catalog.robots, value => value === "yam" ? " (local)" : " (Sandbox)");
+    fillOptions("roomSelect", catalog.rooms, value => value === "yam_tabletop" ? "" : " (Sandbox)");
+    fillOptions("layoutSelect", catalog.layouts);
+    fillOptions("lightingSelect", catalog.lighting);
+    showSettings();
+  } catch { $("settingsNote").textContent = "Simulator settings could not be loaded."; }
   try { rules = await api("/api/rules"); } catch {}
   showRules();
   await loadRuns().catch(() => {});

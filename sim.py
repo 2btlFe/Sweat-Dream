@@ -42,6 +42,8 @@ import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
 
+import simulator_settings as sim_settings
+
 HERE = Path(__file__).resolve().parent
 LIVE_FRAME = os.environ.get("LIVE_FRAME")
 STOP_FILE = os.environ.get("STOP_FILE")
@@ -151,12 +153,38 @@ dream_control.capture = capture
 dream.DreamClient.get_action = get_action
 
 
+def apply_lighting(env, lighting):
+    """Change rendering only; physics, cameras, and object geometry stay fixed."""
+    if lighting == "standard":
+        return
+    palette = {
+        "warm": ([0.32, 0.25, 0.18], [0.52, 0.39, 0.28],
+                 [0.72, 0.56, 0.42], [0.54, 0.43, 0.34], [0.83, 0.76, 0.69, 1]),
+        "cool": ([0.18, 0.22, 0.30], [0.30, 0.39, 0.55],
+                 [0.42, 0.52, 0.68], [0.35, 0.46, 0.62], [0.68, 0.75, 0.84, 1]),
+    }
+    ambient, diffuse, key_light, fill_light, floor = palette[lighting]
+    env.model.vis.headlight.ambient[:] = ambient
+    env.model.vis.headlight.diffuse[:] = diffuse
+    env.model.light_diffuse[0] = key_light
+    env.model.light_diffuse[1] = fill_light
+    for geom_id in range(env.model.ngeom):
+        if env.model.geom_type[geom_id] == mujoco.mjtGeom.mjGEOM_PLANE:
+            env.model.geom_rgba[geom_id] = floor
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run one Dream-1 task in the simulator")
     parser.add_argument("task", nargs="?", default="put apple into the bowl")
     parser.add_argument("--seconds", type=float, default=60)
-    parser.add_argument("--seed", type=int, help="Reproducible small shifts to each object's start pose")
+    parser.add_argument("--seed", type=int, help="Seed for reproducible object variation")
+    parser.add_argument("--layout", choices=sim_settings.LAYOUTS, default="fixed")
+    parser.add_argument("--lighting", choices=sim_settings.LIGHTING, default="standard")
     args = parser.parse_args()
+    if args.layout == "varied" and args.seed is None:
+        parser.error("--layout varied requires --seed")
+    if args.layout == "fixed" and args.seed is not None:
+        parser.error("--seed requires --layout varied")
 
     # Match the key detected by the web app. The bundled sim otherwise gives a
     # separate, possibly stale /login key priority over ~/.dreamlabs/credentials.
@@ -167,11 +195,13 @@ def main():
     run_dir = Path(os.environ.get("RUN_DIR") or HERE / "runs" / new_run_id())
     run_dir.mkdir(parents=True, exist_ok=True)
     meta = {"id": run_dir.name, "task": args.task, "seconds": args.seconds, "seed": args.seed,
+            "robot": "yam", "room": "yam_tabletop", "layout": args.layout, "lighting": args.lighting,
             "started_at": datetime.now().isoformat(timespec="seconds"), "stopped_by_user": False,
             "error": None, "error_type": None}
 
     env = yam_env.YamEnv()
-    if args.seed is not None:
+    apply_lighting(env, args.lighting)
+    if args.layout == "varied":
         rng = np.random.default_rng(args.seed)
         for body, joint in (("apple", "apple_free"), ("orange", "orange_free"),
                             ("banana", "banana_free"), ("water_bottle", "bottle_free")):

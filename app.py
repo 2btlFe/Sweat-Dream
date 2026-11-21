@@ -24,11 +24,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import judge
+import simulator_settings as sim_settings
 
 HERE = Path(__file__).resolve().parent
 PAGE = HERE / "static" / "index.html"
 RUNS = HERE / "runs"
 RULES = RUNS / "rules.json"
+SETTINGS = RUNS / "simulator_settings.json"
 DEFAULT_RULES = judge.DEFAULT_RULES
 ID_RE = re.compile(r"^[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$")
 WORK = Path(tempfile.mkdtemp(prefix="dream-web-"))
@@ -56,6 +58,14 @@ def current_rules():
         return judge.normalize_rules({**DEFAULT_RULES, **saved})
     except (TypeError, ValueError):
         return dict(DEFAULT_RULES)
+
+
+def current_settings():
+    saved = read_json(SETTINGS, {})
+    try:
+        return sim_settings.normalize(saved)
+    except ValueError:
+        return dict(sim_settings.DEFAULT)
 
 
 def run_dir(run_id):
@@ -90,7 +100,7 @@ class Runner:
     def running(self):
         return self.process is not None and self.process.poll() is None
 
-    def start(self, task, seconds):
+    def start(self, task, seconds, settings):
         with self.lock:
             if self.running():
                 raise RuntimeError("A run is already going.")
@@ -99,9 +109,13 @@ class Runner:
             run_id = datetime.now().strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
             env = {**os.environ, "PYTHONUTF8": "1", "PYTHONUNBUFFERED": "1", "PYTHONWARNINGS": "ignore",
                    "LIVE_FRAME": str(LIVE), "STOP_FILE": str(STOP), "RUN_DIR": str(RUNS / run_id)}
+            command = [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds),
+                       "--lighting", settings["lighting"], "--layout", settings["layout"]]
+            if settings["layout"] == "varied":
+                command += ["--seed", str(settings["seed"] if settings["seed"] is not None
+                                          else secrets.randbelow(2**32))]
             self.process = subprocess.Popen(
-                [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds),
-                 "--seed", str(secrets.randbelow(1_000_000_000))], cwd=str(HERE), env=env,
+                command, cwd=str(HERE), env=env,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
             self.task, self.started, self.ended, self.run_id = task, time.time(), None, run_id
             self.log.clear()
@@ -164,6 +178,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "no frame yet"}, 404)
         if path == "/api/rules":
             return self.send_json(current_rules())
+        if path == "/api/simulator-settings":
+            return self.send_json({"settings": current_settings(), "catalog": sim_settings.catalog()})
         if path == "/api/runs":
             runs = []
             rules = current_rules()
@@ -192,14 +208,24 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "Type a task, such as: put apple into the bowl"}, 400)
             if judge.parse_task(task) is None:
                 return self.send_json({"error": "Automatic judging supports putting apple, orange, banana, or bottle in a bowl or on a plate."}, 400)
+            settings = current_settings()
+            if not sim_settings.local_supported(settings):
+                return self.send_json({"error": "This robot and room are available in Dream Labs Sandbox, not the local YAM simulator."}, 400)
             try:
                 seconds = min(300, max(10, int(float(body.get("seconds") or 60))))
-                RUNNER.start(task, seconds)
+                RUNNER.start(task, seconds, settings)
             except (ValueError, TypeError):
                 return self.send_json({"error": "The time limit must be a number."}, 400)
             except RuntimeError as error:
                 return self.send_json({"error": str(error)}, 409)
             return self.send_json(RUNNER.status())
+        if self.path == "/api/simulator-settings":
+            try:
+                settings = sim_settings.normalize(body)
+            except ValueError as error:
+                return self.send_json({"error": str(error)}, 400)
+            write_json(SETTINGS, settings)
+            return self.send_json({"settings": settings, "catalog": sim_settings.catalog()})
         if self.path == "/api/rules":
             try:
                 rules = judge.normalize_rules(body)

@@ -25,8 +25,15 @@ python app.py
 Open http://localhost:8000.
 
 1. Type a task such as `put apple into the bowl` → **Run**.
-2. Set the distance, release, and still-time rules. Existing runs are re-evaluated immediately.
-3. Select a run to inspect its final frame, checks, and distance chart. **Save labels** writes the current server-side verdicts to `label.json`.
+2. Open **Simulation setup** in the right panel. Local runs use YAM tabletop. Choose a fixed starting layout or seeded object variation, and Standard, Warm, or Cool lighting.
+3. Set the distance, release, and still-time rules. Existing runs are re-evaluated immediately.
+4. Select a run to inspect its final frame, checks, and distance chart. **Save labels** writes the current server-side verdicts to `label.json`.
+
+## Simulator selection
+
+Dream Labs Sandbox currently lists YAM, Trossen WidowX AI, MakerMods Metal, SO-101, OpenYAM, AgileX PiPER, Universal Robots UR5e, Seeed reBot B601, and MakerMods Maker Arm. Its rooms are Kitchen, Sunny apartment, Cottage, Walnut study, and Evening den. Objects can be selected from Food, Toys, Kitchen, Home and tools, Containers, and Pictures, up to eight on the table. The public Playground's **SIM 1–4** buttons switch between shared live rooms; they are not local scene presets.
+
+The bundled `dream_examples/yam_mujoco` package used by this app contains one local YAM tabletop scene. The right panel lists Sandbox robots and rooms for comparison, but **Run** is available only for YAM tabletop. For another robot or room, use the panel's Sandbox link. The local lighting presets change rendering; they do not reproduce Dream Labs' Sandbox rooms. The four fruit/bottle objects, bowl, and plate are part of the fixed local scene. Each run records its robot, room, layout, lighting, and actual seed in `meta.json`.
 
 The run list also shows episodes collected from the command line, including after a page reload.
 
