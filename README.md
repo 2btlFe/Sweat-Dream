@@ -1,7 +1,7 @@
 # Sweat-Dream
 
 A small website for running **Dream-1** in the Dream Labs robot simulator.
-Type a task such as `put apple into the bowl`, press **Run**, and watch the two robot arms live in your browser.
+Type a task such as `Move an object to the center of the workspace`, press **Run**, and watch the two robot arms live in your browser.
 
 ## 1. Install
 
@@ -52,4 +52,4 @@ Then open http://localhost:8000.
 | --- | --- |
 | `app.py` | The website |
 | `static/index.html` | The page |
-| `sim.py` | Runs one task in the simulator. Also works alone: `python sim.py "put apple into the bowl"` |
+| `sim.py` | Runs one task in the simulator. Also works alone: `python sim.py "Move an object to the center of the workspace"` |

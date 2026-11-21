@@ -1,6 +1,6 @@
 """Run one Dream-1 task in the Dream Labs simulator (headless).
 
-    python sim.py "put apple into the bowl" --seconds 60
+    python sim.py "Move an object to the center of the workspace" --seconds 60
 
 app.py starts this for every run. Two environment variables connect it to the website:
   LIVE_FRAME  path of a JPEG that is replaced with the latest camera view (top camera + both wrist cameras)
@@ -9,12 +9,15 @@ app.py starts this for every run. Two environment variables connect it to the we
 
 import argparse
 import importlib.util
+import json
 import os
 import sys
 import threading
 import time
 import warnings
 from pathlib import Path
+
+import ood
 
 warnings.filterwarnings("ignore")
 
@@ -76,9 +79,27 @@ dream.DreamClient.get_action = get_action
 
 def main():
     parser = argparse.ArgumentParser(description="Run one Dream-1 task in the simulator")
-    parser.add_argument("task", nargs="?", default="put apple into the bowl")
+    parser.add_argument("task", nargs="?", default="Move an object to the center of the workspace")
     parser.add_argument("--seconds", type=float, default=60)
+    parser.add_argument("--ood", type=json.loads, default={}, help="Scene settings as a JSON object")
+    parser.add_argument("--preview", type=Path, help="Render the initial camera view to a JPEG and exit")
     args = parser.parse_args()
+    try:
+        changes = ood.validate(args.ood)
+    except ValueError as error:
+        parser.error(str(error))
+
+    if args.preview:
+        import yam_env
+
+        env = ood.build_environment(yam_env, changes) if changes else yam_env.YamEnv()
+        try:
+            state = env.state()
+            env.step(state["left"], state["right"])
+            save_live_frame(env.images(), str(args.preview))
+        finally:
+            env.close()
+        return
 
     stop = threading.Event()
     if STOP_FILE:
@@ -92,14 +113,22 @@ def main():
         threading.Thread(target=watch, daemon=True).start()
 
     print(f"Starting the simulator: {args.task} ({args.seconds:g} s)", flush=True)
+    env = None
     try:
+        if changes:
+            import yam_env
+
+            env = ood.build_environment(yam_env, changes)
+            print(f"Scene settings applied: {json.dumps(changes, sort_keys=True)}", flush=True)
         dream_control.main(["--task", args.task, "--seconds", str(args.seconds), "--headless", "--quiet"],
-                           stop_event=stop)
+                           shared_env=env, stop_event=stop)
     except (RuntimeError, ValueError, KeyError, OSError) as error:
         print(f"Stopped: {error}", flush=True)
         sys.exit(1)
     finally:
         stop.set()
+        if env is not None:
+            env.close()
     print("Done.", flush=True)
 
 
