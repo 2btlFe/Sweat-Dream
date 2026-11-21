@@ -30,6 +30,14 @@
   .camera-panel > .view { flex: 1; height: 0; min-height: 200px; aspect-ratio: auto; background: #0d1117; object-fit: contain; }
   .sidebar { min-width: 0; min-height: 0; padding: 20px; overflow-y: auto; border-left: 1px solid var(--line); background: var(--panel); }
   .sidebar .panel { padding: 16px; }
+  .sidebar details.panel { padding: 0; }
+  .sidebar details.panel > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 16px; cursor: pointer; font-size: 17px; font-weight: 700; list-style: none; user-select: none; }
+  .sidebar details.panel > summary::-webkit-details-marker { display: none; }
+  .sidebar details.panel > summary::after { content: "⌄"; font-size: 20px; line-height: 1; color: var(--muted); transform: rotate(-90deg); transition: transform .18s ease; }
+  .sidebar details.panel[open] > summary::after { transform: rotate(0deg); }
+  .sidebar details.panel > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; border-radius: 10px; }
+  .sidebar details.panel[open] > summary { border-bottom: 1px solid var(--line); }
+  .sidebar .panel-content { padding: 16px; }
   .sidebar .banners, .sidebar .detail { grid-template-columns: minmax(0, 1fr); }
   .sidebar .banner { padding: 12px; }
   .sidebar .banner .value { font-size: 22px; }
@@ -155,8 +163,9 @@
   </div>
 
   <aside class="sidebar" aria-label="Success rules and runs">
-  <section class="panel">
-    <h2>Success rules</h2>
+  <details class="panel" id="rulesPanel" open>
+    <summary>Success rules</summary>
+    <div class="panel-content">
     <p class="hint">At the end, the object must be in the target, released if required, and stable for the selected time. Stable means under 0.05 m/s.</p>
     <div class="banners">
       <div class="banner">
@@ -183,11 +192,13 @@
       </div>
     </div>
     <div class="saved-note" id="rulesNote"></div>
-  </section>
+    </div>
+  </details>
 
-  <section class="panel">
-    <div class="row" style="justify-content: space-between; align-items: center;">
-      <h2>Runs</h2>
+  <details class="panel" id="runsPanel" open>
+    <summary>Runs</summary>
+    <div class="panel-content">
+    <div class="row" style="justify-content: flex-end; align-items: center;">
       <button id="saveLabels" class="ghost">Save labels</button>
     </div>
     <table style="margin-top:10px">
@@ -213,7 +224,8 @@
         </div>
       </div>
     </div>
-  </section>
+    </div>
+  </details>
   </aside>
   </div>
 </main>
