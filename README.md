@@ -26,8 +26,8 @@ Open http://localhost:8000.
    table; needs [Node.js](https://nodejs.org) to fetch it, and a seed only shifts its objects by up to 2 cm). The other
    robots in the list run only in the [Dream Labs Sandbox](https://platform.dreamlabs.ai/sandbox). A room styles the
    table and background (kitchen, cottage, ...). The choice is kept in `runs/simulator_settings.json`.
-3. **Seed**: with **Next seed after each run or batch** (ticked by default) every single run, and every batch after
-   the last one's seeds, starts from a new seed, so the start layouts keep changing; each run keeps its seed in
+3. **Seed**: with **Next seed after each run or batch** (ticked by default) every single run, and every batch, starts
+   from a new seed, so the start layouts keep changing; each run keeps its seed in
    `meta.json`, and **Same start (seed N)** in a run's detail puts that seed and its random settings back. The start scene comes from it (objects placed around their usual spots, within reach of both arms; see
    [SCENE_SEED.md](SCENE_SEED.md)). **↻** draws a new one; the same seed always gives the same start.
 4. **Camera, robot & environment settings**: workspace viewpoint and camera offsets, the arms' initial angles, blur,
@@ -139,8 +139,9 @@ object layout each time, no seed) with default scene settings. Its runs are name
 
 Switch to **Batch**. Pick what each episode does (**Data collection**: Dream-1, then the recovery script on a
 failure; or **Dream-1 only**), how many run **at once** (1 to 4), the number of episodes and the seconds per
-episode, and the seeds: **Seed, Seed + 1, …**
-(train seeds, from the Seed field) or **Eval set (50)** (the fixed evaluation seeds, easy / medium / hard). Each
+episode, and the seeds: **From the seed**
+(one train seed is the whole batch: each episode's own seed is derived from it, `seed_web.episode_seed`, so the
+same seed gives the same episodes again and other seeds share none) or **Eval set (50)** (the fixed evaluation seeds, easy / medium / hard). Each
 episode starts from its seed's scene, with the scene settings above; the ones marked random are drawn from each
 episode's seed. The page shows progress, success / failure / invalid counts, the time left, and the camera view of
 each episode going now (one tile per episode).

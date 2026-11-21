@@ -641,7 +641,7 @@ class Batch:
             return set(self.active)
 
     def start(self, tasks, seeds, seconds, changes, random_names, split, robot=(), mode="plain", workers=1,
-              collection=None, original_of=None, original=False):
+              collection=None, original_of=None, original=False, batch_seed=None):
         """@param seeds One seed per episode. @param changes, random_names The scene settings, and the ones drawn
         from each seed. @param split "train" or "eval" (shown on the page). @param workers Episodes at once."""
         if self.running() or RUNNER.running():
@@ -653,7 +653,7 @@ class Batch:
         self.info = {"id": "b" + datetime.now().strftime("%Y%m%d-%H%M%S"), "tasks": tasks, "total": len(seeds),
                      "seconds": seconds, "seeds": seeds, "seed": seeds[0], "split": split, "ood": changes,
                      "ood_random": random_names, "rules": current_rules(), "robot": list(robot), "mode": mode,
-                     "workers": workers, "collection": collection, "original_of": original_of, "original": original or bool(original_of), "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
+                     "workers": workers, "collection": collection, "original_of": original_of, "original": original or bool(original_of), "batch_seed": batch_seed, "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
                      "started": time.time(), "ended": None, "current": None, "active": [], "stopped_reason": None,
                      "durations": [], "invalid_in_a_row": 0}
         self.thread = threading.Thread(target=self._supervise, daemon=True)
@@ -695,6 +695,7 @@ class Batch:
                "JUDGE_SPEC": json.dumps(task["judge"]),
                "LIVE_FRAME": str(live_frame(run_id)),  # its camera view, for the page (/api/live.jpg?run=...)
                **({"ORIGINAL": "1"} if info.get("original") else {}),
+               **({"BATCH_SEED": str(info["batch_seed"])} if info.get("batch_seed") is not None else {}),
                **({"ORIGINAL_OF": info["original_of"]} if info.get("original_of") else {})}
         if PAGE_KEY["value"]:
             env["DREAM_API_KEY"] = PAGE_KEY["value"]
@@ -1194,9 +1195,9 @@ class Handler(BaseHTTPRequestHandler):
                 elif split == "train":
                     first = str(body.get("seed", "")).strip()
                     first = int(first) if first else secrets.randbelow(1_000_000)
-                    if not 0 <= first or first + count > 1_000_000:
+                    if not 0 <= first < 1_000_000:
                         raise ValueError("Train seeds are 0 to 999999.")
-                    seeds = list(range(first, first + count))
+                    seeds = [seed_web.episode_seed(first, i) for i in range(count)]  # one seed is the whole batch
                 else:
                     raise ValueError("Seeds must be 'train' or 'eval'.")
                 mode = body.get("mode") or "collect"
@@ -1211,7 +1212,7 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError(f"Run 1 to {MAX_WORKERS} episodes at once.")
                 collection, _args = collection_args(body.get("collection"))
                 BATCH.start(tasks, seeds, seconds, changes, random_names, split, robot, mode, workers, collection,
-                            original=original)
+                            original=original, batch_seed=first if split == "train" else None)
             except (ValueError, TypeError, AttributeError) as error:
                 return self.send_json({"error": str(error)}, 400)
             except RuntimeError as error:

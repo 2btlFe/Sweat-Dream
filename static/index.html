@@ -415,7 +415,7 @@
         <div><label for="batchSeconds">Seconds each</label><input id="batchSeconds" type="number" min="10" max="300" value="60"></div>
         <div><label>Seeds</label>
           <div class="toggle" role="group" aria-label="Seeds">
-            <button id="splitTrain" class="on" aria-pressed="true" title="Seed, Seed + 1, Seed + 2, …">Seed + i</button>
+            <button id="splitTrain" class="on" aria-pressed="true" title="One seed is the whole batch: it gives every episode its own layout, and the same seed gives the same episodes again">From the seed</button>
             <button id="splitEval" aria-pressed="false" title="The 50 fixed evaluation seeds">Eval set (50)</button>
           </div>
         </div>
@@ -431,7 +431,7 @@
         <div><label for="batchWorkers">At once</label><input id="batchWorkers" type="number" min="1" max="4" value="2" title="Episodes run at the same time (1 to 4)"></div>
       </div>
       <div id="batchCollectSlot"></div>
-      <p class="muted small" style="margin: 8px 0 12px" id="batchHow">Each episode starts from its own seed. The scene settings below apply to every episode; the ones marked <em>random</em> are drawn from each episode's seed. Runs in the background.</p>
+      <p class="muted small" style="margin: 8px 0 12px" id="batchHow">The seed is the whole batch: it gives each episode its own layout (the same episodes again with the same seed; other seeds share none). The scene settings below apply to every episode; the ones marked <em>random</em> are drawn from each episode's seed. Runs in the background.</p>
       <p class="muted small" style="margin: 8px 0 12px" id="batchHowOriginal" hidden>Original: every episode starts from the simulator's default scene (the same object layout each time) with default scene settings; the seed and the scene settings below are not used. Dream-1 runs alone. Runs in the background.</p>
       <p class="small" style="margin: 0 0 4px">Every episode runs <b>the task above</b> (<span id="batchTaskName"></span>).</p>
       <div id="batchTaskList" hidden>
@@ -918,7 +918,7 @@ async function renderDetail() {
   const v = verdict(run);
   showDetailMedia(run);
   const extra = [run.batch_id ? batchName(run.batch_id) : "Single run",
-                 run.layout === "custom" ? "custom layout" : run.seed != null ? `seed ${run.seed}${run.split === "eval" ? " (eval)" : ""}` : run.layout === "default" ? "default scene" : "",
+                 run.layout === "custom" ? "custom layout" : run.seed != null ? `seed ${run.seed}${run.split === "eval" ? " (eval)" : ""}${run.batch_seed != null ? ` (batch seed ${run.batch_seed})` : ""}` : run.layout === "default" ? "default scene" : "",
                  run.robot && run.robot !== "yam" ? (simCatalog?.robots[run.robot] || run.robot) : "",
                  run.room && run.room !== "yam_tabletop" ? (simCatalog?.rooms[run.room] || run.room) : "",
                  run.ood_random?.length ? `random: ${run.ood_random.join(", ")}` : "",
@@ -1587,7 +1587,7 @@ function estimate() {
   const workers = Math.max(1, Math.min(4, Number($("batchWorkers").value) || 1, count || 1));
   const minutes = Math.round(Math.ceil(count / workers) * (secs + 20) / 60);
   const seeds = batchMode === "original" ? "original: default scene each episode, default settings, Dream-1 only"
-    : split === "eval" ? `eval seeds 1-${Math.min(count, 50)}` : `seeds ${$("seed")?.value || "?"}…${(Number($("seed")?.value) || 0) + count - 1}`;
+    : split === "eval" ? `eval seeds 1-${Math.min(count, 50)}` : `batch seed ${$("seed")?.value || "?"} (${count} different layouts, the same again with this seed)`;
   $("batchEstimate").textContent = count && secs ? `${count} episodes · ${workers} at once · ${seeds} · about ${minutes} min · ${batchTasks.size} task${batchTasks.size > 1 ? "s" : ""}` : "";
   return minutes;
 }
@@ -1609,7 +1609,7 @@ $("startBatch").onclick = async () => {
     await api("/api/batch", { tasks, count, seconds: $("batchSeconds").value, split, seed, ood, mode: batchMode,
                               workers: Number($("batchWorkers").value) || 1, collection: collectionSettings(),
                               ood_random: isOpenYAM() ? [] : ood_random });
-    if (split !== "eval" && batchMode !== "original") advanceSeed(count);  // episode i used seed + i: the next batch starts after them
+    if (split !== "eval" && batchMode !== "original") advanceSeed(1);  // the seed was the whole batch: the next batch gets the next one
     followBatch = true;
     refresh();
   } catch (err) { showError(err); }
@@ -1643,7 +1643,7 @@ function showBatch(b) {
   const now = b.active?.length ? b.active : (b.current ? [b.current] : []);
   $("batchNow").textContent = now.length ? `Now${b.workers > 1 ? ` (${now.length} at once)` : ""}: ` + now.map(e => `#${e.index} ${e.task} (${e.seed != null ? `seed ${e.seed}` : "default scene"})`).join(" · ")
     : b.original ? `Original: default scene every episode (same object layout), default settings, Dream-1 alone · ${b.seconds} s each`
-    : `${b.split === "eval" ? "Eval seeds" : `Seeds from ${b.seed}`}${b.ood_random?.length ? ` · random: ${b.ood_random.join(", ")}` : ""} · ${b.seconds} s each · labeled with the rules as at the start`;
+    : `${b.split === "eval" ? "Eval seeds" : `Batch seed ${b.batch_seed ?? b.seed}`}${b.ood_random?.length ? ` · random: ${b.ood_random.join(", ")}` : ""} · ${b.seconds} s each · labeled with the rules as at the start`;
   $("batchEnd").textContent = (b.running ? "" : b.stopped_reason || "Finished.")
     + (b.capacity_retries ? ` Dream-1 was at capacity ${b.capacity_retries} time${b.capacity_retries > 1 ? "s" : ""}: those episodes were tried again.` : "");
   $("batchEnd").classList.toggle("bad", !b.running && !!b.stopped_reason && b.stopped_reason !== "Stopped by you.");
