@@ -62,6 +62,29 @@ STOP = WORK / "stop"
 TELEOP_STATE = WORK / "teleop.json"
 EPISODES = HERE / "episodes"  # KSY's recordings (recorder.py), one per run id
 MODES = ("collect", "test", "human", "plain")
+## Data collection: how fast a failure is handed to the recovery script, and what it does (sim.py's options).
+COLLECTION = {"stall_s": 6.0, "quick_fail": True, "script_goal": "finish", "script_speed": 1.0, "end_on_success": True}
+
+
+def collection_args(given):
+    """sim.py's data collection options from the page's settings (defaults: COLLECTION).
+    @return (the settings, the arguments). @throws ValueError"""
+    c = {**COLLECTION, **(given or {})}
+    try:
+        stall, speed = float(c["stall_s"]), float(c["script_speed"])
+    except (TypeError, ValueError) as error:
+        raise ValueError("Collection settings: numbers expected.") from error
+    if not 2 <= stall <= 30:
+        raise ValueError("Hand over after 2 to 30 s without progress.")
+    if not 1 <= speed <= 3:
+        raise ValueError("The script's speed is 1 to 3 times Dream-1's.")
+    if c["script_goal"] not in ("carry", "finish"):
+        raise ValueError("The script's goal is carry or finish.")
+    c = {"stall_s": stall, "quick_fail": bool(c["quick_fail"]), "script_goal": c["script_goal"],
+         "script_speed": speed, "end_on_success": bool(c["end_on_success"])}
+    args = ["--stall-s", f"{stall:g}", "--script-goal", c["script_goal"], "--script-speed", f"{speed:g}"]
+    args += (["--quick-fail"] if c["quick_fail"] else []) + (["--end-on-success"] if c["end_on_success"] else [])
+    return c, args
 PREVIEW_LOCK = threading.Lock()
 ## Tasks without a bowl or plate are run but not judged (the judge needs an object and a target).
 EXAMPLES = [
@@ -163,7 +186,7 @@ class Runner:
         return self.process is not None and self.process.poll() is None
 
     def start(self, task, seconds, changes=None, seeding=(), scene=None, live=True, extra_env=None, robot=(),
-              mode="plain", record=True, resume=None):
+              mode="plain", record=True, resume=None, collection=()):
         """Start one run of sim.py.
         @param changes Scene settings (ood.validate output).
         @param seeding sim.py's seed arguments (seed_web.seeding_args): --seed, --ood-random.
@@ -179,7 +202,8 @@ class Runner:
             if not has_api_key() and mode != "human" and not resume:  # a human-only run calls no Dream-1 until T
                 raise RuntimeError("Enter your API key first.")
             self.last_start = dict(task=task, seconds=seconds, changes=changes, seeding=seeding, scene=scene,
-                                   live=live, extra_env=extra_env, robot=robot, mode=mode, record=record, resume=resume)
+                                   live=live, extra_env=extra_env, robot=robot, mode=mode, record=record, resume=resume,
+                                   collection=collection)
             TELEOP_STATE.unlink(missing_ok=True)
             STOP.unlink(missing_ok=True)
             LIVE.unlink(missing_ok=True)
@@ -202,8 +226,8 @@ class Runner:
             else:
                 command.extend(seeding)
             if not resume:
-                command += {"collect": ["--collect"], "test": ["--recover", "human"], "human": ["--teleop"],
-                            "plain": ["--plain"]}[mode]
+                command += {"collect": ["--collect", *collection], "test": ["--recover", "human"],
+                            "human": ["--teleop"], "plain": ["--plain"]}[mode]
             if not record:
                 command.append("--no-record")
             self.process = subprocess.Popen(
@@ -403,6 +427,7 @@ def write_hand_label(d, label, note, rules):
 
 
 MAX_WORKERS = 4  # episodes at once; 3 at once ran like one at a time on an M3 (8 cores), see README
+NO_CAPACITY_TRIES = 5  # Dream-1 "at max capacity" (DA-2000 NO_CAPACITY): the episode is tried again this many times
 
 
 class Batch:
@@ -426,7 +451,8 @@ class Batch:
         with self.lock:
             return set(self.active)
 
-    def start(self, tasks, seeds, seconds, changes, random_names, split, robot=(), mode="plain", workers=1):
+    def start(self, tasks, seeds, seconds, changes, random_names, split, robot=(), mode="plain", workers=1,
+              collection=None):
         """@param seeds One seed per episode. @param changes, random_names The scene settings, and the ones drawn
         from each seed. @param split "train" or "eval" (shown on the page). @param workers Episodes at once."""
         if self.running() or RUNNER.running():
@@ -438,7 +464,7 @@ class Batch:
         self.info = {"id": "b" + datetime.now().strftime("%Y%m%d-%H%M%S"), "tasks": tasks, "total": len(seeds),
                      "seconds": seconds, "seeds": seeds, "seed": seeds[0], "split": split, "ood": changes,
                      "ood_random": random_names, "rules": current_rules(), "robot": list(robot), "mode": mode,
-                     "workers": workers, "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
+                     "workers": workers, "collection": collection, "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
                      "started": time.time(), "ended": None, "current": None, "active": [], "stopped_reason": None,
                      "durations": [], "invalid_in_a_row": 0}
         self.thread = threading.Thread(target=self._supervise, daemon=True)
@@ -482,6 +508,8 @@ class Batch:
             env["DREAM_API_KEY"] = PAGE_KEY["value"]
         command = [sys.executable, str(HERE / "sim.py"), task["prompt"], "--seconds", str(info["seconds"]),
                    *info["robot"], "--seed", str(seed), {"collect": "--collect", "plain": "--plain"}[info["mode"]]]
+        if info["mode"] == "collect":
+            command += collection_args(info["collection"])[1]
         if info["ood"]:
             command += ["--ood", json.dumps(info["ood"])]
         if info["ood_random"]:
@@ -494,14 +522,21 @@ class Batch:
 
     def _worker(self):
         info = self.info
+        retry = None  # (episode index, tries so far): Dream-1 was at capacity, so the same episode runs again
         while True:
             with self.lock:
-                if self.stop_requested or info["stopped_reason"] or self.next >= info["total"]:
+                if self.stop_requested or info["stopped_reason"]:
                     return
-                i = self.next
-                self.next += 1
+                if retry is None and self.next >= info["total"]:
+                    return
+                if retry is None:
+                    i, tries = self.next, 0
+                    self.next += 1
+                else:
+                    i, tries = retry
                 run_id = datetime.now().strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
                 stop_file = WORK / f"stop-{run_id}"
+            retry = None
             started = time.time()
             process, prompt, seed = self._spawn(i, run_id, stop_file)
             with self.lock:
@@ -516,6 +551,17 @@ class Batch:
                 time.sleep(0.5)
             d = run_dir(run_id)
             meta = read_json(d / "meta.json", {}) if d else {}
+            if "NO_CAPACITY" in str(meta.get("error") or "") and tries + 1 < NO_CAPACITY_TRIES and not self.stop_requested:
+                # Dream-1 is busy (shared by everyone): not this episode's fault. Drop the attempt, wait, try again.
+                with self.lock:
+                    self.active.pop(run_id, None)
+                    self._show_active()
+                    info["capacity_retries"] = info.get("capacity_retries", 0) + 1
+                delete_runs([run_id])
+                stop_file.unlink(missing_ok=True)
+                time.sleep(5 * (tries + 1))
+                retry = (i, tries + 1)
+                continue
             verdict = (judge.evaluate(meta, read_json(d / "trajectory.json", {}), info["rules"]) if d
                        else judge.invalid("no_result"))
             if d:
@@ -769,10 +815,14 @@ class Handler(BaseHTTPRequestHandler):
             if mode == "human" and ("openyam" in robot or (scene and set(scene["items"]) != set(OBJECTS + TARGETS))):
                 return self.send_json({"error": "Human control needs YAM with all six items on the table."}, 400)
             try:
+                _settings, collection = collection_args(body.get("collection"))
+            except ValueError as error:
+                return self.send_json({"error": str(error)}, 400)
+            try:
                 seconds = min(900 if mode in ("human", "test") else 300, max(10, int(float(body.get("seconds") or 60))))
                 RUNNER.start(task, seconds, changes, seeding, scene,
                              extra_env={"JUDGE_SPEC": json.dumps(spec)} if spec else None, robot=robot,
-                             mode=mode, record=body.get("record", True) is not False)
+                             mode=mode, record=body.get("record", True) is not False, collection=collection)
             except (ValueError, TypeError):
                 return self.send_json({"error": "The time limit must be a number."}, 400)
             except RuntimeError as error:
@@ -864,7 +914,8 @@ class Handler(BaseHTTPRequestHandler):
                 workers = int(body.get("workers") or 1)
                 if not 1 <= workers <= MAX_WORKERS:
                     raise ValueError(f"Run 1 to {MAX_WORKERS} episodes at once.")
-                BATCH.start(tasks, seeds, seconds, changes, random_names, split, robot, mode, workers)
+                collection, _args = collection_args(body.get("collection"))
+                BATCH.start(tasks, seeds, seconds, changes, random_names, split, robot, mode, workers, collection)
             except (ValueError, TypeError, AttributeError) as error:
                 return self.send_json({"error": str(error)}, 400)
             except RuntimeError as error:

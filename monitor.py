@@ -11,8 +11,12 @@ Stages of a pick-and-place task, in order:
 
 When Dream-1 is in control, a failure event asks for a human:
     dropped         the object was carried, then fell back to the table outside the target
-    stalled         no progress for STALL_S (no new stage, the hand not getting closer to the object)
+    stalled         no progress for stall_s (STALL_S by default: no new stage, the hand not getting closer)
     off_table       the object fell off the table: cannot be recovered, the run should end
+With quick=True (data collection), two more, so the recovery script starts sooner:
+    missed_grasp    a hand next to the object closed its gripper, and the object was still not lifted MISSED_GRASP_S later
+    pushed_away     the object was pushed PUSHED_M along the table without being lifted, away from the target
+With finish=True every recoverable failure's goal is the task itself (the script finishes it), not picking it up.
 
 Recovery goal shown to the human, and the moment to give the arms back (key T):
     failed before or while carrying (dropped, stalled in reach)  ->  object lifted in a hand again (stage carry)
@@ -39,7 +43,11 @@ NEAR_HAND_M = 0.07  # object centre this close to a hand (TCP) counts as in that
 OFF_TABLE_Z = 0.70
 REST_SPEED = 0.05  # m/s
 SETTLE_S = 1.0
-STALL_S = 12.0  # no progress this long: stalled
+STALL_S = 12.0  # no progress this long: stalled (the default; data collection uses a shorter time)
+MISSED_GRASP_S = 2.0  # gripper closed next to the object, object not lifted this long: missed grasp
+CLOSED = 0.25  # gripper opening (0 closed .. 1 open) below this counts as closed
+PUSHED_M = 0.06  # the object slid this far on the table without being lifted ...
+AWAY_M = 0.03  # ... and ended this much further from the target than it started: pushed away
 PROGRESS_M = 0.02  # the hand got this much closer to the object than ever before: progress
 STAGES = ["reach", "carry", "placed", "success"]
 GOALS = {"carry": "pick the {obj} up again (lift it in a gripper)", "success": "finish the task: {task}"}
@@ -51,11 +59,18 @@ def parse_task(task):
 
 
 class Monitor:
-    def __init__(self, task, env):
+    def __init__(self, task, env, stall_s=STALL_S, quick=False, finish=False):
+        """@param stall_s Seconds without progress that count as stalled. @param quick Also look for a missed grasp
+        and an object pushed away. @param finish Every recoverable failure's goal is finishing the task."""
         self.task = task
+        self.stall_s, self.quick, self.finish = float(stall_s), bool(quick), bool(finish)
+        self.closed_since = None
         parsed = parse_task(task)
         self.object, self.target = parsed if parsed else (None, None)
         self.rest_z = float(env.data.body(self.object).xpos[2]) if self.object else None
+        self.start_xy = env.data.body(self.object).xpos[:2].copy() if self.object else None
+        self.start_gap = (float(np.linalg.norm(self.start_xy - env.data.body(self.target).xpos[:2]))
+                          if self.object else None)
         self.t = 0.0
         self.stage = "reach"
         self.best_stage = "reach"
@@ -115,13 +130,30 @@ class Monitor:
             return self._fail("off_table", None)
         if before == "carry" and self.stage == "reach" and not lifted:
             return self._fail("dropped", "carry")
-        if self.stage != "success" and self.t - self.last_progress_t > STALL_S:
+        if self.quick and self.stage == "reach":
+            # A missed grasp: the hand next to the object has closed its gripper, and the object stays down.
+            sides = ("left", "right")
+            nearest = sides[int(np.argmin([np.linalg.norm(position - h) for h in hands]))]
+            closed = env.state()[nearest][6] < CLOSED
+            if in_hand and closed and not lifted:
+                self.closed_since = self.t if self.closed_since is None else self.closed_since
+                if self.t - self.closed_since >= MISSED_GRASP_S:
+                    return self._fail("missed_grasp", "carry")
+            else:
+                self.closed_since = None
+            # Pushed away: slid along the table, never lifted, now further from the target than at the start.
+            slid = float(np.linalg.norm(position[:2] - self.start_xy))
+            gap = float(np.linalg.norm(position[:2] - target_pos[:2]))
+            if slid > PUSHED_M and gap > self.start_gap + AWAY_M and not lifted and speed < REST_SPEED:
+                return self._fail("pushed_away", "carry")
+        if self.stage != "success" and self.t - self.last_progress_t > self.stall_s:
             return self._fail("stalled", "carry" if self.stage == "reach" else "success")
         return None
 
     def recovered(self):
         """The human gave the arms back: watch for the next failure from here."""
         self.event, self.goal, self.goal_reached = None, None, False
+        self.closed_since = None
         self.last_progress_t = self.t
         self.closest = np.inf
         self.best_stage = self.stage
@@ -138,5 +170,7 @@ class Monitor:
         }
 
     def _fail(self, event, goal):
+        if goal and self.finish:
+            goal = "success"  # data collection: the script finishes the task, so the run ends a success
         self.event, self.goal, self.goal_reached = event, goal, False
         return event

@@ -135,6 +135,14 @@
   .resume img { width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #080c10; border-radius: 8px; }
   .resume input[type=range] { padding: 0; border: 0; background: transparent; accent-color: var(--accent); }
 
+  .collect-box { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--well); }
+  .collect-box summary { cursor: pointer; font-size: 13px; font-weight: 650; }
+  .collect-box .grid2 { margin: 10px 0 6px; }
+  .collect-box .check { margin: 6px 0 0; align-items: flex-start; }
+  .collect-box .check input { margin-top: 3px; }
+  .inline-num { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .inline-num input { width: 64px; padding: 5px 7px; }
+
   /* custom layout */
   .check { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text); margin: 0 0 12px; }
   .check code { font-size: 12px; }
@@ -266,6 +274,7 @@
         <label><input type="radio" name="runMode" value="human"><span>Human only<span class="muted">You drive from the start; T hands the arms to Dream-1 (no credits until then).</span></span></label>
         <label><input type="radio" name="runMode" value="plain"><span>Dream-1 only<span class="muted">No monitor, script or human control (OpenYAM and custom layouts without all six items always run this way).</span></span></label>
       </div>
+      <div id="singleCollectSlot"></div>
       <label class="check" style="margin: 10px 0 0; align-items: flex-start"><input type="checkbox" id="record" checked style="margin-top: 3px"><span>Record to <code>episodes/</code> <span class="muted">(who controlled each step, inputs, cameras, physics state: needed to resume)</span></span></label>
       <div class="actions">
         <button id="run">Run</button>
@@ -273,6 +282,25 @@
         <button id="stop" class="stop" hidden>Stop</button>
       </div>
     </div>
+
+    <details class="collect-box" id="collectBox" open>
+      <summary>Data collection settings · faster successes</summary>
+      <div class="inline-num" style="margin-top: 10px">Hand over to the script after
+        <input id="stallS" type="number" min="2" max="30" step="1" value="6" aria-label="Seconds without progress"> s without progress</div>
+      <label class="check"><input type="checkbox" id="quickFail" checked><span>Also hand over at once on a <b>missed grasp</b> (gripper closed next to the object, not lifted after 2 s) or an object <b>pushed away</b> (slid 6 cm away from the target)</span></label>
+      <div class="grid2">
+        <div><label>The script</label>
+          <div class="toggle" role="group" aria-label="The script's goal">
+            <button id="goalFinish" class="on" aria-pressed="true" title="Pick the object up, put it in the target, let go">Finishes the task</button>
+            <button id="goalCarry" aria-pressed="false" title="Pick the object up and give the arms back to Dream-1">Picks it up, back to Dream-1</button>
+          </div>
+        </div>
+        <div><label for="scriptSpeed">Script speed</label>
+          <select id="scriptSpeed"><option value="1">Dream-1's pace</option><option value="1.5">1.5×</option><option value="2">2×</option><option value="3">3×</option></select>
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" id="endOnSuccess" checked><span>End the run as soon as the task is done (placed, released, at rest)</span></label>
+    </details>
 
     <div id="batchForm" hidden>
       <div class="grid3" style="margin-top: 12px">
@@ -294,6 +322,7 @@
         </div>
         <div><label for="batchWorkers">At once</label><input id="batchWorkers" type="number" min="1" max="4" value="2" title="Episodes run at the same time (1 to 4)"></div>
       </div>
+      <div id="batchCollectSlot"></div>
       <p class="muted small" style="margin: 8px 0 12px">Each episode starts from its own seed. The scene settings below apply to every episode; the ones marked <em>random</em> are drawn from each episode's seed. Runs in the background, without the cameras.</p>
       <label>Tasks <span class="muted">(taken in turn)</span></label>
       <div class="items" id="batchTasks"></div>
@@ -1147,7 +1176,7 @@ $("startBatch").onclick = async () => {
       .map(({ prompt, judge }) => ({ prompt, judge }));
     const { seed, ood_random } = seeding();
     await api("/api/batch", { tasks, count, seconds: $("batchSeconds").value, split, seed, ood, mode: batchMode,
-                              workers: Number($("batchWorkers").value) || 1,
+                              workers: Number($("batchWorkers").value) || 1, collection: collectionSettings(),
                               ood_random: isOpenYAM() ? [] : ood_random });
     followBatch = true;
     refresh();
@@ -1182,7 +1211,8 @@ function showBatch(b) {
   const now = b.active?.length ? b.active : (b.current ? [b.current] : []);
   $("batchNow").textContent = now.length ? `Now${b.workers > 1 ? ` (${now.length} at once)` : ""}: ` + now.map(e => `#${e.index} ${e.task} (seed ${e.seed})`).join(" · ")
     : `${b.split === "eval" ? "Eval seeds" : `Seeds from ${b.seed}`}${b.ood_random?.length ? ` · random: ${b.ood_random.join(", ")}` : ""} · ${b.seconds} s each · labeled with the rules as at the start`;
-  $("batchEnd").textContent = b.running ? "" : b.stopped_reason || "Finished.";
+  $("batchEnd").textContent = (b.running ? "" : b.stopped_reason || "Finished.")
+    + (b.capacity_retries ? ` Dream-1 was at capacity ${b.capacity_retries} time${b.capacity_retries > 1 ? "s" : ""}: those episodes were tried again.` : "");
   $("batchEnd").classList.toggle("bad", !b.running && !!b.stopped_reason && b.stopped_reason !== "Stopped by you.");
 }
 
@@ -1375,7 +1405,7 @@ $("run").onclick = async () => {
     $("previewStatus").hidden = true;
     document.activeElement.blur();  // so the keys go to the robot, not to the box last clicked
     await api("/api/run", { task: $("task").value, seconds: $("seconds").value, ...startScene(ood),
-                            mode: runMode(), record: $("record").checked });
+                            mode: runMode(), record: $("record").checked, collection: collectionSettings() });
     $("live").hidden = true;
     $("placeholder").hidden = false;
     $("placeholder").textContent = "Starting the simulator… (the first picture takes a few seconds)";
@@ -1402,6 +1432,29 @@ $("reset").onclick = async () => {
   $("reset").disabled = false;
   refresh();
 };
+
+/* ---------- data collection settings (monitor.py, recovery.py) ---------- */
+
+let scriptGoal = "finish";
+for (const [id, g] of [["goalFinish", "finish"], ["goalCarry", "carry"]]) $(id).onclick = () => {
+  scriptGoal = g;
+  for (const [other, og] of [["goalFinish", "finish"], ["goalCarry", "carry"]]) {
+    $(other).classList.toggle("on", og === g); $(other).setAttribute("aria-pressed", og === g);
+  }
+};
+const collectionSettings = () => ({
+  stall_s: Number($("stallS").value) || 6, quick_fail: $("quickFail").checked, script_goal: scriptGoal,
+  script_speed: Number($("scriptSpeed").value) || 1, end_on_success: $("endOnSuccess").checked,
+});
+/** The settings show under whichever form runs in data collection mode. */
+function placeCollectBox() {
+  const single = mode === "single" && runMode() === "collect", batch = mode === "batch" && batchMode === "collect";
+  $("collectBox").hidden = !(single || batch);
+  if (single) $("singleCollectSlot").append($("collectBox"));
+  if (batch) $("batchCollectSlot").append($("collectBox"));
+}
+for (const id of ["modeSingle", "modeBatch", "batchCollect", "batchPlain"]) $(id).addEventListener("click", placeCollectBox);
+for (const radio of document.querySelectorAll("input[name=runMode]")) radio.addEventListener("change", placeCollectBox);
 
 /* ---------- human control (KSY: teleop.py, monitor.py, recovery.py) ---------- */
 
@@ -1592,6 +1645,7 @@ $("ood").addEventListener("reset", schedulePreview);
   }
   await loadRuns().catch(() => {});
   loadEpisodes();
+  placeCollectBox();
   await refresh();
   if (ready) schedulePreview();
   else $("placeholder").textContent = "Restart app.py to load the current scene settings.";

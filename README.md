@@ -58,7 +58,23 @@ marked random are then not drawn (they need the seed).
 | **Dream-1 only** | No monitor, script or human control. OpenYAM, and custom layouts without all six items, always run this way. |
 
 Failures the monitor sees (pick & place tasks): **dropped** (carried, then fell back outside the target), **stalled**
-(12 s without progress), **off_table** (cannot be recovered). The recovery goal is to pick the object up again, or to
+(12 s without progress), **off_table** (cannot be recovered).
+
+**Data collection settings** (shown in data collection mode, single runs and batches), for faster successes:
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| Hand over after | 6 s | seconds without progress before the script takes over (counted from Dream-1's first move) |
+| Quick signals | on | also hand over at once on a **missed grasp** (gripper closed next to the object, not lifted 2 s later) or an object **pushed away** (slid 6 cm, further from the target) |
+| The script | finishes the task | picks the object up, puts it in the target, lets go; or *picks it up, back to Dream-1* (the old behaviour) |
+| Script speed | Dream-1's pace | 1.5×, 2× or 3× makes recoveries faster, but less like Dream-1's motion |
+| End when done | on | the run ends as soon as the task is done (placed, released, at rest), so nothing undoes it |
+
+Measured (3 real runs at once, same seeds, 60 s): 3 of 3 successes, ended 35-45 s in (Dream-1 handed over at 15-25 s,
+once on a missed grasp); with the old behaviour (12 s, pick up and hand back) 1 of 3.
+
+When Dream-1 is at capacity (`DA-2000 NO_CAPACITY`, shared by everyone), a batch tries that episode again (same seed)
+after 5, 10, 15, ... s, up to 5 times, and drops the attempt. The recovery goal is to pick the object up again, or to
 finish the task if it was already carried; the page turns green when it is reached, and `T` gives the arms back.
 
 **Mouse** on the camera pictures: click an object (the nearer arm moves its hand 10 cm above it; a click in a wrist
