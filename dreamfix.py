@@ -14,7 +14,18 @@ import sys
 import time
 from pathlib import Path
 
-SIM_DIR = Path(sys.prefix) / "Lib/site-packages/dream_examples/yam_mujoco"
+def _sim_dir() -> Path:
+    """The installed Dream YAM Sim (Windows venvs keep packages in Lib/site-packages, macOS and Linux in
+    lib/pythonX.Y/site-packages)."""
+    import importlib.util
+
+    spec = importlib.util.find_spec("dream_examples")
+    if spec is not None and spec.submodule_search_locations:
+        return Path(next(iter(spec.submodule_search_locations))) / "yam_mujoco"
+    return Path(sys.prefix) / "Lib/site-packages/dream_examples/yam_mujoco"
+
+
+SIM_DIR = _sim_dir()
 sys.path.insert(0, str(SIM_DIR))
 
 import dream  # noqa: E402

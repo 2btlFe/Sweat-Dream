@@ -50,6 +50,13 @@ main { overflow-y: auto; padding: 16px; min-width: 0; }
 .videos .side { display: grid; gap: 8px; grid-template-rows: 1fr 1fr; }
 video { width: 100%; display: block; background: #000; border-radius: 6px; aspect-ratio: 16 / 9; object-fit: contain; }
 .cam { position: relative; }
+video.pca { object-fit: fill; } /* the 224x224 map stretched back to the camera's 16:9: pixels line up with the camera */
+.videos.both { grid-template-columns: repeat(3, 1fr); }
+.pca-state { font-size: 12px; color: var(--muted); }
+details.method { margin-top: 14px; font-size: 12.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+details.method summary { cursor: pointer; color: var(--ink); font-weight: 600; }
+details.method ol { margin: 8px 0 4px 18px; padding: 0; } details.method li { margin: 4px 0; }
+details.method .facts { margin-top: 6px; font-variant-numeric: tabular-nums; }
 .cam span { position: absolute; left: 8px; top: 6px; font-size: 11px; color: #fff; background: rgba(0,0,0,.45); padding: 1px 6px; border-radius: 4px; }
 .controls { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .controls button { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
@@ -162,7 +169,7 @@ function renderList() {
     <div class="item ${e.id === state.sel ? "sel" : ""}" data-id="${e.id}">
       <div class="task">${esc(e.task)}</div>
       <div class="sub">${blind() && !e.human_label ? "" : "sim " + chip(e.sim_label)} you ${chip(e.human_label)}
-        <span>${esc((e.source || "").replace("scripted:", "script:"))}</span></div>
+        <span>${esc((e.source || "").replace("scripted:", "script:"))}</span>${e.pca_state === "ready" ? `<span title="feature PCA ready">· PCA</span>` : ""}</div>
     </div>`).join("") : `<div class="empty">Nothing here.</div>`;
   $("#list").onclick = e => { const it = e.target.closest(".item"); if (it) select(it.dataset.id); };
 }
@@ -179,25 +186,55 @@ async function select(id) {
 // --- video -------------------------------------------------------------------------------------------------
 let speed = Number(store.get("speed", "2"));
 function vids() { return [...document.querySelectorAll("main video")]; }
-function primary() { return $("#v-top") || vids()[0]; }
+function primary() { return $("#v-top") || $("#p-top") || vids()[0]; }
+let view = store.get("view", "both");  // camera | pca | both
+function pcaState(pca) {
+  const s = pca && pca.status;
+  if (!s) return "PCA not made yet (python pca.py --all)";
+  if (s.state === "ready") return "";
+  if (s.state === "running") return `PCA: ${s.done}/${s.total} frames…`;
+  if (s.state === "paused") return `PCA paused: ${s.reason || "an episode is being recorded"}`;
+  if (s.state === "error") return "PCA failed: " + (s.error || "");
+  return "PCA: " + s.state + "…";
+}
+function methodPanel(pca) {
+  const i = pca && pca.info;
+  const facts = i ? `${i.method === "naf" ? "NAF" : "bilinear"} · ${i.frames} frames · ${i.ms_per_frame} ms/frame on ${i.device} · ${i.seconds} s in all · ${i.reused_views} unchanged views reused` : "";
+  return `<details class="method"><summary>How the feature PCA maps are made</summary><ol>
+    <li><b>Features</b>: each camera frame is resized to 224×224 and passed through DINOv2 ViT-S/14, a self-supervised vision model: a 16×16 grid of 384-dimensional patch features. (Dream-1's own features are not available through its API.)</li>
+    <li><b>PCA</b>: one basis per episode, fitted on frames spread over the whole episode and all three cameras, so a colour means the same thing at every moment and in every view. The first three components are shown as red, green and blue: patches that look alike to the model get alike colours.</li>
+    <li><b>NAF upsampling</b>: NAF (<i>Zero-Shot Feature Upsampling via Neighborhood Attention Filtering</i>, Chambon et al., valeo.ai, CVPR 2026) lifts the 16×16 map to 224×224 without training for this model: each pixel attends to the 9×9 patches around it, with weights from the image's content and position, so feature edges follow the edges in the picture. PCA is linear and NAF averages each attention head's values, so the 3 projected values per head are upsampled instead of 384 features: the same result for far less work.</li>
+    <li><b>Here</b>: made after the episode by <code>pca.py</code>, paused while an episode is recording; each map is averaged with its neighbours in time, and a camera whose image did not change keeps its previous map. NAF normally needs NATTEN (CUDA); a plain PyTorch neighbourhood attention runs it on any GPU or CPU, and cached RoPE tables, split padding, float16 and <code>torch.compile</code> make it about 1.9× faster than released. The map is stretched back to 16:9 so it lines up with the camera.</li>
+  </ol>${facts ? `<div class="facts">This episode: ${esc(facts)}</div>` : ""}</details>`;
+}
 function simTime(v) { return state.ep.frame_t0 + v; }
 function videoTime(t) { return Math.max(0, t - state.ep.frame_t0); }
 function duration() { const p = primary(); return p && isFinite(p.duration) ? p.duration : state.ep.frame_count / state.ep.fps; }
 
 function renderMain() {
   const ep = state.ep, cams = ["top", "left", "right"].filter(c => ep.videos.includes(c + ".mp4"));
+  const hasPca = cams.length > 0 && cams.every(c => (ep.pca?.videos || []).includes(c + ".mp4"));
+  const mode = hasPca ? view : "camera";
   const v = c => `<div class="cam"><video id="v-${c}" src="/media/${ep.id}/${c}.mp4" preload="auto" muted playsinline></video><span>${c}</span></div>`;
+  const pv = c => `<div class="cam"><video id="p-${c}" class="pca" src="/media/${ep.id}/pca/${c}.mp4" preload="auto" muted playsinline></video><span>${c} · PCA</span></div>`;
+  const layout = items => `<div class="videos">${items[0]}<div class="side">${items.slice(1).join("")}</div></div>`;
+  const videos = !cams.length ? `<div class="empty">No video for this episode.</div>`
+    : mode === "both" ? `<div class="videos both">${cams.map(v).join("")}${cams.map(pv).join("")}</div>`
+    : layout(cams.map(mode === "pca" ? pv : v));
   $("#main").innerHTML = `
     <div class="title"><h2>${esc(ep.task)}</h2>
       <span class="meta">${esc(ep.id)} · ${esc(ep.source)}${ep.seed != null ? " · seed " + ep.seed : ""} · ${ep.sim_s ?? "?"} s sim</span></div>
-    ${cams.length ? `<div class="videos">${v(cams[0])}<div class="side">${cams.slice(1).map(v).join("")}</div></div>` : `<div class="empty">No video for this episode.</div>`}
+    ${videos}
     <div class="controls">
       <button id="play">Play</button><button id="back">−1 frame</button><button id="fwd">+1 frame</button>
       <select id="speed">${[0.5, 1, 2, 4].map(s => `<option value="${s}" ${s === speed ? "selected" : ""}>${s}× sim speed</option>`).join("")}</select>
       <span class="time" id="time"></span>
+      <select id="view" title="Camera, feature PCA, or both">${[["camera", "Camera"], ["pca", "Feature PCA"], ["both", "Camera + PCA"]].map(([k, n]) => `<option value="${k}" ${k === mode ? "selected" : ""} ${k !== "camera" && !hasPca ? "disabled" : ""}>${n}</option>`).join("")}</select>
+      <span class="pca-state">${esc(pcaState(ep.pca))}</span>
     </div>
     <div class="timeline" id="tl"><div class="track"></div><div class="fill" id="fill"></div><div class="head" id="head"></div><div id="pins"></div></div>
-    <div class="legend"><span><i style="background:var(--bad)"></i>sim failure time</span><span><i style="background:var(--ok)"></i>sim success time</span><span><i style="background:var(--mark)"></i>your failure mark</span></div>`;
+    <div class="legend"><span><i style="background:var(--bad)"></i>sim failure time</span><span><i style="background:var(--ok)"></i>sim success time</span><span><i style="background:var(--mark)"></i>your failure mark</span></div>
+    ${methodPanel(ep.pca)}`;
   const p = primary(); if (!p) return;
   vids().forEach(x => x.playbackRate = speed);
   p.addEventListener("timeupdate", tick); p.addEventListener("seeked", tick); p.addEventListener("loadedmetadata", () => { tick(); renderPins(); });
@@ -206,6 +243,7 @@ function renderMain() {
   p.addEventListener("ended", () => { $("#play").textContent = "Play"; });
   $("#play").onclick = togglePlay; $("#back").onclick = () => stepFrame(-1); $("#fwd").onclick = () => stepFrame(1);
   $("#speed").onchange = e => { speed = Number(e.target.value); store.set("speed", speed); vids().forEach(x => x.playbackRate = speed); };
+  $("#view").onchange = e => { const t = primary().currentTime; view = e.target.value; store.set("view", view); renderMain(); const q = primary(); if (q) q.addEventListener("loadedmetadata", () => seek(t), { once: true }); };
   const tl = $("#tl"); let drag = false;
   const seekTo = ev => { const r = tl.getBoundingClientRect(); seek(Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)) * duration()); };
   tl.onpointerdown = ev => { drag = true; tl.setPointerCapture(ev.pointerId); seekTo(ev); };

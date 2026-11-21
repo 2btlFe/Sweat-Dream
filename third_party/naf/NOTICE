@@ -1,0 +1,13 @@
+NAF: Zero-Shot Feature Upsampling via Neighborhood Attention Filtering
+Loick Chambon, Paul Couairon, Eloi Zablocki, Alexandre Boulch, Nicolas Thome, Matthieu Cord (valeo.ai)
+https://github.com/valeoai/NAF  (commit 37f2dfc180f2de53d98bd601109c0da0dd6b0f43), Apache License 2.0 (LICENSE)
+Weights: https://github.com/valeoai/NAF/releases/download/model/naf_release.pth (downloaded at run time)
+
+Copied files: src/model/naf.py, src/layers/{__init__,attentions,convolutions,rope}.py, unchanged except:
+
+- src/layers/attentions.py (modified for this project): when NATTEN cannot be imported (it ships CUDA builds;
+  this project also runs on Apple silicon and Intel laptops), CrossAttention uses plain PyTorch instead:
+  `na2d_torch`, NATTEN's dilated 2D neighbourhood attention (same windows, shifted at the edges of each dilation
+  group; same default scale), and `na2d_blocks_spatial`, the same result computed once per low-resolution cell
+  for NAF's case (keys and values enlarged from a grid by an integer factor). The NATTEN code paths are kept.
+- src/__init__.py and src/model/__init__.py are empty files written here (the originals import other models).
