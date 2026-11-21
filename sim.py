@@ -13,6 +13,8 @@ Run modes (KSY: monitor.py, recovery.py, teleop.py, recorder.py):
     python sim.py --resume <run id> --resume-step 120        restart a recorded run at step 120, exactly as it was, with a
                                                              human in control
     python sim.py "put apple into the bowl" --plain          Dream-1 only: no monitor, script or human control
+    python sim.py "put apple into the bowl" --script-only    rule-based only: the recovery script does the whole task
+                                                             from the first step (no Dream-1, no API key)
 Data collection options (faster successes): --stall-s 6 (hand over after 6 s without progress), --quick-fail (also a
 missed grasp or an object pushed away), --script-goal finish (the script finishes the task, not only picks it up),
 --script-speed 2 (the script moves twice as fast as Dream-1), --end-on-success (end the run when the task is done).
@@ -98,7 +100,8 @@ TELEOP = Teleop()
 MONITOR = None  # the failure monitor, set in main() once the task is known (KSY modes)
 RECOVERY = None  # the recovery script; None with --recover human
 RECORDER = None  # the episode recorder (episodes/); None with --no-record or --plain
-COLLECT = False  # --collect: Dream-1, then the recovery script; no human input
+COLLECT = False  # --collect: Dream-1, then the recovery script; no human input (also --script-only)
+SCRIPT_ONLY = False  # --script-only: the recovery script from the first step, no Dream-1
 KSY = False  # whether the run goes through teleop / monitor / recovery (not --plain, OpenYAM or a partial table)
 DREAM_STARTED = [False]  # Dream-1 was asked for a real chunk: before that, the loop only fills its camera window
 HOLD_ROWS = 20  # while a human (or the script) has the arms, Dream-1 is not called: the loop gets 1 s of hold rows
@@ -396,6 +399,38 @@ def keyboard_only(env, seconds, stop):
     return None
 
 
+def all_done():
+    """Every object of the task is at its goal (the monitor's stage is the watched object's only)."""
+    return MONITOR.stage == "success" and {obj for obj, _entry in MONITOR.plan} <= set(MONITOR.done)
+
+
+def script_only(env, seconds, stop):
+    """Rule-based only (--script-only): the recovery script (recovery.py) does the task from the first step, object
+    by object, as it finishes a task after a failure in data collection; Dream-1 is never asked (no key, no API use).
+    The time limit is simulated time, run as fast as the computer can (no waiting for the wall clock). Cameras every
+    4 steps (5 per second), as the frames Dream-1 sees. The run ends when the task is done (--end-on-success), the
+    script gives up, or the time is up."""
+    TELEOP.dream_available = False  # T and clicks hand nothing to Dream-1
+    steps, limit = 0, int(round(seconds / STEP_S))
+    while not stop.is_set() and steps < limit:
+        if RECOVERY is not None and not RECOVERY.active and TELEOP.mode != "paused" and not all_done():
+            # The next object (the first, or the next of a goal scene): the script takes the arms for it.
+            TELEOP.chunk_started()  # "returning" after the last object: back to "dream", which the script takes over
+            MONITOR._fail("scripted", "success")  # its goal: this object at its place
+            if RECORDER is not None:
+                RECORDER.event("script_start", object=MONITOR.object)
+            RECOVERY.start(env, "scripted", "success")
+        env.step(None, None)  # the script replaces the action (TELEOP.filter in controlled_step)
+        if steps % 4 == 0:
+            images = env.images()
+            last_images.update(images)
+            if LIVE_FRAME:
+                save_jpeg(camera_view(images), LIVE_FRAME)
+            if RECORDER is not None:
+                RECORDER.on_frame(images)
+        steps += 1
+
+
 GOAL_DROP_M = 0.06  # a dragged object is let go this far above where it will rest, then physics settles it
 GOAL_SETTLE_STEPS = 40  # 2 s of simulated time, arms holding still
 
@@ -502,7 +537,8 @@ def start_ksy(env, args, meta, stop, source_dir):
             last = recorded["action"][resume["step"] - 1]
             TELEOP.last_action = (last[:7].copy(), last[7:].copy())
     if not args.no_record:
-        RECORDER = EpisodeRecorder(env, args.task, mode="resumed" if resume else "human-only" if args.teleop else "dream",
+        RECORDER = EpisodeRecorder(env, args.task, mode="resumed" if resume else "human-only" if args.teleop
+                                   else "script-only" if SCRIPT_ONLY else "dream",
                                    extra={"recover": args.recover, "time_limit_s": args.seconds, "resumed_from": resume,
                                           "run": meta["id"], "seed": meta["seed"], "room": meta["room"]})
         RECORDER.id, RECORDER.dir = meta["id"], EPISODES_DIR / meta["id"]  # one id: runs/<id> and episodes/<id>
@@ -563,7 +599,7 @@ def start_ksy(env, args, meta, stop, source_dir):
             script_result[0] = RECOVERY.result
             if RECORDER is not None and RECOVERY.result:
                 RECORDER.event("script", result=RECOVERY.result)
-        if args.end_on_success and COLLECT and not stop.is_set() and MONITOR.stage == "success":
+        if args.end_on_success and COLLECT and not stop.is_set() and all_done():
             # The task is done (placed, released, at rest): end here, before anything can undo it.
             print("  Ending the run: the task is done.", flush=True)
             meta["ended_early"] = "task done"
@@ -645,6 +681,8 @@ def main():
     parser.add_argument("--resume-step", type=int, default=0, help="the step of --resume to start from")
     parser.add_argument("--no-record", action="store_true", help="do not record the run to episodes/")
     parser.add_argument("--plain", action="store_true", help="Dream-1 only: no monitor, recovery script or human control")
+    parser.add_argument("--script-only", action="store_true",
+                        help="rule-based only: the recovery script does the whole task from the first step; no Dream-1")
     parser.add_argument("--stall-s", type=float, help="data collection: seconds without progress before the script takes over")
     parser.add_argument("--quick-fail", action="store_true", help="data collection: a missed grasp or a pushed-away object fails at once")
     parser.add_argument("--script-goal", choices=("carry", "finish"), default="carry",
@@ -668,7 +706,7 @@ def main():
     if not args.default_scene:
         args.seed = scene.pick_seed(args)  # the seed the scene is built from, kept in meta.json
     # KSY's monitor, recovery script, human control and recorder need the YAM table with all six items.
-    global KSY, COLLECT, MONITOR, RECOVERY, RECORDER
+    global KSY, COLLECT, SCRIPT_ONLY, MONITOR, RECOVERY, RECORDER
     partial = bool(SCENE) and set(SCENE.get("items", {})) != set(BODIES)
     KSY = not (args.plain or openyam or partial)
     if not KSY and (args.teleop or args.resume):
@@ -676,14 +714,18 @@ def main():
     if not KSY and (args.collect or args.recover == "human") and not args.plain:
         print("  Monitor, recovery script and human control are for YAM with all six items: running Dream-1 only.",
               flush=True)
-    COLLECT = KSY and args.collect and not args.teleop and not args.resume
+    if args.script_only and (not KSY or args.teleop or args.resume):
+        parser.error("Rule-based only runs need YAM with all six items on the table, and start fresh (no human).")
+    SCRIPT_ONLY = KSY and args.script_only
+    COLLECT = KSY and (args.collect or SCRIPT_ONLY) and not args.teleop and not args.resume
     if COLLECT:
         args.recover = "script"
         speed = max(1.0, min(3.0, args.script_speed))
         for name in ("SCRIPT_SPEED_M_S", "SCRIPT_ACCEL_M_S2", "SCRIPT_MAX_JOINT_RAD_S", "SCRIPT_JOINT_ACCEL_RAD_S2"):
             setattr(teleop, name, getattr(teleop, name) * speed)
         teleop.SCRIPT_GRIP_SECONDS /= speed
-    mode = ("plain" if not KSY else "resumed" if args.resume else "human" if args.teleop else "collect" if COLLECT
+    mode = ("plain" if not KSY else "resumed" if args.resume else "human" if args.teleop else "script" if SCRIPT_ONLY
+            else "collect" if COLLECT
             else "test" if args.recover == "human" else "assist")
     if not openyam:
         theme_yam_room(args.room)
@@ -801,10 +843,15 @@ def main():
     print(f"Starting the simulator: {args.task} ({args.seconds:g} s)"
           + {"human": " · you have the arms (T hands them to Dream-1)", "resumed": " · you have the arms",
              "collect": " · collecting: Dream-1, then the recovery script; no human",
+             "script": " · rule-based only: the recovery script from the start; no Dream-1",
              "test": " · press T to take over"}.get(mode, ""), flush=True)
     RECORDING["on"] = True
     try:
-        if args.teleop:
+        if SCRIPT_ONLY:
+            if not MONITOR.understood():
+                raise RuntimeError("The rule-based script needs a pick-and-place task or a goal scene it understands.")
+            script_only(env, args.seconds, stop)
+        elif args.teleop:
             left = keyboard_only(env, args.seconds, stop)
             if left is not None and left > 1 and not stop.is_set():
                 # Hand-off: Dream-1 continues from the scene exactly as the human left it, for the time that is left.

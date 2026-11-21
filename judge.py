@@ -240,7 +240,8 @@ def evaluate(meta, trajectory, rules):
     spec = judged_spec(meta)
     if spec is None:
         return invalid("unsupported_task")
-    by_hand = meta.get("mode") in ("human", "resumed")  # a person drove (part of) it: Dream-1 need not have answered
+    # A person or the rule-based script drove (part of) it: Dream-1 need not have answered.
+    by_hand = meta.get("mode") in ("human", "resumed", "script")
     if not by_hand and (meta.get("model_responses", 0) < 1 or meta.get("model_actions", 0) < 1):
         return invalid("no_model_actions")
     positions = trajectory.get("positions", {}) if isinstance(trajectory, dict) else {}

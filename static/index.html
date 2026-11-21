@@ -377,6 +377,7 @@
       </div>
       <div class="modes" role="radiogroup" aria-label="Run mode">
         <label><input type="radio" name="runMode" value="collect" checked><span>Data collection<span class="muted">Dream-1; when it fails, the recovery script takes over. No human: a failure it cannot recover ends the run (recover it later in Recordings).</span></span></label>
+        <label><input type="radio" name="runMode" value="script"><span>Rule-based only<span class="muted">The rule-based script does the whole task from the first step (every object of a goal scene). No Dream-1: no key or credits, faster than real time.</span></span></label>
         <label><input type="radio" name="runMode" value="test"><span>Test<span class="muted">Dream-1 and you take turns with T; a failure hands the arms to you.</span></span></label>
         <label><input type="radio" name="runMode" value="human"><span>Human only<span class="muted">You drive from the start; T hands the arms to Dream-1 (no credits until then).</span></span></label>
         <label><input type="radio" name="runMode" value="plain"><span>Dream-1 only<span class="muted">No monitor, script or human control (OpenYAM and custom layouts without all six items always run this way).</span></span></label>
@@ -391,12 +392,12 @@
     </div>
 
     <details class="collect-box" id="collectBox" open>
-      <summary>Data collection settings · faster successes</summary>
-      <div class="inline-num" style="margin-top: 10px">Hand over to the script after
+      <summary id="collectTitle">Data collection settings · faster successes</summary>
+      <div class="inline-num" id="stallRow" style="margin-top: 10px">Hand over to the script after
         <input id="stallS" type="number" min="2" max="30" step="1" value="6" aria-label="Seconds without progress"> s without progress</div>
-      <label class="check"><input type="checkbox" id="quickFail" checked><span>Also hand over at once on a <b>missed grasp</b> (gripper closed next to the object, not lifted after 2 s) or an object <b>pushed away</b> (slid 6 cm away from the target)</span></label>
+      <label class="check" id="quickRow"><input type="checkbox" id="quickFail" checked><span>Also hand over at once on a <b>missed grasp</b> (gripper closed next to the object, not lifted after 2 s) or an object <b>pushed away</b> (slid 6 cm away from the target)</span></label>
       <div class="grid2">
-        <div><label>The script</label>
+        <div id="goalRow"><label>The script</label>
           <div class="toggle" role="group" aria-label="The script's goal">
             <button id="goalFinish" class="on" aria-pressed="true" title="Pick the object up, put it in the target, let go">Finishes the task</button>
             <button id="goalCarry" aria-pressed="false" title="Pick the object up and give the arms back to Dream-1">Picks it up, back to Dream-1</button>
@@ -422,10 +423,11 @@
       </div>
       <div class="grid2" style="margin: 12px 0 0; grid-template-columns: minmax(0, 2fr) minmax(90px, 1fr)">
         <div><label>Each episode</label>
-          <div class="toggle" role="group" aria-label="Batch mode" style="grid-template-columns: repeat(3, 1fr)">
+          <div class="toggle" role="group" aria-label="Batch mode" style="grid-template-columns: repeat(2, 1fr)">
             <button id="batchCollect" class="on" aria-pressed="true" title="Dream-1; when it fails, the recovery script takes over">Data collection</button>
+            <button id="batchScript" aria-pressed="false" title="The rule-based script does the whole task; no Dream-1, no credits">Rule-based only</button>
             <button id="batchPlain" aria-pressed="false" title="Dream-1 only">Dream-1 only</button>
-            <button id="batchOriginal" aria-pressed="false" title="The baseline: the seed and the environment fixed (every episode from the simulator\'s default scene, the same object layout, with default scene settings); Dream-1 with the recovery script, as in Data collection">Original</button>
+            <button id="batchOriginal" aria-pressed="false" title="The baseline: the seed and the environment fixed (every episode from the simulator's default scene, the same object layout, with default scene settings); Dream-1 with the recovery script, as in Data collection">Original</button>
           </div>
         </div>
         <div><label for="batchWorkers">At once</label><input id="batchWorkers" type="number" min="1" max="4" value="2" title="Episodes run at the same time (1 to 4)"></div>
@@ -996,7 +998,7 @@ function drawChart(v) {
 
 /* ---------- each run's settings ---------- */
 
-const MODE_TEXT = { collect: "data collection", test: "test", human: "human only", resumed: "resumed", plain: "Dream-1 only", assist: "Dream-1 + script + human" };
+const MODE_TEXT = { collect: "data collection", script: "rule-based only", test: "test", human: "human only", resumed: "resumed", plain: "Dream-1 only", assist: "Dream-1 + script + human" };
 const startText = run => run.layout === "custom" ? "custom layout" : run.layout === "sandbox" ? "Sandbox table"
   : run.seed != null ? `seed ${run.seed}${run.split === "eval" ? " (eval)" : ""}` : "default scene";
 /** One line under the task in the list: mode · start · robot / room. */
@@ -1455,7 +1457,7 @@ function setSplit(next) {
   estimate();
 }
 let batchMode = "collect";
-const BATCH_MODES = [["batchCollect", "collect"], ["batchPlain", "plain"], ["batchOriginal", "original"]];
+const BATCH_MODES = [["batchCollect", "collect"], ["batchScript", "script"], ["batchPlain", "plain"], ["batchOriginal", "original"]];
 for (const [id, m] of BATCH_MODES) $(id).onclick = () => {
   batchMode = m;
   for (const [other, om] of BATCH_MODES) { $(other).classList.toggle("on", om === m); $(other).setAttribute("aria-pressed", om === m); }
@@ -1463,6 +1465,7 @@ for (const [id, m] of BATCH_MODES) $(id).onclick = () => {
   $("splitTrain").disabled = $("splitEval").disabled = m === "original";
   $("batchHow").hidden = m === "original"; $("batchHowOriginal").hidden = m !== "original";
   estimate();
+  refresh();  // a rule-based batch needs no key: the Start button follows the mode
 };
 $("splitTrain").onclick = () => setSplit("train");
 $("splitEval").onclick = () => setSplit("eval");
@@ -1585,7 +1588,9 @@ $("customPrompt").addEventListener("keydown", e => { if (e.key === "Enter") { e.
 function estimate() {
   const count = Number($("batchCount").value) || 0, secs = Number($("batchSeconds").value) || 0;
   const workers = Math.max(1, Math.min(4, Number($("batchWorkers").value) || 1, count || 1));
-  const minutes = Math.round(Math.ceil(count / workers) * (secs + 20) / 60);
+  // Rule-based runs go faster than real time (about 2.5x on an M3) and end once the task is done.
+  const each = batchMode === "script" ? secs / 2.5 + 10 : secs + 20;
+  const minutes = Math.round(Math.ceil(count / workers) * each / 60);
   const seeds = batchMode === "original" ? "original: fixed default scene and settings, with the recovery script"
     : split === "eval" ? `eval seeds 1-${Math.min(count, 50)}` : `batch seed ${$("seed")?.value || "?"} (${count} different layouts, the same again with this seed)`;
   $("batchEstimate").textContent = count && secs ? `${count} episodes · ${workers} at once · ${seeds} · about ${minutes} min · ${batchTasks.size} task${batchTasks.size > 1 ? "s" : ""}` : "";
@@ -1601,8 +1606,10 @@ $("startBatch").onclick = async () => {
   const count = Number($("batchCount").value);
   // Every episode runs the task set above (its words, and its goal scene when it has one).
   if (goalSpec && !goalRelational()) { notify("The task's goal scene has a fixed table spot, which only fits one seed: for batches, tie every object to an item (in the bowl, beside the plate, ...)."); return; }
-  const how = batchMode === "original" ? " as the original (the default scene and settings every episode, Dream-1 with the recovery script)" : "";
-  if (!(await ask(`Run ${count} episodes${how} in the background (about ${estimate()} min of Dream-1 use)?`, "Start batch"))) return;
+  const how = batchMode === "original" ? " as the original (the default scene and settings every episode, Dream-1 with the recovery script)"
+    : batchMode === "script" ? " rule-based (the script alone, no Dream-1 use)" : "";
+  const use = batchMode === "script" ? "" : " of Dream-1 use";
+  if (!(await ask(`Run ${count} episodes${how} in the background (about ${estimate()} min${use})?`, "Start batch"))) return;
   try {
     const tasks = [{ prompt: $("task").value.trim(), ...(goalSpec ? { judge: goalSpec } : {}) }];
     const { seed, ood_random } = seeding();
@@ -1895,8 +1902,9 @@ async function refresh() {
   if (running) $("previewStatus").hidden = true;
   if (batchRunning && mode !== "batch") setMode("batch");
   $("modeSingle").disabled = $("modeBatch").disabled = running;
-  $("run").disabled = running || (!s.key.source && runMode() !== "human") || !robotRunsHere() || !!setupProblem;  // human only: no key needed
-  $("startBatch").disabled = running || !s.key.source || !robotRunsHere();
+  // Human-only and rule-based runs need no key (no Dream-1; a human-only run asks it only after T).
+  $("run").disabled = running || (!s.key.source && !["human", "script"].includes(runMode())) || !robotRunsHere() || !!setupProblem;
+  $("startBatch").disabled = running || (!s.key.source && batchMode !== "script") || !robotRunsHere();
   $("robot").disabled = $("room").disabled = running;
   $("stop").hidden = !s.running || batchRunning;
   $("stopBatch").hidden = !batchRunning;
@@ -2229,14 +2237,19 @@ const collectionSettings = () => ({
   stall_s: Number($("stallS").value) || 6, quick_fail: $("quickFail").checked, script_goal: scriptGoal,
   script_speed: Number($("scriptSpeed").value) || 1, end_on_success: $("endOnSuccess").checked,
 });
-/** The settings show under whichever form runs in data collection mode. */
+/** The settings show under whichever form runs in data collection or rule-based mode; a rule-based run has no
+ *  Dream-1 to hand over from, so only the script's speed and ending on success apply. */
 function placeCollectBox() {
-  const single = mode === "single" && runMode() === "collect", batch = mode === "batch" && ["collect", "original"].includes(batchMode);
+  const scripted = ["collect", "script"];  // Original runs in data collection mode too (fixed scene, with recovery)
+  const single = mode === "single" && scripted.includes(runMode()), batch = mode === "batch" && [...scripted, "original"].includes(batchMode);
+  const ruleBased = (single ? runMode() : batchMode) === "script";
   $("collectBox").hidden = !(single || batch);
+  for (const id of ["stallRow", "quickRow", "goalRow"]) $(id).hidden = ruleBased;
+  $("collectTitle").textContent = ruleBased ? "Rule-based script settings" : "Data collection settings · faster successes";
   if (single) $("singleCollectSlot").append($("collectBox"));
   if (batch) $("batchCollectSlot").append($("collectBox"));
 }
-for (const id of ["modeSingle", "modeBatch", "batchCollect", "batchPlain", "batchOriginal"]) $(id).addEventListener("click", placeCollectBox);
+for (const id of ["modeSingle", "modeBatch", "batchCollect", "batchScript", "batchPlain", "batchOriginal"]) $(id).addEventListener("click", placeCollectBox);
 for (const radio of document.querySelectorAll("input[name=runMode]")) radio.addEventListener("change", placeCollectBox);
 
 /* ---------- human control (KSY: teleop.py, monitor.py, recovery.py) ---------- */
@@ -2265,7 +2278,8 @@ function showControl(s, batchRunning) {
   $("stage").textContent = (m && m.understood ? `Task stage: ${m.stage}` + (t.mode === "dream" && m.seconds_without_progress > 3 ? ` · no progress for ${m.seconds_without_progress} s` : "") : "Monitor: pick and place tasks only")
     + (t.recording ? ` · ● recording (${t.recording.steps} steps)` : " · not recording");
   let help = "", ok = false;
-  if (t.mode === "script" && r) help = `${REASONS[r.event] || r.event}. The script is recovering (goal: ${m && m.goal || r.goal}) · step: ${r.step || "—"} · attempt ${r.attempt} of ${r.max_attempts} (${r.arm || "—"} arm).` + (t.collecting ? "" : " Press T or click the picture to take over.");
+  if (t.mode === "script" && r && r.event === "scripted") help = `Rule-based run: the script is placing the ${(t.monitor?.object || "object").replace("water_", "")} (goal: ${m && m.goal || "—"}) · step: ${r.step || "—"} · attempt ${r.attempt} of ${r.max_attempts} (${r.arm || "—"} arm).`;
+  else if (t.mode === "script" && r) help = `${REASONS[r.event] || r.event}. The script is recovering (goal: ${m && m.goal || r.goal}) · step: ${r.step || "—"} · attempt ${r.attempt} of ${r.max_attempts} (${r.arm || "—"} arm).` + (t.collecting ? "" : " Press T or click the picture to take over.");
   else if (t.mode === "paused" && r && r.result && r.result.startsWith("gave up")) help = `The script ${r.result}. The arms are held. Recovery goal: ${m && m.goal || "—"}. Click the picture or press T to start.`;
   else if (t.mode === "paused") help = `${REASONS[t.reason] || t.reason}. The arms are held. Recovery goal: ${m && m.goal || "—"}. Click the picture or press T to start.`;
   else if (t.mode === "human" && m && m.goal) { ok = m.goal_reached; help = ok ? `Recovery goal reached (${m.goal}). Press T to give the arms back to Dream-1.` : `Recovery goal: ${m.goal}.`; }
@@ -2278,8 +2292,10 @@ function showControl(s, batchRunning) {
   // Data collection: the model and the recovery script only; the human controls come back in a resumed run.
   $("controlButtons").hidden = !!t.collecting;
   if (t.collecting) {
-    $("controlMode").textContent = t.mode === "script" ? "Collecting · recovery script" : "Collecting · Dream-1";
-    $("message").textContent = "Data collection: no human input. A failure the script cannot recover ends the run; recover it later in Recordings.";
+    const ruleBased = s.mode === "script";
+    $("controlMode").textContent = ruleBased ? "Rule-based · script" : t.mode === "script" ? "Collecting · recovery script" : "Collecting · Dream-1";
+    $("message").textContent = ruleBased ? "Rule-based only: the script does the task, no Dream-1. If it gives up, the run ends; recover it later in Recordings."
+      : "Data collection: no human input. A failure the script cannot recover ends the run; recover it later in Recordings.";
   }
 }
 

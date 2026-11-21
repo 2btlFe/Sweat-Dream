@@ -23,6 +23,11 @@ Recovery goal "success" (finish the task): the steps above unless the object is 
     retreat   12 cm up (the monitor counts a placed object as done only once the hand has left it)
     placed?   the monitor sees the task done (stage success)
 
+Relay (goal "success"), when no arm reaches both the object and its goal (one reaches the object, only the other the
+goal): the first arm sets the object down at a free spot on the table both arms reach, and the other arm picks it
+up there and finishes:
+    pick (first arm)  relay  set_down  open  retreat  switch  pick (other arm)  transport ... placed?
+
 An attempt fails when a step takes longer than STEP_TIMEOUT_S, the arm cannot reach a target, or a check fails.
 After a failed attempt the script tries again from the current scene, up to RETRIES times; then it gives up and
 the arms are held for a human (mode paused), as without the script. The human can take over at any time (T, or
@@ -47,11 +52,21 @@ REAIM_M = 0.01  # the object moved this much since the hand was aimed at it: aim
 CHECK_S = 2.5  # how long a check waits for the monitor to see the expected stage
 APPROACH_HEIGHTS_M = (ABOVE_OBJECT_M, 0.07, 0.05)  # the hand starts down from the first one it can reach
 LIFT_HEIGHTS_M = (LIFT_M, 0.08, 0.05)  # lift / retreat: the first height the arm can reach
+# Transport: the hand goes above the target at the first of these heights the arm can reach (a target close to the
+# robots' base, such as a bowl right in front of them, cannot be reached 12 cm up by either arm, but can lower).
+PLACE_HEIGHTS_M = (ABOVE_PLACE_M, 0.10, 0.08, 0.06)
+PLACE_SLACK_M = 0.03  # transport / set_down: a hand that stops this close (sideways) above the target is close enough
+DROP_M = 0.05  # set_down: ... and the object's bottom at most this far above where it would rest
+REACH_TURNS = np.linspace(0.0, np.pi, 4, endpoint=False)  # hand turns tried when checking a point can be reached
 TURNED_DEG = 20.0  # an elongated object (banana) turned this much after the hand was turned for it: attempt again
 UPRIGHT_COS = 0.8  # a water bottle whose axis is tilted further than ~37 degrees from vertical is lying down
 LYING_BOTTLE_DZ = 0.0  # a lying bottle is grasped at its middle (the body origin is the middle of the cylinder)
 PICK = ["prepare", "point", "approach", "descend", "close", "lift", "lifted?"]
 PLACE = ["transport", "set_down", "open", "retreat", "placed?"]
+RELAY = ["relay", "set_down", "open", "retreat", "switch"]  # set it down where the other arm can pick it up
+ITEMS = ["apple", "orange", "banana", "water_bottle", "bowl", "plate"]
+RELAY_CLEAR_M = 0.09  # a relay spot is this far (on the table) from every other item
+RELAY_GRID = [(x, y) for x in np.linspace(-0.16, 0.16, 9) for y in np.linspace(-0.16, 0.20, 10)]
 
 
 def lying(env, obj):
@@ -100,6 +115,9 @@ class Recovery:
         self.other_arm = False  # use the arm farther from the object (after the nearer one could not reach)
         self.release = RELEASE_M  # set-down height above the target's origin
         self.place_point = None
+        self.relay = None  # the relay spot on the table, when one arm hands the object to the other (RELAY)
+        self.forced = None  # the arm the next pick must use (a relay's first or second arm)
+        self.placer = None  # a relay's second arm
         self.result = None  # "recovered", "gave_up: <why>", "human took over"
         self.message = ""
         self.results = []  # (event, goal, result, attempts, seconds), one per recovery, for statistics
@@ -164,12 +182,19 @@ class Recovery:
     def _plan(self, env):
         """Steps for a new attempt, from the scene as it is now."""
         held = self._held_by(env)
+        self.relay, self.forced, self.placer = None, None, None
+        relay = self._relay_plan(env, held) if self.goal == "success" else None
         if self.goal == "success" and held:
             self.side = held
-            self.steps = list(PLACE)
+            self.steps = RELAY + PICK + PLACE if relay else list(PLACE)
         else:
             self.side = None
-            self.steps = PICK + (PLACE if self.goal == "success" else [])
+            self.steps = (PICK + RELAY + PICK + PLACE if relay
+                          else PICK + (PLACE if self.goal == "success" else []))
+        if relay:
+            self.relay, self.forced, self.placer = relay
+            print(f"  Recovery: relay: the {self.forced} arm sets the {self.obj} down at "
+                  f"({self.relay[0]:.2f}, {self.relay[1]:.2f}) for the {self.placer} arm", flush=True)
         self.index, self.step_t, self.wait_t, self.entered = 0, 0.0, 0.0, False
         self.aim, self.aim_heading = None, None
         self.message = f"attempt {self.attempt + 1} of {1 + RETRIES}"
@@ -203,10 +228,11 @@ class Recovery:
                     # reach, the next one uses the other arm.
                     order = [nearer, "right" if nearer == "left" else "left"]
                     if self.monitor.understood():  # also when only picking it up: it goes there next
-                        able = [s for s in order if self._reaches(env, s, position + [0, 0, ABOVE_OBJECT_M])
-                                and self._reaches(env, s, self.monitor.spot(env, obj) + [0, 0, ABOVE_PLACE_M])]
+                        spot = self.monitor.spot(env, obj)
+                        able = [s for s in order if self._picks(env, s, position)
+                                and self._place_height(env, s, spot) is not None]
                         order = able + [s for s in order if s not in able]
-                    self.side = order[0] if not self.other_arm else order[1]
+                    self.side = self.forced or (order[0] if not self.other_arm else order[1])
                     t.active = self.side
                     t.grip[self.side] = 1.0
                     hand = t.targets[self.side][0]
@@ -226,7 +252,9 @@ class Recovery:
                 destination = clip(grasp + [0, 0, self.approach_m] if name == "approach" else grasp)
                 if first or np.linalg.norm(grasp - self.aim) > REAIM_M:  # the object moved: aim again
                     self.aim = grasp
-                    if not first and name == "descend":
+                    if not first and name == "descend" and long_axis(env, obj) is not None:
+                        # An elongated object that slid must be grasped across its new direction: start again. A round
+                        # one (apple, orange, a standing bottle) is followed down where it went.
                         raise Failed(f"the {obj} moved while the hand was going down")
                     t.destinations[self.side] = destination
                 return self._arrived(destination, name)
@@ -243,15 +271,25 @@ class Recovery:
                             break
                     t.destinations[self.side] = self.aim
                 return self._arrived(self.aim, name)
-            if name == "transport":
+            if name == "switch":  # the relay is done: the other arm picks the object up from the relay spot
+                self.side, self.forced = self.placer, self.placer
+                self.aim, self.aim_heading = None, None
+                return True
+            if name in ("transport", "relay"):
                 if first:
-                    # Its goal: the bowl / plate, or its spot beside an item (as the item is now) or on the table.
-                    target = self.monitor.spot(env, obj)
+                    # Its goal: the bowl / plate, or its spot beside an item (as the item is now) or on the table;
+                    # for a relay, the relay spot on the table.
+                    target = self.relay if name == "relay" else self.monitor.spot(env, obj)
                     # As a click on the target does (teleop.clicked): set down until the object's bottom reaches it.
                     height = t.grasp_height.get(self.side)
                     self.release = height - 0.02 if height is not None else RELEASE_M
                     self.place_point = target
-                    self.aim = clip(target + [0, 0, max(ABOVE_PLACE_M, self.release + 0.05)])
+                    # Above it at the first height the arm reaches: high enough for the object to clear the target's
+                    # rim if it can, else lower (a target right in front of the robots' base).
+                    heights = [max(h, self.release + 0.05) for h in PLACE_HEIGHTS_M] + list(PLACE_HEIGHTS_M)
+                    above = next((h for h in heights if self._reaches(env, self.side, target + [0, 0, h])),
+                                 max(ABOVE_PLACE_M, self.release + 0.05))
+                    self.aim = clip(target + [0, 0, above])
                     t.active = self.side
                     t.destinations[self.side] = self.aim
                 return self._arrived(self.aim, name)
@@ -288,7 +326,46 @@ class Recovery:
         rng = np.random.default_rng(1)
         seeds = [t.joints[side]] + [rng.uniform(limits[:, 0], limits[:, 1]) for _ in range(5)]
         point = clip(point)
-        return any(t._ik(env, side, (point, yaw(turn) @ DOWN), seeds)[1] for turn in (0.0, np.pi / 2))
+        return any(t._ik(env, side, (point, yaw(turn) @ DOWN), seeds)[1] for turn in REACH_TURNS)
+
+    def _picks(self, env, side, position):
+        """Whether the arm can hold its hand pointing down above an object at one of the approach heights."""
+        return any(self._reaches(env, side, position + [0, 0, h]) for h in APPROACH_HEIGHTS_M)
+
+    def _relay_plan(self, env, held):
+        """A relay when no arm reaches both the object and its goal: (spot, first arm, second arm), or None (one arm
+        can do it alone, or no relay spot works)."""
+        position, goal = env.data.body(self.obj).xpos.copy(), self.monitor.spot(env, self.obj)
+        pickers = [held] if held else [s for s in SIDES if self._picks(env, s, position)]
+        if not pickers or any(self._place_height(env, s, goal) is not None for s in pickers):
+            return None
+        for first in pickers:
+            second = "left" if first == "right" else "right"
+            if self._place_height(env, second, goal) is None:
+                continue
+            spot = self._relay_spot(env, first, second, position, goal)
+            if spot is not None:
+                return spot, first, second
+        return None
+
+    def _relay_spot(self, env, first, second, position, goal):
+        """A free spot on the table the first arm can set the object down at and the second can pick it up from;
+        the one nearest the middle of the object and its goal first."""
+        others = [env.data.body(n).xpos[:2] for n in ITEMS if n != self.obj]
+        middle = (position[:2] + goal[:2]) / 2
+        for x, y in sorted(RELAY_GRID, key=lambda p: np.linalg.norm(np.array(p) - middle)):
+            xy = np.array([x, y])
+            if min(np.linalg.norm(xy - o) for o in others) < RELAY_CLEAR_M:
+                continue
+            table, resting = np.r_[xy, TABLE_Z], np.r_[xy, position[2]]
+            if self._place_height(env, first, table) is not None and self._picks(env, second, resting):
+                return table
+        return None
+
+    def _place_height(self, env, side, spot):
+        """The first height of PLACE_HEIGHTS_M above a target at which the arm can hold its hand pointing down, or
+        None when it reaches none."""
+        return next((h for h in PLACE_HEIGHTS_M if self._reaches(env, side, spot + [0, 0, h])), None)
 
     def _grasp_point(self, env, obj):
         grasp = env.data.body(obj).xpos + [0, 0, grasp_dz(env, obj)]
@@ -349,7 +426,15 @@ class Recovery:
         t = self.teleop
         if self.side in t.destinations:
             return False
-        if np.linalg.norm(t.targets[self.side][0] - destination) > ARRIVED_M:
+        hand = t.targets[self.side][0]
+        if name in ("transport", "relay", "set_down") and self.place_point is not None:
+            # At the edge of the arm's reach (a target right in front of the robots' base) the hand may stop short:
+            # close enough above the target, the object is set down (or let go a little higher) from there.
+            sideways = np.linalg.norm(hand[:2] - self.place_point[:2])
+            high = hand[2] - (self.place_point[2] + self.release)
+            if sideways < PLACE_SLACK_M and (name != "set_down" or high < DROP_M):
+                return self._joints_done() and self._settled()
+        if np.linalg.norm(hand - destination) > ARRIVED_M:
             # teleop dropped the destination: IK cannot reach it (reach or joint limit), or it lies outside BOUNDS.
             raise Failed(f"{name}: the {self.side} arm cannot reach there")
         return self._joints_done() and self._settled()

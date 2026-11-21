@@ -80,6 +80,7 @@ marked random are then not drawn (they need the seed).
 | Mode | What happens |
 | --- | --- |
 | **Data collection** (default) | Dream-1; when the failure monitor (`monitor.py`) sees it fail, the recovery script (`recovery.py`) takes over and gives the arms back once it has recovered. No human input. If the script gives up, or the object falls off the table, the run ends there: recover it by hand later in **Recordings**. |
+| **Rule-based only** | The recovery script (`recovery.py`) does the whole task from the first step, object by object for a goal scene: no Dream-1, so no API key or credits. It runs in simulated time, faster than real time (about 2.5x on an M3), and the settings that apply are the script's speed and ending once the task is done. If the script gives up, the run ends (recover it later in **Recordings**). YAM with all six items only. |
 | **Test** | Dream-1 and you take turns with `T` at any time; when Dream-1 fails the arms are held for you. |
 | **Human only** | You have the arms from the start (no API key needed); `T` hands them to Dream-1 from the scene as you left it. |
 | **Dream-1 only** | No monitor, script or human control. OpenYAM, and custom layouts without all six items, always run this way. |
@@ -137,7 +138,7 @@ Its runs are named "original of <batch>" (`meta.json`: `original_of`), and with 
 compares the two success rates.
 
 Switch to **Batch**. Pick what each episode does (**Data collection**: Dream-1, then the recovery script on a
-failure; or **Dream-1 only**), how many run **at once** (1 to 4), the number of episodes and the seconds per
+failure; **Rule-based only**: the script from the start, no API key needed; or **Dream-1 only**), how many run **at once** (1 to 4), the number of episodes and the seconds per
 episode, and the seeds: **From the seed**
 (one train seed is the whole batch: each episode's own seed is derived from it, `seed_web.episode_seed`, so the
 same seed gives the same episodes again and other seeds share none) or **Eval set (50)** (the fixed evaluation seeds, easy / medium / hard). Each
