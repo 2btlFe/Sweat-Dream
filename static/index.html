@@ -91,8 +91,13 @@
       <button id="stop" class="stop" hidden>Stop</button>
     </div>
     <div class="examples" id="examples"></div>
-    <label class="check"><input type="checkbox" id="teleopOnly"> Human only (no Dream-1, no API key or credits)</label>
-    <div class="muted" style="font-size:13px;margin-top:6px">A Dream-1 run is <b>data collection</b>: Dream-1 works, and when it fails the
+    <div class="check" style="flex-wrap:wrap;gap:14px">
+      <span>Mode:</span>
+      <label><input type="radio" name="runMode" value="collect" checked> Data collection <span class="muted">(Dream-1 → recovery script, no human)</span></label>
+      <label><input type="radio" name="runMode" value="test"> Test <span class="muted">(Dream-1 ⇄ human with T; a failure asks you)</span></label>
+      <label><input type="radio" name="runMode" value="human"> Human only <span class="muted">(T hands to Dream-1; no credits until then)</span></label>
+    </div>
+    <div class="muted" style="font-size:13px;margin-top:6px">In <b>Data collection</b> mode Dream-1 works, and when it fails the
       recovery script takes over; no human. If the script cannot recover, the run ends there and is saved as a failure:
       recover it by hand afterwards in <b>Recordings</b> (below).</div>
     <label class="check"><input type="checkbox" id="record" checked> Record the run to <code>episodes/</code> (states, actions, who controlled each step, cameras)</label>
@@ -271,7 +276,8 @@ async function refresh() {
 $("run").onclick = async () => {
   document.activeElement.blur();  // so the keys go to the robot, not to the box last clicked
   try {
-    await api("/api/run", { task: $("task").value, seconds: $("seconds").value, teleop_only: $("teleopOnly").checked, record: $("record").checked });
+    const mode = document.querySelector("input[name=runMode]:checked").value;
+    await api("/api/run", { task: $("task").value, seconds: $("seconds").value, mode, record: $("record").checked });
     $("live").hidden = true;
     $("placeholder").hidden = false;
     $("placeholder").textContent = "Starting the simulator… (the first picture takes a few seconds)";

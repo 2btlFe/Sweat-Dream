@@ -87,7 +87,7 @@ You can also take over any time with `T` / **Take over**.
 `Space` gripper, `Tab` switch arm,
 `V` point down, `H` (or **Home**) arm back to its start pose, `T` take over / give back.
 
-- **Human only**: tick it before **Run**. Dream-1 is not called, so no API key or credits are needed.
+- **Human only**: choose it before **Run**. Dream-1 is not called, so no API key or credits are needed.
   Press `T` (or **Hand to Dream-1**) to hand the arms to Dream-1 from the scene as you left it, for the time that
   is left; from then on it is a Dream-1 run (credits are used) and `T` takes over / gives back as usual.
 - The arms start level and stay still until you move them. Clicking or dragging points the hand down first; with
@@ -109,6 +109,14 @@ Every run is saved to `episodes/<id>/` (untick **Record** to skip it), whoever c
 The physics state makes any moment restorable exactly: `mujoco.mj_setState(model, data, physics[k], mjSTATE_INTEGRATION)`
 then `env.step(action[k])`, `env.step(action[k+1])`, … reproduces the recording (0 mm error, checked). The layout of
 `steps.npz` and `meta.json` follows the team's earlier recorder (commit 98d9797) and adds to it.
+
+## Run modes
+
+| Mode | What happens |
+| --- | --- |
+| **Data collection** (default) | Dream-1, then the recovery script when it fails; no human input. A failure the script cannot recover ends the run. |
+| **Test** | Dream-1 and you take turns with `T` at any time; when Dream-1 fails the arms are held for you (no script). |
+| **Human only** | You have the arms from the start; `T` hands them to Dream-1 (credits are used from then on). |
 
 ## Data collection, then human recovery
 

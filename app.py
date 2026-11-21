@@ -127,7 +127,7 @@ class Runner:
     def running(self):
         return self.process is not None and self.process.poll() is None
 
-    def start(self, task, seconds, teleop_only=False, record=True, resume=None, collect=False):
+    def start(self, task, seconds, teleop_only=False, record=True, resume=None, collect=False, recover="script"):
         """@param resume (episode id, step) to restart a recorded run there with a human in control, or None."""
         with self.lock:
             if self.running():
@@ -147,11 +147,14 @@ class Runner:
                 teleop_only, collect = True, False
             if collect and not teleop_only:
                 command.append("--collect")
+            elif recover == "human":
+                command += ["--recover", "human"]  # test runs: a failure asks the human at once
             self.process = subprocess.Popen(
                 command, cwd=str(HERE), env=env, stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
             self.task, self.teleop_only, self.started, self.ended = task, teleop_only, time.time(), None
             self.seconds, self.record, self.resume, self.collect = seconds, record, resume, collect
+            self.recover = recover
             self.log.clear()
             threading.Thread(target=self._read, args=(self.process,), daemon=True).start()
 
@@ -195,7 +198,7 @@ class Runner:
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait()
-        self.start(self.task, self.seconds, self.teleop_only, self.record, self.resume, self.collect)
+        self.start(self.task, self.seconds, self.teleop_only, self.record, self.resume, self.collect, self.recover)
 
     def send_keys(self, message):
         """Pass keyboard input to the running sim.py (one JSON line on its stdin)."""
@@ -281,9 +284,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "Type a task, such as: put apple into the bowl"}, 400)
             try:
                 seconds = min(900, max(10, int(float(body.get("seconds") or 60))))
-                RUNNER.start(task, seconds, teleop_only=bool(body.get("teleop_only")),
-                             record=body.get("record", True) is not False,
-                             collect=body.get("collect", True) is not False)
+                # Run modes: "collect" Dream-1 then the recovery script, no human (data collection, the default);
+                # "test" Dream-1 <-> human with T, a failure asks the human; "human" a human from the start.
+                mode = body.get("mode") or ("human" if body.get("teleop_only") else "collect")
+                if mode not in ("collect", "test", "human"):
+                    return self.send_json({"error": "Unknown run mode."}, 400)
+                RUNNER.start(task, seconds, teleop_only=mode == "human", record=body.get("record", True) is not False,
+                             collect=mode == "collect", recover="human" if mode == "test" else "script")
             except (ValueError, TypeError):
                 return self.send_json({"error": "The time limit must be a number."}, 400)
             except RuntimeError as error:
