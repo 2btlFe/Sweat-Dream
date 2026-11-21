@@ -33,6 +33,7 @@ app.py starts this for every run. Environment variables connect it to the websit
   SCENE_JSON  a custom layout: which objects are on the table and where: {"items": {"apple": [x, y], ...}} in
               metres (world frame); objects left out are removed. Without it, the seed's layout is used.
   BATCH_ID    set by a batch: stored in meta.json
+  ORIGINAL_OF set by an "original" batch (Dream-1 only, the same episodes as that batch): stored in meta.json
   JUDGE_SPEC  what the run is judged on (judge.py), as JSON, e.g. {"type": "pick_place", "pairs": [{"object":
               "apple", "target": "bowl"}]} or {"type": "lift", "object": "any"} (meta.json "judge"); without it
               the task's words give it (JUDGE_PAIRS, the older pairs-only form, is still read)
@@ -740,7 +741,7 @@ def main():
             "ood_random": args.ood_random, "ood": None,
             "started_at": datetime.now().isoformat(timespec="seconds"), "stopped_by_user": False,
             "error": None, "error_type": None, "scene": SCENE or None,
-            "batch_id": os.environ.get("BATCH_ID"),
+            "batch_id": os.environ.get("BATCH_ID"), "original_of": os.environ.get("ORIGINAL_OF") or None,
             "judge": (json.loads(os.environ["JUDGE_SPEC"]) if os.environ.get("JUDGE_SPEC")
                       else {"pairs": json.loads(os.environ["JUDGE_PAIRS"])} if os.environ.get("JUDGE_PAIRS") else None)}
 

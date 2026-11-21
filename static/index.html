@@ -215,6 +215,10 @@
   .bar { height: 10px; background: var(--line); border-radius: 999px; overflow: hidden; }
   .bar div { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
   .counts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 13px; }
+  video.view { background: #080c10; object-fit: contain; }
+  .cam-tabs { display: inline-flex; gap: 4px; }
+  .cam-tabs button { padding: 2px 8px; font-size: 11px; background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; }
+  .cam-tabs button.on { color: var(--accent); border-color: var(--accent); }
   .batch-live { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
   .batch-live:empty { display: none; }
   .batch-live figure { margin: 0; }
@@ -551,13 +555,14 @@
       <summary>Runs</summary>
       <div class="hrow" style="justify-content: space-between">
         <select id="runFilter" aria-label="Which runs" style="width: auto; max-width: 100%"></select>
-        <span class="hrow"><button id="saveLabels" class="ghost small">Save labels</button><button id="deleteShown" class="ghost small danger" title="Delete every run shown in the list, with its recording">Delete shown</button></span>
+        <span class="hrow"><button id="saveLabels" class="ghost small">Save labels</button><button id="deleteShown" class="ghost small danger" title="Delete every run shown in the list, with its recording">Delete shown</button><button id="runOriginal" class="ghost small" hidden title="Run this batch's episodes again with Dream-1 alone: same seeds (object layout), task, judge, scene settings and time limit; no failure monitor, recovery script or human">Run as original</button></span>
       </div>
       <div class="muted small" id="runSummary" style="margin-top: 8px"></div>
       <div class="dataset-bar" role="group" aria-label="Dataset">
         <span class="small"><b id="pickedCount">0</b> picked for a dataset</span>
         <button class="ghost small" id="pickSuccesses" title="Pick every success the list shows">+ Add successes</button>
         <button class="ghost small" id="pickClear">Clear</button>
+        <button class="ghost small danger" id="deletePicked" title="Delete the picked runs, with their recordings">Delete picked</button>
         <button class="small" id="saveDataset" style="margin-left: auto" title="Choose a folder on this computer and save the picked runs there">Save dataset…</button>
       </div>
       <div class="dataset-note" id="datasetNote"></div>
@@ -567,8 +572,12 @@
       </table>
       <div id="detail" class="detail" hidden>
         <div>
+          <video id="detailVideo" class="view" controls muted playsinline preload="metadata" hidden></video>
           <img id="detailImage" class="view" alt="Last frame">
-          <div class="legend"><span>Last frame</span></div>
+          <div class="legend"><span id="detailMedia">Last frame</span>
+            <span class="cam-tabs" id="detailCams" hidden role="group" aria-label="Recording camera">
+              <button data-cam="top" class="on">Top</button><button data-cam="left">Left wrist</button><button data-cam="right">Right wrist</button><button data-cam="last">Last frame</button>
+            </span></div>
         </div>
         <div>
           <div id="detailHead"></div>
@@ -802,8 +811,18 @@ async function loadRuns() {
 
 const batchName = id => {
   const m = /^b(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/.exec(id || "");
-  return m ? `Batch ${when(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`)}` : `Batch ${id}`;
+  const name = m ? `Batch ${when(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`)}` : `Batch ${id}`;
+  const of = originalOf(id);  // an "original" batch: Dream-1 alone on another batch's episodes
+  return of ? `${name} · original of ${batchName(of)}` : name;
 };
+const originalOf = id => (batchState?.id === id && batchState.original_of)
+  || runs.find(r => r.batch_id === id && r.original_of)?.original_of || null;
+/** Success over valid runs of a batch, as "62% (5/8)". */
+function batchRate(id) {
+  const list = runs.filter(r => r.batch_id === id), ok = list.filter(r => finalLabel(r) === "success").length;
+  const valid = ok + list.filter(r => finalLabel(r) === "failure").length;
+  return valid ? `${Math.round(100 * ok / valid)}% (${ok}/${valid})` : "no valid runs";
+}
 // A person's label wins over the rules' verdict; the rules' verdict stays visible next to it.
 const handLabel = run => run.label?.source === "human" ? run.label : null;
 const finalLabel = run => handLabel(run)?.label || verdict(run).label;
@@ -838,6 +857,16 @@ function renderRuns() {
       + (byHand ? ` · ${byHand} by hand (${list.filter(disagrees).length} differ from the rules)` : "")
     : "";
   $("deleteShown").disabled = !list.length;
+  // A batch picked in the filter: run its episodes again as the original (Dream-1 alone); with its pair, compare them.
+  const isBatch = /^b\d{8}-\d{6}$/.test(runFilter);
+  $("runOriginal").hidden = !isBatch || !!originalOf(runFilter);
+  if (isBatch) {
+    const of = originalOf(runFilter), pair = of || runs.find(r => r.original_of === runFilter)?.batch_id;
+    if (pair) {
+      const [method, original] = of ? [of, runFilter] : [runFilter, pair];
+      $("runSummary").textContent += ` · same seeds: ours ${batchRate(method)} vs original ${batchRate(original)}`;
+    }
+  }
   showPicked();
   if (!list.length) { $("runs").innerHTML = '<tr><td colspan="6" class="muted">No runs yet.</td></tr>'; $("detail").hidden = true; return; }
   $("runs").innerHTML = list.map(run => {
@@ -862,12 +891,29 @@ function renderRuns() {
   renderDetail();
 }
 
+/** A recorded run plays its camera video (top / left / right wrist); otherwise, or on "Last frame", its last frame. */
+let detailCam = "top";
+function showDetailMedia(run) {
+  const video = $("detailVideo"), img = $("detailImage"), recorded = !!run.episode;
+  const useVideo = recorded && detailCam !== "last";
+  $("detailCams").hidden = !recorded;
+  document.querySelectorAll("#detailCams [data-cam]").forEach(b => b.classList.toggle("on", b.dataset.cam === (recorded ? detailCam : "last")));
+  $("detailMedia").textContent = useVideo ? "Recording" : "Last frame";
+  const src = useVideo ? `/api/episodes/${run.episode}/${detailCam}.mp4` : "";
+  if (video.dataset.src !== src) { video.dataset.src = src; if (src) video.src = src; else video.removeAttribute("src"); video.load(); }
+  const last = `/api/runs/${run.id}/last.jpg`;
+  if (img.dataset.src !== last) { img.dataset.src = last; img.src = last; }
+  video.hidden = !useVideo;
+  img.hidden = useVideo;
+}
+document.querySelectorAll("#detailCams [data-cam]").forEach(b => b.onclick = () => { detailCam = b.dataset.cam; renderDetail(); });
+
 async function renderDetail() {
   const run = shownRuns().find(r => r.id === selected);
   $("detail").hidden = !run;
   if (!run) return;
   const v = verdict(run);
-  $("detailImage").src = `/api/runs/${run.id}/last.jpg`;
+  showDetailMedia(run);
   const extra = [run.batch_id ? batchName(run.batch_id) : "Single run",
                  run.layout === "custom" ? "custom layout" : run.seed != null ? `seed ${run.seed}${run.split === "eval" ? " (eval)" : ""}` : "",
                  run.robot && run.robot !== "yam" ? (simCatalog?.robots[run.robot] || run.robot) : "",
@@ -996,6 +1042,7 @@ function showPicked() {
   $("pickedCount").title = `success ${n("success")} · failure ${n("failure")} · invalid ${n("invalid")}`;
   $("saveDataset").disabled = !chosen.length;
   $("pickClear").disabled = !chosen.length;
+  $("deletePicked").disabled = !chosen.length;
 }
 $("pickSuccesses").onclick = () => {
   for (const run of shownRuns()) if (finalLabel(run) === "success") picked.add(run.id);
@@ -1145,11 +1192,23 @@ async function deleteRuns(ids, what) {
   } catch (err) { showError(err); }
 }
 $("deleteRun").onclick = () => selected && deleteRuns([selected], "this run");
+$("runOriginal").onclick = async () => {
+  const id = runFilter, n = runs.filter(r => r.batch_id === id && r.seed != null).length;
+  if (!(await ask(`Run the ${n} episodes of ${batchName(id)} again with Dream-1 alone (no failure monitor, recovery script or human)? Same seeds, so the same object layouts, task and settings.`, "Run original"))) return;
+  try {
+    await api("/api/batch", { original_of: id, workers: Number($("batchWorkers").value) || 1 });
+    setMode("batch"); followBatch = true; refresh();
+  } catch (err) { showError(err, "Original"); }
+};
 $("deleteShown").onclick = () => {
   const ids = shownRuns().map(r => r.id);
   deleteRuns(ids, `the ${ids.length} run${ids.length > 1 ? "s" : ""} shown ("${$("runFilter").selectedOptions[0]?.text || "All runs"}")`);
 };
 $("deleteRec").onclick = () => chosen && deleteRuns([chosen.id], "this recording and its run");
+$("deletePicked").onclick = () => {
+  const ids = runs.filter(r => picked.has(r.id)).map(r => r.id);
+  deleteRuns(ids, `the ${ids.length} picked run${ids.length > 1 ? "s" : ""}`);
+};
 
 $("saveLabels").onclick = async () => {
   try {

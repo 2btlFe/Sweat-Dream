@@ -585,6 +585,32 @@ MAX_WORKERS = 4  # episodes at once; 3 at once ran like one at a time on an M3 (
 NO_CAPACITY_TRIES = 5  # Dream-1 "at max capacity" (DA-2000 NO_CAPACITY): the episode is tried again this many times
 
 
+BATCH_ID_RE = re.compile(r"^b[0-9]{8}-[0-9]{6}$")
+
+
+def original_episodes(batch_id):
+    """The episodes of a finished batch, to run again as the baseline: one task per seed, in seed order, from each
+    run's meta.json (task, judge spec, seed), with the batch's scene settings, random settings and time limit.
+    @return (tasks, seeds, seconds, changes, random_names, split)
+    @throws ValueError When the batch is unknown or its runs disagree on the scene settings."""
+    if not BATCH_ID_RE.match(batch_id):
+        raise ValueError("Unknown batch.")
+    metas = [read_json(d / "meta.json", {}) for d in RUNS.iterdir() if run_dir(d.name)] if RUNS.is_dir() else []
+    metas = sorted((m for m in metas if m.get("batch_id") == batch_id and m.get("seed") is not None),
+                   key=lambda m: m["seed"])
+    if not metas:
+        raise ValueError("That batch has no runs with a seed.")
+    first = metas[0]
+    if any(m.get("ood_random") != first.get("ood_random") for m in metas):
+        raise ValueError("The batch's runs differ in their random settings.")
+    # Each run kept the settings in effect, the seed's draws included; the same seed draws them the same again.
+    changes = ood.validate(first.get("ood") or {})
+    random_names = list(first.get("ood_random") or [])
+    tasks = parse_task_list([{"prompt": m["task"], "judge": m.get("judge")} for m in metas], FULL_TABLE)
+    seconds = min(300, max(10, int(float(first.get("seconds") or 60))))
+    return tasks, [int(m["seed"]) for m in metas], seconds, changes, random_names, first.get("split") or "train"
+
+
 class Batch:
     """Many episodes in the background, `workers` at a time: no camera view, one seed each (its start scene, and the
     scene settings marked random drawn from it), and a label from the rules as they were when the batch started.
@@ -607,7 +633,7 @@ class Batch:
             return set(self.active)
 
     def start(self, tasks, seeds, seconds, changes, random_names, split, robot=(), mode="plain", workers=1,
-              collection=None):
+              collection=None, original_of=None):
         """@param seeds One seed per episode. @param changes, random_names The scene settings, and the ones drawn
         from each seed. @param split "train" or "eval" (shown on the page). @param workers Episodes at once."""
         if self.running() or RUNNER.running():
@@ -619,7 +645,7 @@ class Batch:
         self.info = {"id": "b" + datetime.now().strftime("%Y%m%d-%H%M%S"), "tasks": tasks, "total": len(seeds),
                      "seconds": seconds, "seeds": seeds, "seed": seeds[0], "split": split, "ood": changes,
                      "ood_random": random_names, "rules": current_rules(), "robot": list(robot), "mode": mode,
-                     "workers": workers, "collection": collection, "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
+                     "workers": workers, "collection": collection, "original_of": original_of, "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
                      "started": time.time(), "ended": None, "current": None, "active": [], "stopped_reason": None,
                      "durations": [], "invalid_in_a_row": 0}
         self.thread = threading.Thread(target=self._supervise, daemon=True)
@@ -659,7 +685,8 @@ class Batch:
         env = {**os.environ, "PYTHONUTF8": "1", "PYTHONUNBUFFERED": "1", "PYTHONWARNINGS": "ignore",
                "STOP_FILE": str(stop_file), "RUN_DIR": str(RUNS / run_id), "BATCH_ID": info["id"],
                "JUDGE_SPEC": json.dumps(task["judge"]),
-               "LIVE_FRAME": str(live_frame(run_id))}  # its camera view, for the page (/api/live.jpg?run=...)
+               "LIVE_FRAME": str(live_frame(run_id)),  # its camera view, for the page (/api/live.jpg?run=...)
+               **({"ORIGINAL_OF": info["original_of"]} if info.get("original_of") else {})}
         if PAGE_KEY["value"]:
             env["DREAM_API_KEY"] = PAGE_KEY["value"]
         command = [sys.executable, str(HERE / "sim.py"), task["prompt"], "--seconds", str(info["seconds"]),
@@ -891,6 +918,21 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": str(error)}, 400)
         if path == "/api/episodes":
             return self.send_json({"episodes": list_episodes()})
+        m = re.fullmatch(r"/api/episodes/([^/]+)/(top|left|right)\.mp4", path)
+        if m and ID_RE.match(m.group(1)):  # a recording's camera video, for the page's player (byte ranges for seeking)
+            try:
+                data = (EPISODES / m.group(1) / f"{m.group(2)}.mp4").read_bytes()
+            except OSError:
+                return self.send_json({"error": "no video for that recording"}, 404)
+            r = re.fullmatch(r"bytes=(\d*)-(\d*)", self.headers.get("Range") or "")
+            if r and (r.group(1) or r.group(2)):
+                start = int(r.group(1)) if r.group(1) else max(0, len(data) - int(r.group(2)))
+                end = min(int(r.group(2)), len(data) - 1) if r.group(1) and r.group(2) else len(data) - 1
+                if start > end:
+                    return self.send(b"", "video/mp4", 416, headers={"Content-Range": f"bytes */{len(data)}"})
+                return self.send(data[start:end + 1], "video/mp4", 206,
+                                 headers={"Content-Range": f"bytes {start}-{end}/{len(data)}", "Accept-Ranges": "bytes"})
+            return self.send(data, "video/mp4", headers={"Accept-Ranges": "bytes"})
         m = re.fullmatch(r"/api/episodes/([^/]+)/frame\.jpg", path)
         if m and ID_RE.match(m.group(1)):
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
@@ -1106,6 +1148,22 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "That does not look like an API key."}, 400)
             PAGE_KEY["value"] = key or None
             return self.send_json(key_status())
+        if self.path == "/api/batch" and body.get("original_of"):
+            # The baseline: the same episodes as a finished batch (each one's seed, so the same object layout, task,
+            # judge, scene settings and time limit), run by Dream-1 alone: no failure monitor, recovery script or human.
+            try:
+                tasks, seeds, seconds, changes, random_names, split = original_episodes(str(body["original_of"]))
+                robot = robot_args(changes, ["--ood-random"] if random_names else [], None)
+                workers = int(body.get("workers") or 1)
+                if not 1 <= workers <= MAX_WORKERS:
+                    raise ValueError(f"Run 1 to {MAX_WORKERS} episodes at once.")
+                BATCH.start(tasks, seeds, seconds, changes, random_names, split, robot, "plain", workers, None,
+                            original_of=str(body["original_of"]))
+            except (ValueError, TypeError, AttributeError) as error:
+                return self.send_json({"error": str(error)}, 400)
+            except RuntimeError as error:
+                return self.send_json({"error": str(error)}, 409)
+            return self.send_json(RUNNER.status())
         if self.path == "/api/batch":
             try:
                 tasks = parse_task_list(body.get("tasks"), FULL_TABLE)  # a seed's scene has all six items

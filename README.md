@@ -41,7 +41,8 @@ Open http://localhost:8000.
 5. Type a task such as `put apple into the bowl` → **Run**. The note under the task says what the run is judged on;
    open-ended tasks (such as "Move an object to the center of the workspace") run but are not judged.
 6. Set the distance, release, and still-time rules. Existing runs are re-evaluated immediately.
-7. Select a run to inspect its final frame, checks, and distance chart. **Save labels** writes the current
+7. Select a run to inspect it: a recorded run plays its camera video (**Top / Left wrist / Right wrist**,
+   or **Last frame**), with its checks and distance chart. **Save labels** writes the current
    server-side verdicts to `label.json`.
 8. **Your label**: decide a run yourself with **Success / Failure / Invalid** (keys **1 / 2 / 3**; **0** goes back to
    the rules), with an optional note. **J / K** move to the next / previous run. A label set by hand wins over the
@@ -66,7 +67,8 @@ Open http://localhost:8000.
    Runs without a recording (Plain mode) and recordings shorter than 1.6 s are left out (`lerobot_export.py`).
 10. **Delete**: **Delete this run** (in a run's detail), **Delete shown** (every run the list shows, e.g. one batch) or
    **Delete** in Recordings removes a finished run for good: `runs/<id>` and its recording `episodes/<id>`. The page
-   asks first; the run going now is never deleted.
+   asks first; the run going now is never deleted. **Delete picked** (next to Save dataset) removes the runs picked
+   with **+**, so several unwanted episodes go at once.
 
 **Custom layout** (optional, single runs): tick *Use my own layout*, pick the objects and targets on the table and
 drag them on the map (the robot is YAM, the only one in this simulator). The map starts from the seed's scene (as
@@ -123,6 +125,12 @@ recovery and leave out the steps that led into the failure. From the command lin
 like any other run (Stop is its normal end).
 
 ### Batch (many episodes in the background)
+
+**Run as original** (the baseline): pick a finished batch in the run list's filter and press **Run as original**. It
+runs that batch's episodes again with Dream-1 alone (no failure monitor, recovery script or human): the same seeds,
+so the same object layouts, with the same task, judge, scene settings, random settings and time limit (from each run's
+`meta.json`). Its runs are named "original of <batch>" (`meta.json`: `original_of`), and with either batch picked the
+summary compares the two success rates on the same seeds.
 
 Switch to **Batch**. Pick what each episode does (**Data collection**: Dream-1, then the recovery script on a
 failure; or **Dream-1 only**), how many run **at once** (1 to 4), the number of episodes and the seconds per
