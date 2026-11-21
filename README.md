@@ -2,6 +2,39 @@
 
 Run Dream-1 in the simulator, set success rules, collect episodes, and save reproducible labels.
 
+## Dream Labs fine-tuning dataset pipeline
+
+`finetune_pipeline.py` builds LeRobot v2.1 from recorded YAM episodes and uses Dream Labs' own local validator. Install with `pip install dreamlabs` (the client, PyArrow and PyAV are required). **No API key or credits are needed to build or validate.**
+
+First test the format with synthetic data; this contains artificial pixels and actions and is **only for plumbing checks**:
+
+```bash
+python finetune_pipeline.py dummy /tmp/sweat-dream-dummy
+python finetune_pipeline.py validate /tmp/sweat-dream-dummy
+```
+
+After each teammate copies their complete `runs/` and `episodes/` folders to separate directories on one laptop, build a real dataset from runs whose saved `label.json` says `success`:
+
+```bash
+python finetune_pipeline.py build /tmp/sweat-dream-train /path/member1 /path/member2 /path/member3
+python finetune_pipeline.py validate /tmp/sweat-dream-train
+```
+
+The converter handles one episode at a time, keeps tasks and source paths in `provenance.json`, and requires all episodes to have YAM's 14-value state/action layout and three synchronized camera videos. Review labels and videos before training. Keep held-out evaluation episodes outside the input directories; success-only training data is not an evaluation set. Data from other robot embodiments needs a separate dataset and config.
+
+Remote steps use the API key in `~/.dreamlabs/credentials` or `DREAM_API_KEY`, under the account that owns the training credit. They run **only when you call each command**. Register the YAM embodiment once, upload the real dataset, wait for `processed`, then submit a job:
+
+```bash
+python finetune_pipeline.py register sweat-yam
+python finetune_pipeline.py upload /tmp/sweat-dream-train sweat-dream-v1 --embodiment YOUR_USERNAME/sweat-yam
+python finetune_pipeline.py status ds_ID --dataset
+python finetune_pipeline.py queue
+python finetune_pipeline.py train YOUR_USERNAME/sweat-dream-v1 sweat-v1 --steps 500
+python finetune_pipeline.py status JOB_ID
+```
+
+The `train` command queues a credit-consuming job. A dummy dataset can pass format validation but should not be used for meaningful training; save the credits for real, reviewed demonstrations. The resulting checkpoint belongs to the account used for upload and training.
+
 ## Install
 
 ```bash
