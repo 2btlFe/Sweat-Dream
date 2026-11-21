@@ -124,6 +124,11 @@
   .errbar pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 0; }
   .errbar .close { grid-column: 2; grid-row: 1; align-self: start; }
   fieldset.bad { border-color: var(--danger) !important; }
+  /* in-page confirm / notice (window.confirm and alert do nothing in some embedded browsers) */
+  dialog.ask { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); padding: 18px 20px; max-width: 440px; }
+  dialog.ask::backdrop { background: #0008; }
+  dialog.ask p { margin: 0 0 14px; font-size: 14px; line-height: 1.5; white-space: pre-line; }
+  dialog.ask .acts { display: flex; justify-content: flex-end; gap: 8px; }
   .setup-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .robot-note { font-size: 12px; color: var(--muted); margin: -6px 0 14px; min-height: 0; }
   .robot-note:empty { display: none; }
@@ -210,6 +215,11 @@
   .bar { height: 10px; background: var(--line); border-radius: 999px; overflow: hidden; }
   .bar div { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
   .counts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 13px; }
+  .batch-live { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+  .batch-live:empty { display: none; }
+  .batch-live figure { margin: 0; }
+  .batch-live img { width: 100%; aspect-ratio: 16 / 6; object-fit: contain; background: #080c10; border-radius: 8px; display: block; }
+  .batch-live figcaption { font-size: 11px; color: var(--muted); margin-top: 3px; overflow-wrap: anywhere; }
 
   /* success rules */
   .banners { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
@@ -316,6 +326,10 @@
     <h1>Dream-1 Simulator</h1>
     <p class="sub">Set up a start scene, run Dream-1 once or in a batch, and label the runs with your own success rules.</p>
   </header>
+  <dialog class="ask" id="askDialog" aria-labelledby="askText">
+    <p id="askText"></p>
+    <div class="acts"><button class="ghost" id="askNo">Cancel</button><button id="askYes">OK</button></div>
+  </dialog>
   <div class="errbar" id="errBar" role="alert" hidden>
     <strong id="errTitle"></strong>
     <button class="ghost small close" id="errClose" aria-label="Dismiss the error">✕</button>
@@ -479,6 +493,7 @@
       <div class="bar"><div id="batchBar"></div></div>
       <div class="counts" id="batchCounts"></div>
       <div class="muted small" id="batchNow"></div>
+      <div class="batch-live" id="batchLive" aria-label="Camera view of each episode going now"></div>
       <div class="batch-end small" id="batchEnd"></div>
       <div><button class="ghost small" id="batchShow">Show these runs</button></div>
     </div>
@@ -1119,10 +1134,10 @@ document.addEventListener("keydown", e => {
 async function deleteRuns(ids, what) {
   ids = ids.filter(id => !(running && id === lastRunId));
   if (!ids.length) return;
-  if (!confirm(`Delete ${what}? Its trajectory, labels and recording are removed for good.`)) return;
+  if (!(await ask(`Delete ${what}? Its trajectory, labels and recording are removed for good.`, "Delete"))) return;
   try {
     const { deleted, skipped } = await api("/api/runs/delete", { run_ids: ids });
-    if (skipped.length) alert(`${skipped.length} not deleted (still going, or already gone).`);
+    if (skipped.length) notify(`${skipped.length} not deleted (still going, or already gone).`);
     if (deleted.includes(selected)) selected = null;
     if (chosen && deleted.includes(chosen.id)) { chosen = null; $("resumeBox").hidden = true; }
     await loadRuns();
@@ -1488,8 +1503,8 @@ function addCustomTask() {
   let judge;
   if (draft.type === "pick_place") {
     const pairs = draft.pairs.filter(p => p.object && p.target);
-    if (!pairs.length) { alert("Pick an object and a bowl or plate to judge it on."); return; }
-    if (new Set(pairs.map(p => p.object)).size !== pairs.length) { alert("Each object can be judged only once."); return; }
+    if (!pairs.length) { notify("Pick an object and a bowl or plate to judge it on."); return; }
+    if (new Set(pairs.map(p => p.object)).size !== pairs.length) { notify("Each object can be judged only once."); return; }
     judge = { type: "pick_place", pairs: pairs.map(p => ({ ...p })) };
   } else {
     judge = { type: draft.type, object: draft.object, ...(draft.type === "move_to_area" ? { area: draft.area } : {}) };
@@ -1518,10 +1533,10 @@ $("startBatch").onclick = async () => {
   const ood = isOpenYAM() ? {} : readOOD();
   if (ood === null) return;
   const count = Number($("batchCount").value);
-  if (!confirm(`Run ${count} episodes in the background (about ${estimate()} min of Dream-1 use)?`)) return;
+  // Every episode runs the task set above (its words, and its goal scene when it has one).
+  if (goalSpec && !goalRelational()) { notify("The task's goal scene has a fixed table spot, which only fits one seed: for batches, tie every object to an item (in the bowl, beside the plate, ...)."); return; }
+  if (!(await ask(`Run ${count} episodes in the background (about ${estimate()} min of Dream-1 use)?`, "Start batch"))) return;
   try {
-    // Every episode runs the task set above (its words, and its goal scene when it has one).
-    if (goalSpec && !goalRelational()) { alert("The task's goal scene has a fixed table spot, which only fits one seed: for batches, tie every object to an item (in the bowl, beside the plate, ...)."); return; }
     const tasks = [{ prompt: $("task").value.trim(), ...(goalSpec ? { judge: goalSpec } : {}) }];
     const { seed, ood_random } = seeding();
     await api("/api/batch", { tasks, count, seconds: $("batchSeconds").value, split, seed, ood, mode: batchMode,
@@ -1564,6 +1579,33 @@ function showBatch(b) {
   $("batchEnd").textContent = (b.running ? "" : b.stopped_reason || "Finished.")
     + (b.capacity_retries ? ` Dream-1 was at capacity ${b.capacity_retries} time${b.capacity_retries > 1 ? "s" : ""}: those episodes were tried again.` : "");
   $("batchEnd").classList.toggle("bad", !b.running && !!b.stopped_reason && b.stopped_reason !== "Stopped by you.");
+  showBatchLive(b.running ? (b.active || []).filter(e => e.run) : []);
+}
+
+/** One camera view per episode going now (each writes its own, /api/live.jpg?run=...), refreshed twice a second. */
+let batchLiveTimer = null;
+function showBatchLive(episodes) {
+  const box = $("batchLive"), want = new Set(episodes.map(e => e.run));
+  for (const fig of [...box.children]) if (!want.has(fig.dataset.run)) fig.remove();
+  for (const e of episodes) {
+    let fig = box.querySelector(`[data-run="${e.run}"]`);
+    if (!fig) {
+      fig = document.createElement("figure");
+      fig.dataset.run = e.run;
+      fig.innerHTML = `<img alt="Episode ${e.index} camera view"><figcaption></figcaption>`;
+      box.append(fig);
+    }
+    fig.querySelector("figcaption").textContent = `#${e.index} · seed ${e.seed} · ${e.task}`;
+  }
+  if (episodes.length && !batchLiveTimer) batchLiveTimer = setInterval(refreshBatchLive, 500);
+  if (!episodes.length && batchLiveTimer) { clearInterval(batchLiveTimer); batchLiveTimer = null; }
+}
+function refreshBatchLive() {
+  for (const fig of $("batchLive").children) {
+    const next = new Image();  // swap only when the new frame has loaded (no flicker, no broken image before the first)
+    next.onload = () => { const img = fig.querySelector("img"); if (img) img.src = next.src; };
+    next.src = `/api/live.jpg?run=${fig.dataset.run}&t=${Date.now()}`;
+  }
 }
 
 
@@ -1580,6 +1622,28 @@ const ERRORS = [
   [/outside the simulator joint limits|Invalid value for/i, "A scene setting is out of range", "Bring it back inside its range, or go back to the defaults.", true],
   [/Cannot reach app\.py|Failed to fetch|NetworkError/i, "The page cannot reach app.py", "Start python app.py again and reload the page.", false],
 ];
+/** An in-page confirm: resolves true on OK, false on Cancel / Esc. window.confirm returns false at once, without
+ *  asking, in some embedded browsers (the app's preview pane), which silently cancelled batches and deletes. */
+function ask(message, ok = "OK") {
+  const box = $("askDialog");
+  $("askText").textContent = message;
+  $("askYes").textContent = ok;
+  $("askNo").hidden = false;
+  return new Promise(resolve => {
+    const done = answer => { box.onclose = null; if (box.open) box.close(); resolve(answer); };
+    $("askYes").onclick = () => done(true);
+    $("askNo").onclick = () => done(false);
+    box.onclose = () => done(false);  // Esc
+    box.showModal();
+    $("askYes").focus();
+  });
+}
+/** An in-page notice with one OK button (instead of window.alert, for the same reason). */
+function notify(message) {
+  ask(message).then(() => {});
+  $("askNo").hidden = true;
+}
+
 let setupProblem = null;  // why the start scene cannot be built (blocks Run until a preview works)
 let setupShown = false;   // the banner shows that problem (a working preview then clears it)
 
@@ -1827,7 +1891,7 @@ $("run").onclick = async () => {
     document.activeElement.blur();  // so the keys go to the robot, not to the box last clicked
     const start = startScene(ood);
     if (goalSpec && !goalRelational() && JSON.stringify(start) !== goalStart) {
-      if (!confirm("The start scene changed since the goal was set (seed, settings or layout). Run without the goal?")) return;
+      if (!(await ask("The start scene changed since the goal was set (seed, settings or layout). Run without the goal?", "Run without goal"))) return;
       clearGoal();
     }
     await api("/api/run", { task: $("task").value, seconds: $("seconds").value, ...start,
@@ -1983,7 +2047,7 @@ async function renderGoal(goal) {
     $("goalImg").src = view.image;
     goalPending = {};
     drawGoal();
-  } catch (err) { alert(err.message); }
+  } catch (err) { notify(err.message); }
   finally { $("goalBusy").hidden = true; }
 }
 $("goalSvg").addEventListener("pointerdown", e => {
@@ -2069,7 +2133,7 @@ $("setTask").onclick = async () => {
 $("goalReset").onclick = () => { goalChoice = {}; renderGoal({}); };
 $("goalCancel").onclick = () => { $("task").value = taskBefore; $("goalDialog").close(); checkTask(); };
 $("goalUse").onclick = () => {
-  if (!$("task").value.trim()) { alert("Write what Dream-1 should do."); return; }
+  if (!$("task").value.trim()) { notify("Write what Dream-1 should do."); return; }
   const moved = Object.keys(goalView?.goal || {});
   if (!moved.length) { goalSpec = null; showTask(); $("goalDialog").close(); return; }  // judged by the words
   goalSpec = { type: "goal", objects: Object.fromEntries(moved.map(n => {
@@ -2260,7 +2324,7 @@ $("fwd1s").onclick = () => setStep(+$("resumeStep").value + 20);
 $("failuresOnly").onchange = loadEpisodes;
 $("reloadEps").onclick = loadEpisodes;
 $("resumeBtn").onclick = async () => {
-  if (running && !confirm("A run is going. Stop it (its recording is saved) and resume this one?")) return;
+  if (running && !(await ask("A run is going. Stop it (its recording is saved) and resume this one?", "Stop and resume"))) return;
   $("resumeBtn").disabled = true;
   $("resumeBtn").textContent = running ? "Stopping the current run…" : "Restoring…";
   try {

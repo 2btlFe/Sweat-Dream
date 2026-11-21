@@ -129,8 +129,8 @@ failure; or **Dream-1 only**), how many run **at once** (1 to 4), the number of 
 episode, and the seeds: **Seed, Seed + 1, …**
 (train seeds, from the Seed field) or **Eval set (50)** (the fixed evaluation seeds, easy / medium / hard). Each
 episode starts from its seed's scene, with the scene settings above; the ones marked random are drawn from each
-episode's seed. The cameras are not shown; the page shows progress, success / failure / invalid counts and the time
-left instead.
+episode's seed. The page shows progress, success / failure / invalid counts, the time left, and the camera view of
+each episode going now (one tile per episode).
 
 Tasks: pick the example prompts, or type your own prompt and **Add** it. Dream-1 gets your prompt as written. The
 judge only parses fixed sentences, so each own prompt is judged on the **judge as** pairs below it: object → target,

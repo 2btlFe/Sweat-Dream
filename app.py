@@ -57,6 +57,11 @@ AREA = {"x": (-0.30, 0.30), "y": (-0.22, 0.18)}
 MAX_BATCH = 500
 FULL_TABLE = {"items": {name: None for name in OBJECTS + TARGETS}}  # a seed's scene has all six items
 ID_RE = re.compile(r"^[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$")
+
+
+def live_frame(run_id):
+    """Where a batch episode writes its latest camera view (the single run uses LIVE)."""
+    return WORK / f"live-{run_id}.jpg"
 WORK = Path(tempfile.mkdtemp(prefix="dream-web-"))
 LIVE = WORK / "live.jpg"
 STOP = WORK / "stop"
@@ -653,7 +658,8 @@ class Batch:
         task, seed = info["tasks"][i % len(info["tasks"])], info["seeds"][i]
         env = {**os.environ, "PYTHONUTF8": "1", "PYTHONUNBUFFERED": "1", "PYTHONWARNINGS": "ignore",
                "STOP_FILE": str(stop_file), "RUN_DIR": str(RUNS / run_id), "BATCH_ID": info["id"],
-               "JUDGE_SPEC": json.dumps(task["judge"])}
+               "JUDGE_SPEC": json.dumps(task["judge"]),
+               "LIVE_FRAME": str(live_frame(run_id))}  # its camera view, for the page (/api/live.jpg?run=...)
         if PAGE_KEY["value"]:
             env["DREAM_API_KEY"] = PAGE_KEY["value"]
         command = [sys.executable, str(HERE / "sim.py"), task["prompt"], "--seconds", str(info["seconds"]),
@@ -728,6 +734,7 @@ class Batch:
                 elif info["invalid_in_a_row"] >= 3 and not info["stopped_reason"]:
                     info["stopped_reason"] = "Three invalid episodes in a row."
             stop_file.unlink(missing_ok=True)
+            live_frame(run_id).unlink(missing_ok=True)
 
     def _show_active(self, prompt_of=None):
         """The episodes going now, for the page (called with the lock held)."""
@@ -737,7 +744,7 @@ class Batch:
         self._names = names
         active = sorted((index, run_id) for run_id, (index, _p, _s) in self.active.items())
         info["active"] = [{"index": index + 1, "task": names.get(run_id, ("", None))[0],
-                           "seed": names.get(run_id, ("", None))[1]} for index, run_id in active]
+                           "seed": names.get(run_id, ("", None))[1], "run": run_id} for index, run_id in active]
         info["current"] = info["active"][0] if info["active"] else None
 
     def status(self):
@@ -892,8 +899,11 @@ class Handler(BaseHTTPRequestHandler):
             except (OSError, ValueError, KeyError, IndexError):
                 return self.send_json({"error": "no picture for that recording"}, 404)
         if path == "/api/live.jpg":
+            run = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get("run", [""])[0]  # a batch episode view
+            if run and not ID_RE.match(run):
+                return self.send_json({"error": "bad run id"}, 400)
             try:
-                return self.send(LIVE.read_bytes(), "image/jpeg")
+                return self.send((live_frame(run) if run else LIVE).read_bytes(), "image/jpeg")
             except OSError:
                 return self.send_json({"error": "no frame yet"}, 404)
         if path == "/api/rules":
