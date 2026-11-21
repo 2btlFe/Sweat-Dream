@@ -1,45 +1,34 @@
-"""Local Dream Labs validator checks for generated and converted datasets."""
+"""Local Dream Labs format and teammate dataset aggregation checks."""
 
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
-import numpy as np
-
 import finetune_pipeline as pipeline
 
 
 class FineTunePipelineTests(unittest.TestCase):
-    def test_dummy_dataset_passes_official_validator(self):
+    def test_dummy_passes_official_validator(self):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "dummy"
-            pipeline.build(output, [pipeline.synthetic_episode()])
-            self.assertEqual(pipeline.validate(output).episodes, 1)
+            pipeline.make_dummy(output)
+            self.assertEqual(pipeline.validate(output)["episodes"], 1)
 
-    def test_labeled_recording_is_converted_and_failure_skipped(self):
+    def test_combine_only_successful_recordings(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "member1"
             episode = root / "episodes" / "example"
-            run = root / "runs" / "example"
-            episode.mkdir(parents=True)
-            run.mkdir(parents=True)
-            dummy = pipeline.synthetic_episode()
-            times = dummy["t"]
-            np.savez(episode / "steps.npz", t=times, state=dummy["state"],
-                     action=dummy["action"], frame_t=dummy["frame_t"])
-            (episode / "meta.json").write_text(json.dumps({"task": dummy["task"], "robot": "yam"}))
-            (run / "meta.json").write_text(json.dumps({"episode": "example"}))
-            (run / "label.json").write_text(json.dumps({"label": "success"}))
-            for camera, role in pipeline.CAMERAS.items():
-                pipeline.write_video(episode / f"{camera}.mp4", dummy["frames"][role])
-            chosen = pipeline.selected_recordings([root])
-            self.assertEqual(len(chosen), 1)
-            output = Path(tmp) / "converted"
-            pipeline.build(output, [folder for folder, _ in chosen])
-            self.assertEqual(pipeline.validate(output).frames, 12)
-            (run / "label.json").write_text(json.dumps({"label": "failure"}))
-            self.assertEqual(pipeline.selected_recordings([root]), [])
+            pipeline.sample_recording(episode)
+            for run_id, label in (("example", "success"), ("failed", "failure")):
+                run = root / "runs" / run_id
+                run.mkdir(parents=True)
+                (run / "meta.json").write_text(json.dumps({"episode": "example", "task": "put apple into the bowl"}))
+                (run / "label.json").write_text(json.dumps({"label": label}))
+            output = Path(tmp) / "combined"
+            pipeline.combine(output, [root])
+            self.assertEqual(pipeline.validate(output)["episodes"], 1)
+            self.assertEqual(len(pipeline.selected_recordings([root])), 1)
 
 
 if __name__ == "__main__":
