@@ -142,7 +142,11 @@ Switch to **Batch**. Pick what each episode does (**Data collection**: Dream-1, 
 failure; **Rule-based only**: the script from the start, no API key needed; or **Dream-1 only**), how many run **at once** (1 to 4), the number of episodes and the seconds per
 episode, and the seeds: **From the seed**
 (one train seed is the whole batch: each episode's own seed is derived from it, `seed_web.episode_seed`, so the
-same seed gives the same episodes again and other seeds share none) or **Eval set (50)** (the fixed evaluation seeds, easy / medium / hard). Each
+same seed gives the same episodes again and other seeds share none) or **Eval set (50)** (the fixed evaluation seeds, easy / medium / hard).
+Batch episodes do not wait for the wall clock (`sim.py --fast`): simulated time already stands still while Dream-1
+answers, so each chunk is played at once instead of 50 ms per step. The run is the same, only sooner (a 32 s
+episode took 15 s with start-up), and the seconds per episode are simulated time. More Dream-1 requests then come
+in the same minute, so several at once may meet `NO_CAPACITY` more often (those episodes are tried again). Each
 episode starts from its seed's scene, with the scene settings above; the ones marked random are drawn from each
 episode's seed. The page shows progress, success / failure / invalid counts, the time left, and the camera view of
 each episode going now (one tile per episode).

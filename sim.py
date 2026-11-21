@@ -207,12 +207,45 @@ original_step = yam_env.YamEnv.step
 
 
 RECORDING = {"on": False}  # off while the scene is built and settled, on for the run itself
+# --fast (batches): Dream-1's loop plays each chunk without waiting 50 ms of wall time per step. Simulated time already
+# stands still while Dream-1 answers, so the run is the same, only shorter; the time limit is then simulated time.
+FAST = {"on": False, "t0": None, "limit": None, "stop": None}
+
+
+class FastTime:
+    """dream_control's time module under --fast: the wait after each played step is skipped (env.step sets
+    `skip`); every other wait (polling for Dream-1's answer) and the clock are the real ones."""
+
+    def __init__(self):
+        self.skip = False
+
+    def sleep(self, seconds):
+        if self.skip:
+            self.skip = False
+            return
+        time.sleep(seconds)
+
+    def __getattr__(self, name):
+        return getattr(time, name)
+
+
+def fast_tick(env):
+    """After a played step under --fast: skip the wait that follows, and end the run at the simulated time limit."""
+    if not FAST["on"] or not RECORDING["on"]:
+        return
+    dream_control.time.skip = True
+    if FAST["t0"] is None:
+        FAST["t0"] = float(env.data.time)
+    if float(env.data.time) - FAST["t0"] >= FAST["limit"] and not FAST["stop"].is_set():
+        print(f"  Time limit: {FAST['limit']:g} s of simulated time.", flush=True)
+        FAST["stop"].set()
 
 
 def step(self, left, right):
     result = original_step(self, left, right)
     if RECORDING["on"]:
         TRAJECTORY.record(self)
+    fast_tick(self)
     if STATS["model_responses"]:
         STATS["model_actions"] += 1
     return result
@@ -269,6 +302,7 @@ def sandbox_step(self, left, right):
     result = original_sandbox_step(self, left, right)
     if RECORDING["on"]:
         TRAJECTORY.record(self)
+    fast_tick(self)
     if STATS["model_responses"]:
         STATS["model_actions"] += 1
     return result
@@ -689,6 +723,8 @@ def main():
                         help="data collection: the script picks the object up and gives the arms back (carry), or finishes the task")
     parser.add_argument("--script-speed", type=float, default=1.0, help="data collection: the script's speed, x Dream-1's pace (1 to 3)")
     parser.add_argument("--end-on-success", action="store_true", help="end the run once the monitor sees the task done")
+    parser.add_argument("--fast", action="store_true",
+                        help="play Dream-1's chunks without waiting for the wall clock; --seconds is then simulated time")
     scene.add_arguments(parser)  # --seed, --default-scene, --split, --setting, --ood-random
     args = parser.parse_args()
     source_dir = resume_options(args) if args.resume else None
@@ -785,7 +821,8 @@ def main():
             "ood_random": args.ood_random, "ood": None,
             "started_at": datetime.now().isoformat(timespec="seconds"), "stopped_by_user": False,
             "error": None, "error_type": None, "scene": SCENE or None,
-            "batch_id": os.environ.get("BATCH_ID"), "original": os.environ.get("ORIGINAL") == "1",
+            "batch_id": os.environ.get("BATCH_ID"),
+            "fast": bool(args.fast),  # Dream-1's chunks played without wall-clock waits; the limit is simulated time "original": os.environ.get("ORIGINAL") == "1",
             "batch_seed": int(os.environ["BATCH_SEED"]) if os.environ.get("BATCH_SEED") else None,
             "original_of": os.environ.get("ORIGINAL_OF") or None,
             "judge": (json.loads(os.environ["JUDGE_SPEC"]) if os.environ.get("JUDGE_SPEC")
@@ -846,6 +883,13 @@ def main():
              "script": " · rule-based only: the recovery script from the start; no Dream-1",
              "test": " · press T to take over"}.get(mode, ""), flush=True)
     RECORDING["on"] = True
+    dream_seconds = str(args.seconds)
+    if args.fast and not args.teleop:
+        FAST.update(on=True, limit=float(args.seconds), stop=stop)
+        dream_control.time = FastTime()
+        # The limit is simulated time (fast_tick); the wall clock only guards against a slow service, below the
+        # batch's own watchdog (app.py: the time limit + 180 s).
+        dream_seconds = str(args.seconds + 150)
     try:
         if SCRIPT_ONLY:
             if not MONITOR.understood():
@@ -859,7 +903,7 @@ def main():
                 dream_control.main(["--task", args.task, "--seconds", f"{left:.1f}", "--headless", "--quiet"],
                                    shared_env=env, stop_event=stop)
         else:
-            dream_control.main(["--task", args.task, "--seconds", str(args.seconds), "--headless", "--quiet"],
+            dream_control.main(["--task", args.task, "--seconds", dream_seconds, "--headless", "--quiet"],
                                shared_env=env, stop_event=stop)
     except Exception as error:
         meta["error"] = str(error)
