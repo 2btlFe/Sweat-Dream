@@ -47,6 +47,20 @@ python batch.py --repeats 10 --seconds 60 --budget-minutes 60
 
 The batch uses the selected robot and room, the key in `~/.dreamlabs/credentials` (`DREAM_API_KEY=...`), and a snapshot of the rules saved in the UI. Batch runs use the simulator's default object layout. It writes each episode to `runs/<id>/` and stops on an invalid run, such as an API authentication error. Check the API key and endpoint before starting a large batch. `--tasks`, `--seed`, `--repeats`, and `--seconds` are adjustable.
 
+## Team collection for fine-tuning candidates
+
+Each teammate installs the repo and their own Dream Labs API key, then chooses a unique member number (1–6) and one object. Run this on **each laptop**; the example makes 40 attempts for member 1:
+
+```bash
+python collect_success.py --member 1 --object apple --attempts 40 --seconds 60
+```
+
+Change `--member` and `--object` on each laptop. Supported objects are `apple`, `orange`, `banana`, and `bottle`; six people will need to share some objects. The exact instruction is `pick <object> into the bowl`. Each member gets a disjoint, reproducible seed range. Use `--attempts 30` for 30 attempts. The default time budget is 120 minutes; change it with `--budget-minutes`. Run the **same command again** to resume unfinished attempts. Keep the same rules, robot, room, lighting, and seconds during a collection. All laptops read the committed `collection_rules.json`, so agree on that file before starting; changing it mid-collection is rejected. The UI's machine-local rules do not affect team collection.
+
+Every attempt is saved under `runs/<id>/` with `meta.json`, `trajectory.json`, camera frames, `frames.json` (frame timestamps), and `label.json`. The trajectory now includes time-aligned left and right robot actions. Only judged successes with complete actions and frames are copied to `batches/member-N-object/success/`; `manifest.json` records all completed attempts and failure reasons. Invalid episodes stop the collection for inspection. Copy each teammate's entire `batches/member-N-object/` directory to a shared drive, then combine the `success/` directories. `runs/` and `batches/` are ignored by Git because they may be large.
+
+These exports are **raw fine-tuning candidates**, not a Dream Labs upload file. The replay images are a combined top and wrist view, and the action vectors are simulator commands. Confirm Dream Labs' required training schema, camera separation, action representation, and data rights before uploading. Review a sample of automatically labeled successes manually; the coordinate-based label may not match visual task quality.
+
 ## Rules
 
 | Rule | Meaning |

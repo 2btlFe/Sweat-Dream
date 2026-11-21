@@ -9,7 +9,7 @@ import re
 
 OBJECTS = {"apple": "apple", "orange": "orange", "banana": "banana",
            "bottle": "water_bottle", "water bottle": "water_bottle"}
-TASK = re.compile(r"\b(?:put|place|move|drop|set)\s+(?:the\s+|a\s+|an\s+)?"
+TASK = re.compile(r"\b(?:put|place|move|drop|set|pick)\s+(?:the\s+|a\s+|an\s+)?"
                   r"(water bottle|bottle|apple|orange|banana)\s+"
                   r"(?:into|in|onto|on|inside|in to|on to)\s+(?:the\s+|a\s+)?(bowl|plate)\b", re.I)
 DEFAULT_RULES = {"distance_cm": 6.5, "release": True, "still_seconds": 1.0}

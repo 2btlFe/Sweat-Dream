@@ -111,9 +111,10 @@ class Trajectory:
         self.t = []
         self.positions = {}
         self.touching = {}
+        self.actions = {"left": [], "right": []}
         self.ids = None
 
-    def record(self, env):
+    def record(self, env, left, right):
         m, d = env.model, env.data
         if self.ids is None:
             bodies = getattr(env, "object_bodies", {name: name for name in OBJECTS + TARGETS})
@@ -137,13 +138,16 @@ class Trajectory:
             elif b in self.tips and a in self.object_of:
                 touching.add(self.object_of[a])
         self.t.append(round(float(d.time), 3))
+        self.actions["left"].append([float(v) for v in left])
+        self.actions["right"].append([float(v) for v in right])
         for name, body in self.ids.items():
             self.positions[name].append([round(float(v), 4) for v in d.xpos[body]])
         for name in self.touching:
             self.touching[name].append(int(name in touching))
 
     def to_json(self):
-        return {"t": self.t, "positions": self.positions, "touching": self.touching}
+        return {"t": self.t, "positions": self.positions, "touching": self.touching,
+                "actions": self.actions}
 
 
 TRAJECTORY = Trajectory()
@@ -155,7 +159,7 @@ original_step = yam_env.YamEnv.step
 
 def step(self, left, right):
     result = original_step(self, left, right)
-    TRAJECTORY.record(self)
+    TRAJECTORY.record(self, left, right)
     if STATS["model_responses"]:
         STATS["model_actions"] += 1
     return result
@@ -166,6 +170,7 @@ original_capture = dream_control.capture
 last_images = {}
 REPLAY_DIR = None
 FRAME_COUNT = 0
+FRAME_TIMES = []
 
 
 def capture(env, windows, keep=True):
@@ -174,6 +179,7 @@ def capture(env, windows, keep=True):
         last_images.update(original_capture(env, windows, keep))
         if keep and REPLAY_DIR is not None:
             save_jpeg(camera_view(last_images), REPLAY_DIR / f"{FRAME_COUNT:05d}.jpg")
+            FRAME_TIMES.append({"file": f"{FRAME_COUNT:05d}.jpg", "time_s": round(float(env.data.time), 3)})
             FRAME_COUNT += 1
         if LIVE_FRAME:
             save_jpeg(camera_view(last_images), LIVE_FRAME)
@@ -206,7 +212,7 @@ original_sandbox_step = SandboxEnv.step
 
 def sandbox_step(self, left, right):
     result = original_sandbox_step(self, left, right)
-    TRAJECTORY.record(self)
+    TRAJECTORY.record(self, left, right)
     if STATS["model_responses"]:
         STATS["model_actions"] += 1
     return result
@@ -328,6 +334,7 @@ def main():
         meta["replay_fps"] = 5
         meta.update(STATS)
         (run_dir / "trajectory.json").write_text(json.dumps(TRAJECTORY.to_json(), separators=(",", ":")))
+        (run_dir / "frames.json").write_text(json.dumps(FRAME_TIMES, separators=(",", ":")))
         if last_images:
             save_jpeg(camera_view(last_images), run_dir / "last.jpg")
         (run_dir / "meta.json").write_text(json.dumps(meta, indent=2))
