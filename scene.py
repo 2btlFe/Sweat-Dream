@@ -422,6 +422,8 @@ WRIST_MIN_DOWN = 0.2
 # of the viewpoint preset, which is itself aimed at the workspace.
 RANDOM_CAMERA_SPAN = {"camera_x_cm": 3, "camera_y_cm": 3, "camera_z_cm": 3, "camera_pitch_deg": 8,
                       "camera_yaw_deg": 8, "camera_roll_deg": 5, "camera_fov_offset_deg": 8}
+# Other controls drawn near their default too: the light stays within 0.8x to 1.2x.
+RANDOM_SPAN = {**RANDOM_CAMERA_SPAN, "light": 0.2}
 # A random camera or arm setting must leave every object showing in the workspace camera, at least this many pixels
 # of each in the 640x360 image the model gets (not out of frame, not hidden behind an arm).
 TOP_MIN_PIXELS = 100
@@ -455,7 +457,7 @@ def draw_controls(seed, names, setting="default", attempt=0):
             values[name] = options[int(rng.integers(len(options)))]
         else:
             low, high = field["min"], field["max"]
-            span = RANDOM_ARM_SPAN_DEG[int(name[-1]) - 1] if name in ood.ARM_FIELDS else RANDOM_CAMERA_SPAN.get(name)
+            span = RANDOM_ARM_SPAN_DEG[int(name[-1]) - 1] if name in ood.ARM_FIELDS else RANDOM_SPAN.get(name)
             if span is not None:  # near the default, not anywhere in the control's whole range
                 low, high = max(low, field["default"] - span), min(high, field["default"] + span)
             # Gaussian around the default (sigma: a quarter of the allowed range), drawn again until it falls inside

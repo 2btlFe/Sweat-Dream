@@ -596,6 +596,10 @@ def write_hand_label(d, label, note, rules):
                                   "saved_at": datetime.now().isoformat(timespec="seconds")})
 
 
+# A batch's "vary the scene": each episode draws these from its seed, near their defaults (scene.RANDOM_SPAN: the
+# camera within a few cm and degrees, the light within 0.8x to 1.2x), and its room from seed_web.VARY_ROOMS.
+VARY_CONTROLS = ("camera_x_cm", "camera_y_cm", "camera_z_cm", "camera_pitch_deg", "camera_yaw_deg", "camera_roll_deg",
+                 "camera_fov_offset_deg", "light")
 MAX_WORKERS = 4  # episodes at once; 3 at once ran like one at a time on an M3 (8 cores), see README
 NO_CAPACITY_TRIES = 5  # Dream-1 "at max capacity" (DA-2000 NO_CAPACITY): the episode is tried again this many times
 
@@ -644,9 +648,10 @@ class Batch:
             return set(self.active)
 
     def start(self, tasks, seeds, seconds, changes, random_names, split, robot=(), mode="plain", workers=1,
-              collection=None, original_of=None, original=False, batch_seed=None):
+              collection=None, original_of=None, original=False, batch_seed=None, vary_scene=False):
         """@param seeds One seed per episode. @param changes, random_names The scene settings, and the ones drawn
-        from each seed. @param split "train" or "eval" (shown on the page). @param workers Episodes at once."""
+        from each seed. @param split "train" or "eval" (shown on the page). @param workers Episodes at once.
+        @param vary_scene Each episode's room is drawn from its seed (seed_web.episode_room)."""
         if self.running() or RUNNER.running():
             raise RuntimeError("A run is already going.")
         if not has_api_key() and mode not in NO_KEY_MODES:
@@ -656,7 +661,7 @@ class Batch:
         self.info = {"id": "b" + datetime.now().strftime("%Y%m%d-%H%M%S"), "tasks": tasks, "total": len(seeds),
                      "seconds": seconds, "seeds": seeds, "seed": seeds[0], "split": split, "ood": changes,
                      "ood_random": random_names, "rules": current_rules(), "robot": list(robot), "mode": mode,
-                     "workers": workers, "collection": collection, "original_of": original_of, "original": original or bool(original_of), "batch_seed": batch_seed, "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
+                     "workers": workers, "collection": collection, "original_of": original_of, "original": original or bool(original_of), "batch_seed": batch_seed, "vary_scene": bool(vary_scene), "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
                      "started": time.time(), "ended": None, "current": None, "active": [], "stopped_reason": None,
                      "durations": [], "invalid_in_a_row": 0}
         self.thread = threading.Thread(target=self._supervise, daemon=True)
@@ -702,8 +707,11 @@ class Batch:
                **({"ORIGINAL_OF": info["original_of"]} if info.get("original_of") else {})}
         if PAGE_KEY["value"]:
             env["DREAM_API_KEY"] = PAGE_KEY["value"]
+        robot = list(info["robot"])
+        if info.get("vary_scene") and seed is not None and "--room" in robot:  # this episode's room, from its seed
+            robot[robot.index("--room") + 1] = seed_web.episode_room(seed)
         command = [sys.executable, str(HERE / "sim.py"), task["prompt"], "--seconds", str(info["seconds"]),
-                   *info["robot"], *(["--seed", str(seed)] if seed is not None else ["--default-scene"]),
+                   *robot, *(["--seed", str(seed)] if seed is not None else ["--default-scene"]),
                    {"collect": "--collect", "script": "--script-only", "plain": "--plain"}[info["mode"]]]
         if info["mode"] in ("collect", "script"):
             command += collection_args(info["collection"])[1]
@@ -1192,6 +1200,11 @@ class Handler(BaseHTTPRequestHandler):
                 changes = ood.validate(body.get("ood") or {})
                 seed_web.seeding_args({"ood_random": body.get("ood_random")}, ood.FIELDS)  # checks the names
                 random_names = list(body.get("ood_random") or [])
+                # Vary the scene: the camera, the light and the room drawn from each episode's seed (not for Original,
+                # whose scene and settings stay fixed).
+                vary = bool(body.get("vary_scene")) and body.get("mode") != "original"
+                if vary:
+                    random_names = sorted(set(random_names) | set(VARY_CONTROLS))
                 robot = robot_args(changes, ["--ood-random"] if random_names else [], None)
                 split = body.get("split") or "train"
                 if split == "eval":  # the fixed evaluation seeds, in order
@@ -1220,7 +1233,8 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError(f"Run 1 to {MAX_WORKERS} episodes at once.")
                 collection, _args = collection_args(body.get("collection"))
                 BATCH.start(tasks, seeds, seconds, changes, random_names, split, robot, mode, workers, collection,
-                            original=original, batch_seed=first if split == "train" else None)
+                            original=original, batch_seed=first if split == "train" else None,
+                            vary_scene=vary and not original)
             except (ValueError, TypeError, AttributeError) as error:
                 return self.send_json({"error": str(error)}, 400)
             except RuntimeError as error:

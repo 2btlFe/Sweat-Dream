@@ -141,7 +141,11 @@ Switch to **Batch**. Pick what each episode does (**Data collection**: Dream-1, 
 failure; **Rule-based only**: the script from the start, no API key needed; or **Dream-1 only**), how many run **at once** (1 to 4), the number of episodes and the seconds per
 episode, and the seeds: **From the seed**
 (one train seed is the whole batch: each episode's own seed is derived from it, `seed_web.episode_seed`, so the
-same seed gives the same episodes again and other seeds share none) or **Eval set (50)** (the fixed evaluation seeds, easy / medium / hard). Each
+same seed gives the same episodes again and other seeds share none) or **Eval set (50)** (the fixed evaluation seeds, easy / medium / hard).
+**Scene per episode**: **Same settings** (the default) uses the scene settings and the room picked on the page for every
+episode; **Vary per episode** draws, from each episode's own seed and close to the defaults, the workspace camera's
+position (±3 cm), angle (±8°, roll ±5°) and field of view (±8°), the light (0.8× to 1.2×), and the room (YAM tabletop
+or Evening den, `seed_web.episode_room`); the same batch seed gives the same scenes again. Original keeps its scene fixed. Each
 episode starts from its seed's scene, with the scene settings above; the ones marked random are drawn from each
 episode's seed. The page shows progress, success / failure / invalid counts, the time left, and the camera view of
 each episode going now (one tile per episode).

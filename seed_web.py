@@ -33,6 +33,16 @@ def episode_seed(batch_seed, index):
     return int.from_bytes(digest[:8], "big") % 1_000_000
 
 
+VARY_ROOMS = ("yam_tabletop", "evening_den")  # the rooms a batch's "vary the scene" draws from
+
+
+def episode_room(seed):
+    """The room of an episode whose batch varies the scene: drawn from the episode's seed, so the same batch seed
+    gives the same rooms again."""
+    digest = hashlib.sha256(f"sweat-dream room {int(seed)}".encode()).digest()
+    return VARY_ROOMS[digest[0] % len(VARY_ROOMS)]
+
+
 def drawn_header(stdout):
     """@return The X-Scene-Controls header (the scene-control values sim.py printed) and X-Scene-Layout (where each
     item starts, so the page's custom layout can start from the seed's); "{}" when sim.py printed none."""

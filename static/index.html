@@ -432,6 +432,13 @@
         </div>
         <div><label for="batchWorkers">At once</label><input id="batchWorkers" type="number" min="1" max="4" value="2" title="Episodes run at the same time (1 to 4)"></div>
       </div>
+      <div id="varyRow" style="margin-top: 12px"><label>Scene per episode</label>
+        <div class="toggle" role="group" aria-label="Scene per episode">
+          <button id="varyOff" class="on" aria-pressed="true" title="Every episode uses the scene settings below and the room picked above">Same settings</button>
+          <button id="varyOn" aria-pressed="false" title="Each episode draws, from its own seed and close to the defaults: the workspace camera's position (±3 cm), angle (±8°, roll ±5°) and field of view (±8°), the light (0.8× to 1.2×), and the room (YAM tabletop or Evening den)">Vary per episode</button>
+        </div>
+        <p class="muted small" id="varyNote" style="margin: 4px 0 0" hidden>Each episode draws, from its own seed and close to the defaults: the camera's position, angle and field of view, the light, and the room (YAM tabletop or Evening den). The same batch seed gives the same scenes again.</p>
+      </div>
       <div id="batchCollectSlot"></div>
       <p class="muted small" style="margin: 8px 0 12px" id="batchHow">The seed is the whole batch: it gives each episode its own layout (the same episodes again with the same seed; other seeds share none). The scene settings below apply to every episode; the ones marked <em>random</em> are drawn from each episode's seed. Runs in the background.</p>
       <p class="muted small" style="margin: 8px 0 12px" id="batchHowOriginal" hidden>Original: the seed and the environment are fixed: every episode starts from the simulator's default scene (the same object layout) with default scene settings; the seed and the scene settings below are not used. Dream-1 runs with the failure monitor and the recovery script, as in Data collection (its settings above).</p>
@@ -1457,6 +1464,17 @@ function setSplit(next) {
   estimate();
 }
 let batchMode = "collect";
+let varyScene = false;
+/** Vary per episode (camera, light, room from each episode's seed) or the same settings for every episode. Original
+ *  keeps its scene and settings fixed, so it does not vary. */
+function setVary(on) {
+  varyScene = on;
+  for (const [id, v] of [["varyOff", false], ["varyOn", true]]) { $(id).classList.toggle("on", v === on); $(id).setAttribute("aria-pressed", v === on); }
+  $("varyNote").hidden = !on;
+  estimate();
+}
+$("varyOff").onclick = () => setVary(false);
+$("varyOn").onclick = () => setVary(true);
 const BATCH_MODES = [["batchCollect", "collect"], ["batchScript", "script"], ["batchPlain", "plain"], ["batchOriginal", "original"]];
 for (const [id, m] of BATCH_MODES) $(id).onclick = () => {
   batchMode = m;
@@ -1464,6 +1482,7 @@ for (const [id, m] of BATCH_MODES) $(id).onclick = () => {
   // Original uses no seed and no scene settings: the seed choice does not apply.
   $("splitTrain").disabled = $("splitEval").disabled = m === "original";
   $("batchHow").hidden = m === "original"; $("batchHowOriginal").hidden = m !== "original";
+  $("varyRow").hidden = m === "original";
   estimate();
   refresh();  // a rule-based batch needs no key: the Start button follows the mode
 };
@@ -1593,7 +1612,8 @@ function estimate() {
   const minutes = Math.round(Math.ceil(count / workers) * each / 60);
   const seeds = batchMode === "original" ? "original: fixed default scene and settings, with the recovery script"
     : split === "eval" ? `eval seeds 1-${Math.min(count, 50)}` : `batch seed ${$("seed")?.value || "?"} (${count} different layouts, the same again with this seed)`;
-  $("batchEstimate").textContent = count && secs ? `${count} episodes · ${workers} at once · ${seeds} · about ${minutes} min · ${batchTasks.size} task${batchTasks.size > 1 ? "s" : ""}` : "";
+  const vary = varyScene && batchMode !== "original" ? " · camera, light and room vary" : "";
+  $("batchEstimate").textContent = count && secs ? `${count} episodes · ${workers} at once · ${seeds}${vary} · about ${minutes} min · ${batchTasks.size} task${batchTasks.size > 1 ? "s" : ""}` : "";
   return minutes;
 }
 $("batchCount").oninput = estimate;
@@ -1614,6 +1634,7 @@ $("startBatch").onclick = async () => {
     const tasks = [{ prompt: $("task").value.trim(), ...(goalSpec ? { judge: goalSpec } : {}) }];
     const { seed, ood_random } = seeding();
     await api("/api/batch", { tasks, count, seconds: $("batchSeconds").value, split, seed, ood, mode: batchMode,
+                              vary_scene: varyScene && batchMode !== "original",
                               workers: Number($("batchWorkers").value) || 1, collection: collectionSettings(),
                               ood_random: isOpenYAM() ? [] : ood_random });
     if (split !== "eval" && batchMode !== "original") advanceSeed(1);  // the seed was the whole batch: the next batch gets the next one
