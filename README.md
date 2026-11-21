@@ -41,12 +41,15 @@ Open http://localhost:8000.
    it (`source: "human"`, `rules_verdict`). The run list marks these runs with ✋, and its filter can show only them
    or only the ones where you and the rules disagree.
 9. **Datasets**: each row's **+ / −** puts the run in the dataset or takes it out; **+ Add successes** picks every
-   success the list shows (e.g. one batch). **Save dataset** writes `datasets/<time>-<name>/`: `runs/<id>/` and the
-   recording `episodes/<id>/` of every picked run (hard links: no extra disk, and they stay if a run is deleted later),
+   success the list shows (e.g. one batch). **Save dataset…** opens a popup: a name, and the folder on this computer to
+   save in (type a full path, or browse: Project datasets, Home, Desktop, Documents, Downloads, then into folders;
+   the last folder is remembered). It writes `<folder>/<time>-<name>/` (`datasets/` by default): `runs/<id>/` and the
+   recording `episodes/<id>/` of every picked run (hard links on the same disk: no extra space, and they stay if a run
+   is deleted later; copies on another disk),
    and `manifest.json` with each run's final label (yours first), the rules' verdict, the judge spec, who acted, and
    its settings. Each run's settings (mode, robot and room, seed or layout, scene settings and the ones drawn from
    the seed, data collection settings, time limit, batch) show under its task in the list and in full in its detail.
-   With **Dream Labs format** ticked (the default), the recordings are also written as one LeRobot v2.1 dataset in
+   With **Dream Labs format** ticked in the popup (the default), the recordings are also written as one LeRobot v2.1 dataset in
    `dream_format/`, the format Dream Labs fine-tuning uploads, and checked with the Dream Labs checks
    (`dream.datasets.validate_dataset`, on this computer, nothing sent). One row per camera frame (5 per second):
    `observation.state` and `action` are 14 values, right arm first (6 joints in rad, gripper 0 closed .. 1 open, then

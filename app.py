@@ -424,15 +424,18 @@ def link_tree(source, target):
     shutil.copytree(source, target, copy_function=link)
 
 
-def save_dataset(run_ids, name, dream_format=False):
+def save_dataset(run_ids, name, dream_format=False, location=None):
     """A dataset of the chosen runs: datasets/<time>-<name>/ with runs/<id>/ (trajectory, labels, meta), episodes/<id>/
     (recording: steps, physics, cameras) and manifest.json (each run's label, task, judge spec and settings).
     @param dream_format Also write the recordings in the Dream Labs format (LeRobot v2.1, lerobot_export.py) to
         dream_format/, with embodiment.json, and run the Dream Labs checks on it.
+    @param location The folder on this computer to save it in (a new <time>-<name>/ inside it); None: datasets/.
     @return (folder, manifest). @throws ValueError when no chosen run can be saved."""
     rules = current_rules()
     slug = re.sub(r"[^A-Za-z0-9_-]+", "-", str(name or "")).strip("-")[:40] or "dataset"
-    folder = DATASETS / f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{slug}"
+    folder = save_location(location) / f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{slug}"
+    if folder.exists():
+        raise ValueError(f"{folder} already exists.")
     entries, skipped = [], []
     busy = BATCH.active_ids() | ({RUNNER.run_id} if RUNNER.running() else set())
     for run_id in dict.fromkeys(run_ids):
@@ -493,6 +496,51 @@ def export_dream_format(folder, entries):
             "episodes": len(result["episodes"]), "frames": result["frames"], "skipped": skipped,
             "check": lerobot_export.validate(folder / "dream_format") if result["episodes"] else
             {"ok": False, "error": "No recorded run to convert."}}
+
+
+def save_location(location):
+    """The folder a dataset is saved in. @throws ValueError when it is not an existing folder this server can write."""
+    if not location:
+        return DATASETS
+    base = Path(str(location)).expanduser()
+    if not base.is_absolute():
+        raise ValueError("Choose a full path for the save location (e.g. /Users/me/data).")
+    base = base.resolve()
+    if not base.is_dir():
+        raise ValueError(f"{base} is not a folder.")
+    if not os.access(base, os.W_OK):
+        raise ValueError(f"Cannot write in {base}.")
+    return base
+
+
+def shown_path(folder):
+    """A saved dataset's folder as the page shows it: datasets/<name> in this project, else its full path."""
+    try:
+        return str(folder.relative_to(HERE))
+    except ValueError:
+        return str(folder)
+
+
+def folder_listing(path):
+    """The folders inside one folder on this computer, for choosing where to save a dataset (hidden ones left out).
+    @return {path, parent, folders, writable, places}. @throws ValueError when it is not a readable folder."""
+    DATASETS.mkdir(exist_ok=True)
+    folder = Path(str(path or DATASETS)).expanduser()
+    if not folder.is_absolute():
+        raise ValueError("Use a full path.")
+    folder = folder.resolve()
+    if not folder.is_dir():
+        raise ValueError(f"{folder} is not a folder.")
+    try:
+        names = sorted((c.name for c in folder.iterdir() if c.is_dir() and not c.name.startswith(".")), key=str.lower)
+    except OSError as error:
+        raise ValueError(f"Cannot open {folder}: {error.strerror or error}.")
+    home = Path.home()
+    places = [{"name": "Project datasets", "path": str(DATASETS)}, {"name": "Home", "path": str(home)}]
+    places += [{"name": n, "path": str(home / n)} for n in ("Desktop", "Documents", "Downloads") if (home / n).is_dir()]
+    return {"path": str(folder), "parent": str(folder.parent) if folder.parent != folder else None,
+            "folders": names[:500], "more": max(0, len(names) - 500), "writable": os.access(folder, os.W_OK),
+            "places": places}
 
 
 def list_datasets():
@@ -826,6 +874,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(RUNNER.status())
         if path == "/api/datasets":
             return self.send_json({"datasets": list_datasets()})
+        if path == "/api/folders":  # ?path=/abs/folder: the folders in it, to choose where to save a dataset
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            try:
+                return self.send_json(folder_listing(query.get("path", [""])[0]))
+            except ValueError as error:
+                return self.send_json({"error": str(error)}, 400)
         if path == "/api/episodes":
             return self.send_json({"episodes": list_episodes()})
         m = re.fullmatch(r"/api/episodes/([^/]+)/frame\.jpg", path)
@@ -966,10 +1020,11 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(run_ids, list) or not run_ids or any(not isinstance(r, str) for r in run_ids):
                 return self.send_json({"error": "Pick at least one run."}, 400)
             try:
-                folder, manifest = save_dataset(run_ids, body.get("name"), bool(body.get("dream_format")))
+                folder, manifest = save_dataset(run_ids, body.get("name"), bool(body.get("dream_format")),
+                                                body.get("location") or None)
             except ValueError as error:
                 return self.send_json({"error": str(error)}, 400)
-            return self.send_json({"folder": f"datasets/{folder.name}", "count": manifest["count"],
+            return self.send_json({"folder": shown_path(folder), "count": manifest["count"],
                                    "labels": manifest["labels"], "skipped": manifest["skipped"],
                                    "dream_format": manifest.get("dream_format")})
         if self.path == "/api/runs/delete":  # {"run_ids": [...]}: finished runs and their recordings, for good

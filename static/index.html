@@ -207,8 +207,21 @@
   .dataset-bar input { width: 150px; padding: 5px 8px; font-size: 12px; }
   .dataset-note { font-size: 12px; color: var(--muted); margin-top: 6px; }
   .dataset-note.ok { color: var(--ok); }
-  .dataset-bar label.check { display: inline-flex; gap: 5px; align-items: center; font-size: 12px; white-space: nowrap; cursor: pointer; }
-  .dataset-bar label.check input { width: auto; margin: 0; }
+  label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--text); cursor: pointer; margin: 0; }
+  label.check input { width: auto; margin: 0; }
+  dialog.save { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--text); }
+  dialog.save::backdrop { background: rgba(0, 0, 0, .55); }
+  dialog.save h2 { margin: 0 0 4px; }
+  dialog.save .field { margin-top: 12px; }
+  .places { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .folders { list-style: none; margin: 8px 0 0; padding: 4px; height: 200px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--well); }
+  .folders li button { display: block; width: 100%; text-align: left; padding: 5px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font-weight: 400; font-size: 13px; overflow-wrap: anywhere; }
+  .folders li button:hover, .folders li button:focus-visible { background: var(--accent-soft); }
+  .folders li.empty { padding: 8px; color: var(--muted); font-size: 12px; }
+  .save-target { margin-top: 10px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .save-target code { color: var(--text); }
+  .save-error { margin-top: 8px; font-size: 12px; color: var(--bad); }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
   dl.settings { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 12px; font-size: 12px; margin: 6px 0 0; }
   dl.settings dt { color: var(--muted); }
   dl.settings dd { margin: 0; overflow-wrap: anywhere; }
@@ -467,11 +480,7 @@
         <span class="small"><b id="pickedCount">0</b> picked for a dataset</span>
         <button class="ghost small" id="pickSuccesses" title="Pick every success the list shows">+ Add successes</button>
         <button class="ghost small" id="pickClear">Clear</button>
-        <span class="hrow" style="margin-left: auto">
-          <label class="check" title="Also convert the recordings to the Dream Labs dataset format (LeRobot v2.1) for fine-tuning, in dream_format/, and check them with the Dream Labs checks"><input type="checkbox" id="dreamFormat" checked> Dream Labs format</label>
-          <input id="datasetName" maxlength="40" placeholder="dataset name" aria-label="Dataset name">
-          <button class="small" id="saveDataset" title="Save the picked runs, their recordings and a manifest to datasets/">Save dataset</button>
-        </span>
+        <button class="small" id="saveDataset" style="margin-left: auto" title="Choose a folder on this computer and save the picked runs there">Save dataset…</button>
       </div>
       <div class="dataset-note" id="datasetNote"></div>
       <table id="runsTable" style="margin-top: 8px">
@@ -545,6 +554,33 @@
   </div>
 </main>
 
+<dialog class="save" id="saveDialog" aria-labelledby="saveTitle">
+  <form method="dialog" id="saveForm">
+    <h2 id="saveTitle">Save dataset</h2>
+    <div class="muted small" id="saveSummary"></div>
+    <div class="field">
+      <label for="datasetName">Name</label>
+      <input id="datasetName" maxlength="40" placeholder="dataset" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="savePath">Save in (a folder on this computer)</label>
+      <div class="hrow" style="flex-wrap: nowrap">
+        <input id="savePath" spellcheck="false" autocomplete="off" placeholder="/Users/me/data">
+        <button type="button" class="ghost small" id="saveGo" title="Open the folder typed here">Open</button>
+        <button type="button" class="ghost small" id="saveUp" title="The folder above">Up</button>
+      </div>
+      <div class="places" id="savePlaces"></div>
+      <ul class="folders" id="saveFolders" aria-label="Folders"></ul>
+    </div>
+    <label class="check field" title="Also write the recordings as a LeRobot v2.1 dataset (dream_format/) for Dream Labs fine-tuning, checked with the Dream Labs checks"><input type="checkbox" id="dreamFormat" checked> Also save in the Dream Labs format (LeRobot v2.1)</label>
+    <div class="save-target" id="saveTarget"></div>
+    <div class="save-error" id="saveError" role="alert"></div>
+    <div class="dialog-actions">
+      <button type="button" class="ghost" id="saveCancel">Cancel</button>
+      <button type="submit" id="saveConfirm">Save here</button>
+    </div>
+  </form>
+</dialog>
 <script type="module">
 import { loadOOD, readOOD } from "/ood.js";
 import { initSeed, seeding, afterPreview } from "/seed.js";
@@ -852,25 +888,84 @@ function dreamFormatText(d) {
     : "Dream Labs checks did not run: " + d.check.error;
   return ` · Dream Labs format: ${d.episodes} episodes, ${d.frames} frames in ${d.folder}${left}; ${check}`;
 }
-$("saveDataset").onclick = async () => {
-  const ids = runs.filter(r => picked.has(r.id)).map(r => r.id);
-  if (!ids.length) return;
-  $("saveDataset").disabled = true;
-  const dreamFormat = $("dreamFormat").checked;
-  $("datasetNote").className = "dataset-note";
-  $("datasetNote").textContent = dreamFormat ? `Saving ${ids.length} runs and converting their recordings to the Dream Labs format…`
-                                             : `Saving ${ids.length} runs…`;
+/** The save popup: choose a name and a folder on this computer, then save the picked runs there. */
+const saveBox = { path: "", writable: false, asked: 0 };
+const pickedRuns = () => runs.filter(r => picked.has(r.id));
+function remembered(key) { try { return localStorage.getItem(key) || ""; } catch { return ""; } }
+function remember(key, value) { try { localStorage.setItem(key, value); } catch {} }
+function showTarget() {
+  const name = ($("datasetName").value.trim().replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)) || "dataset";
+  $("saveTarget").innerHTML = saveBox.path
+    ? `Saved as <code>${esc(saveBox.path.replace(/\/$/, ""))}/&lt;date-time&gt;-${esc(name)}/</code>`
+      + (saveBox.writable ? "" : " · <b>this folder cannot be written</b>")
+    : "";
+  $("saveConfirm").disabled = !saveBox.path || !saveBox.writable;
+}
+async function openFolder(path) {
+  const ask = ++saveBox.asked;  // only the folder asked for last counts: a slow answer for an earlier one is dropped
+  $("saveError").textContent = "";
+  $("saveConfirm").disabled = true;
   try {
-    const r = await api("/api/datasets", { run_ids: ids, name: $("datasetName").value, dream_format: dreamFormat });
+    const r = await api("/api/folders?path=" + encodeURIComponent(path || ""));
+    if (ask !== saveBox.asked) return;
+    Object.assign(saveBox, { path: r.path, writable: r.writable, parent: r.parent });
+    $("savePath").value = r.path;
+    $("saveUp").disabled = !r.parent;
+    $("savePlaces").innerHTML = r.places.map(p =>
+      `<button type="button" class="ghost small" data-path="${esc(p.path)}">${esc(p.name)}</button>`).join("");
+    $("saveFolders").innerHTML = r.folders.length
+      ? r.folders.map(f => `<li><button type="button" data-folder="${esc(f)}">📁 ${esc(f)}</button></li>`).join("")
+        + (r.more ? `<li class="empty">${r.more} more not shown</li>` : "")
+      : `<li class="empty">No folders inside. The dataset is saved here.</li>`;
+    remember("savePath", r.path);
+  } catch (err) {
+    if (ask !== saveBox.asked) return;
+    $("saveError").textContent = err.message;
+  }
+  showTarget();
+}
+$("savePlaces").onclick = e => { const b = e.target.closest("button[data-path]"); if (b) openFolder(b.dataset.path); };
+$("saveFolders").onclick = e => {
+  const b = e.target.closest("button[data-folder]");
+  if (b) openFolder(saveBox.path.replace(/\/$/, "") + "/" + b.dataset.folder);
+};
+$("saveUp").onclick = () => saveBox.parent && openFolder(saveBox.parent);
+$("saveGo").onclick = () => openFolder($("savePath").value.trim());
+$("savePath").onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); openFolder($("savePath").value.trim()); } };
+$("datasetName").oninput = showTarget;
+$("saveCancel").onclick = () => $("saveDialog").close();
+$("saveDataset").onclick = () => {
+  const chosen = pickedRuns();
+  if (!chosen.length) return;
+  const n = label => chosen.filter(r => finalLabel(r) === label).length;
+  $("saveSummary").textContent = `${chosen.length} picked runs · success ${n("success")} · failure ${n("failure")} · invalid ${n("invalid")}`;
+  $("saveError").textContent = "";
+  $("saveConfirm").textContent = "Save here";
+  $("saveDialog").showModal();
+  openFolder(saveBox.path || remembered("savePath"));
+};
+$("saveForm").onsubmit = async e => {
+  e.preventDefault();
+  const ids = pickedRuns().map(r => r.id);
+  if (!ids.length || !saveBox.path) return;
+  const dreamFormat = $("dreamFormat").checked;
+  $("saveConfirm").disabled = true;
+  $("saveConfirm").textContent = dreamFormat ? "Saving and converting…" : "Saving…";
+  $("saveError").textContent = "";
+  try {
+    const r = await api("/api/datasets", { run_ids: ids, name: $("datasetName").value, dream_format: dreamFormat,
+                                           location: saveBox.path });
+    $("saveDialog").close();
     $("datasetNote").className = r.dream_format && r.dream_format.check.ok !== true ? "dataset-note" : "dataset-note ok";
     $("datasetNote").textContent = `Saved ${r.folder}: ${r.count} runs (success ${r.labels.success}, failure ${r.labels.failure}, invalid ${r.labels.invalid})`
       + (r.skipped.length ? ` · ${r.skipped.length} skipped (still going or gone)` : "") + " · with manifest.json"
       + dreamFormatText(r.dream_format);
     picked.clear(); keepPicked(); renderRuns();
   } catch (err) {
-    $("datasetNote").className = "dataset-note";
-    $("datasetNote").textContent = "Not saved: " + err.message;
+    $("saveError").textContent = "Not saved: " + err.message;
   }
+  $("saveConfirm").textContent = "Save here";
+  showTarget();
   showPicked();
 };
 
