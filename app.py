@@ -61,6 +61,7 @@ LIVE = WORK / "live.jpg"
 STOP = WORK / "stop"
 TELEOP_STATE = WORK / "teleop.json"
 EPISODES = HERE / "episodes"  # KSY's recordings (recorder.py), one per run id
+DATASETS = HERE / "datasets"  # datasets saved from the page: chosen runs, their recordings and a manifest
 MODES = ("collect", "test", "human", "plain")
 ## Data collection: how fast a failure is handed to the recovery script, and what it does (sim.py's options).
 COLLECTION = {"stall_s": 6.0, "quick_fail": True, "script_goal": "finish", "script_speed": 1.0, "end_on_success": True}
@@ -403,6 +404,77 @@ def delete_runs(run_ids):
     return deleted, skipped
 
 
+SETTING_KEYS = ("mode", "robot", "room", "seed", "split", "setting", "scene_version", "layout", "ood", "ood_random",
+                "scene", "collection", "seconds", "batch_id", "resumed_from")
+
+
+def run_settings(meta):
+    """How a run was set up (what the page shows, and what a dataset's manifest keeps)."""
+    return {key: meta.get(key) for key in SETTING_KEYS}
+
+
+def link_tree(source, target):
+    """Copy a folder as hard links (no extra disk, and it survives deleting the run); plain copies where links fail."""
+    def link(src, dst):
+        try:
+            os.link(src, dst)
+        except OSError:
+            shutil.copy2(src, dst)
+    shutil.copytree(source, target, copy_function=link)
+
+
+def save_dataset(run_ids, name):
+    """A dataset of the chosen runs: datasets/<time>-<name>/ with runs/<id>/ (trajectory, labels, meta), episodes/<id>/
+    (recording: steps, physics, cameras) and manifest.json (each run's label, task, judge spec and settings).
+    @return (folder, manifest). @throws ValueError when no chosen run can be saved."""
+    rules = current_rules()
+    slug = re.sub(r"[^A-Za-z0-9_-]+", "-", str(name or "")).strip("-")[:40] or "dataset"
+    folder = DATASETS / f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{slug}"
+    entries, skipped = [], []
+    busy = BATCH.active_ids() | ({RUNNER.run_id} if RUNNER.running() else set())
+    for run_id in dict.fromkeys(run_ids):
+        d = run_dir(run_id) if isinstance(run_id, str) else None
+        if not d or run_id in busy:
+            skipped.append(run_id)
+            continue
+        meta = read_json(d / "meta.json", {})
+        verdict, hand = run_verdict(d, rules), read_json(d / "label.json") or {}
+        by_hand = hand.get("source") == "human"
+        link_tree(d, folder / "runs" / run_id)
+        if (EPISODES / run_id).is_dir():
+            link_tree(EPISODES / run_id, folder / "episodes" / run_id)
+        entries.append({
+            "id": run_id, "task": meta.get("task"),
+            "label": hand["label"] if by_hand else verdict["label"],
+            "label_source": "human" if by_hand else "rules",
+            "reason": hand.get("reason") if by_hand else verdict["reason"],
+            "rules_verdict": {"label": verdict["label"], "reason": verdict["reason"]},
+            "judge": verdict.get("spec"), "success_time_s": verdict.get("success_time_s"),
+            "sim_seconds": meta.get("sim_seconds"), "steps_by_source": meta.get("steps_by_source"),
+            "recorded": (EPISODES / run_id).is_dir(), "settings": run_settings(meta),
+        })
+    if not entries:
+        raise ValueError("None of the chosen runs can be saved (still going, or gone).")
+    counts = {label: sum(e["label"] == label for e in entries) for label in LABELS}
+    manifest = {"name": slug, "created_at": datetime.now().isoformat(timespec="seconds"), "rules": rules,
+                "count": len(entries), "labels": counts, "skipped": skipped, "runs": entries,
+                "layout": {"runs/<id>/": "meta.json, trajectory.json (object poses, contacts per step), label.json, last.jpg",
+                           "episodes/<id>/": "steps.npz (states, actions, who sent each step, physics), events.json, "
+                                             "top/left/right.mp4, meta.json, outcome.json (recorded runs only)"}}
+    write_json(folder / "manifest.json", manifest)
+    return folder, manifest
+
+
+def list_datasets():
+    rows = []
+    for folder in sorted(DATASETS.glob("*"), reverse=True) if DATASETS.is_dir() else []:
+        manifest = read_json(folder / "manifest.json")
+        if manifest:
+            rows.append({"folder": f"datasets/{folder.name}", "count": manifest.get("count"),
+                         "labels": manifest.get("labels"), "created_at": manifest.get("created_at")})
+    return rows
+
+
 def write_label(d, verdict, rules, **extra):
     """Save the rules' verdict as the run's label (source "rules", or "batch" when a batch saves it)."""
     write_json(d / "label.json", {"label": verdict["label"], "reason": verdict["reason"],
@@ -722,6 +794,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(ood.GROUPS)
         if path == "/api/status":
             return self.send_json(RUNNER.status())
+        if path == "/api/datasets":
+            return self.send_json({"datasets": list_datasets()})
         if path == "/api/episodes":
             return self.send_json({"episodes": list_episodes()})
         m = re.fullmatch(r"/api/episodes/([^/]+)/frame\.jpg", path)
@@ -857,6 +931,16 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 return self.send_json({"error": "The label must be success, failure or invalid."}, 400)
             return self.send_json({"label": read_json(d / "label.json")})
+        if self.path == "/api/datasets":  # {"run_ids": [...], "name": "..."}: save those runs as a dataset
+            run_ids = body.get("run_ids")
+            if not isinstance(run_ids, list) or not run_ids or any(not isinstance(r, str) for r in run_ids):
+                return self.send_json({"error": "Pick at least one run."}, 400)
+            try:
+                folder, manifest = save_dataset(run_ids, body.get("name"))
+            except ValueError as error:
+                return self.send_json({"error": str(error)}, 400)
+            return self.send_json({"folder": f"datasets/{folder.name}", "count": manifest["count"],
+                                   "labels": manifest["labels"], "skipped": manifest["skipped"]})
         if self.path == "/api/runs/delete":  # {"run_ids": [...]}: finished runs and their recordings, for good
             run_ids = body.get("run_ids")
             if not isinstance(run_ids, list) or not run_ids or any(not isinstance(r, str) for r in run_ids):

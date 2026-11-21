@@ -40,7 +40,13 @@ Open http://localhost:8000.
    rules: changing the rules or **Save labels** never replaces it, and `label.json` keeps the rules' verdict beside
    it (`source: "human"`, `rules_verdict`). The run list marks these runs with ✋, and its filter can show only them
    or only the ones where you and the rules disagree.
-9. **Delete**: **Delete this run** (in a run's detail), **Delete shown** (every run the list shows, e.g. one batch) or
+9. **Datasets**: each row's **+ / −** puts the run in the dataset or takes it out; **+ Add successes** picks every
+   success the list shows (e.g. one batch). **Save dataset** writes `datasets/<time>-<name>/`: `runs/<id>/` and the
+   recording `episodes/<id>/` of every picked run (hard links: no extra disk, and they stay if a run is deleted later),
+   and `manifest.json` with each run's final label (yours first), the rules' verdict, the judge spec, who acted, and
+   its settings. Each run's settings (mode, robot and room, seed or layout, scene settings and the ones drawn from
+   the seed, data collection settings, time limit, batch) show under its task in the list and in full in its detail.
+10. **Delete**: **Delete this run** (in a run's detail), **Delete shown** (every run the list shows, e.g. one batch) or
    **Delete** in Recordings removes a finished run for good: `runs/<id>` and its recording `episodes/<id>`. The page
    asks first; the run going now is never deleted.
 

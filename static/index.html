@@ -185,16 +185,31 @@
   th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: break-word; }
   th { color: var(--muted); font-weight: 550; font-size: 12px; }
   th:nth-child(1) { width: 17%; } th:nth-child(3) { width: 16%; } th:nth-child(5) { width: 14%; }
+  #runsTable th:nth-child(1) { width: 34px; } #runsTable th:nth-child(2) { width: 16%; }
+  #runsTable th:nth-child(3) { width: auto; } #runsTable th:nth-child(4) { width: 15%; }
+  #runsTable th:nth-child(5) { width: auto; } #runsTable th:nth-child(6) { width: 12%; }
   /* The run list fits its panel's width (not the window's): fewer columns when the panel is narrow. */
   #runsPanel { container-type: inline-size; }
   @container (max-width: 560px) {
     .hide-md { display: none; }
-    th:nth-child(1) { width: 22%; } th:nth-child(3) { width: 21%; }
+    #runsTable th:nth-child(2) { width: 21%; } #runsTable th:nth-child(4) { width: 21%; }
   }
   @container (max-width: 400px) {
     .hide-sm { display: none; }
-    th:nth-child(1) { width: 28%; } th:nth-child(3) { width: 28%; }
+    #runsTable th:nth-child(2) { width: 27%; } #runsTable th:nth-child(4) { width: 27%; }
   }
+  .pick { width: 26px; height: 26px; padding: 0; border-radius: 6px; font-weight: 700; font-size: 15px; line-height: 1;
+          background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  .pick.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  tr.picked td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  .run-settings { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .dataset-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--well); }
+  .dataset-bar input { width: 150px; padding: 5px 8px; font-size: 12px; }
+  .dataset-note { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .dataset-note.ok { color: var(--ok); }
+  dl.settings { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 12px; font-size: 12px; margin: 6px 0 0; }
+  dl.settings dt { color: var(--muted); }
+  dl.settings dd { margin: 0; overflow-wrap: anywhere; }
   tbody tr { cursor: pointer; }
   tbody tr:hover, tbody tr.sel { background: var(--accent-soft); }
   .detail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 14px; }
@@ -446,9 +461,19 @@
         <span class="hrow"><button id="saveLabels" class="ghost small">Save labels</button><button id="deleteShown" class="ghost small danger" title="Delete every run shown in the list, with its recording">Delete shown</button></span>
       </div>
       <div class="muted small" id="runSummary" style="margin-top: 8px"></div>
-      <table style="margin-top: 8px">
-        <thead><tr><th>When</th><th>Task</th><th>Result</th><th class="hide-sm">Why</th><th class="hide-md">Label by</th></tr></thead>
-        <tbody id="runs"><tr><td colspan="5" class="muted">No runs yet.</td></tr></tbody>
+      <div class="dataset-bar" role="group" aria-label="Dataset">
+        <span class="small"><b id="pickedCount">0</b> picked for a dataset</span>
+        <button class="ghost small" id="pickSuccesses" title="Pick every success the list shows">+ Add successes</button>
+        <button class="ghost small" id="pickClear">Clear</button>
+        <span class="hrow" style="margin-left: auto">
+          <input id="datasetName" maxlength="40" placeholder="dataset name" aria-label="Dataset name">
+          <button class="small" id="saveDataset" title="Save the picked runs, their recordings and a manifest to datasets/">Save dataset</button>
+        </span>
+      </div>
+      <div class="dataset-note" id="datasetNote"></div>
+      <table id="runsTable" style="margin-top: 8px">
+        <thead><tr><th aria-label="In the dataset"></th><th>When</th><th>Task</th><th>Result</th><th class="hide-sm">Why</th><th class="hide-md">Label by</th></tr></thead>
+        <tbody id="runs"><tr><td colspan="6" class="muted">No runs yet.</td></tr></tbody>
       </table>
       <div id="detail" class="detail" hidden>
         <div>
@@ -469,6 +494,8 @@
             <div class="muted small" id="handState" style="margin-top: 6px"></div>
           </div>
           <ul class="checks" id="detailChecks"></ul>
+          <div class="label" style="margin: 12px 0 0">How it was run</div>
+          <dl class="settings" id="detailSettings"></dl>
         </div>
         <div>
           <svg class="chart" id="chart" viewBox="0 0 640 190" role="img" aria-label="Distance from each judged object to its target over time"></svg>
@@ -652,20 +679,27 @@ function renderRuns() {
       + (byHand ? ` · ${byHand} by hand (${list.filter(disagrees).length} differ from the rules)` : "")
     : "";
   $("deleteShown").disabled = !list.length;
-  if (!list.length) { $("runs").innerHTML = '<tr><td colspan="5" class="muted">No runs yet.</td></tr>'; $("detail").hidden = true; return; }
+  showPicked();
+  if (!list.length) { $("runs").innerHTML = '<tr><td colspan="6" class="muted">No runs yet.</td></tr>'; $("detail").hidden = true; return; }
   $("runs").innerHTML = list.map(run => {
     const v = verdict(run), hand = handLabel(run);
     const why = hand ? `${hand.reason}${hand.label !== v.label ? ` (rules: ${v.label})` : ""}` : words(v.reason);
     const by = hand ? "hand" : run.label ? "rules (saved)" : "rules";
-    return `<tr data-id="${esc(run.id)}" class="${run.id === selected ? "sel" : ""}">
+    const on = picked.has(run.id);
+    return `<tr data-id="${esc(run.id)}" class="${run.id === selected ? "sel" : ""} ${on ? "picked" : ""}">
+      <td><button class="pick ${on ? "on" : ""}" data-pick="${esc(run.id)}" aria-pressed="${on}" title="${on ? "Take out of the dataset" : "Add to the dataset"}">${on ? "−" : "+"}</button></td>
       <td>${when(run.started_at)}</td>
-      <td>${esc(run.task)}</td>
+      <td>${esc(run.task)}<span class="run-settings">${esc(settingsBrief(run))}</span></td>
       <td>${chip(finalLabel(run))}${hand ? '<span class="by-hand" title="Labeled by hand">✋</span>' : ""}</td>
       <td class="hide-sm">${esc(why)}</td>
       <td class="hide-md"><span class="muted">${by}</span></td>
     </tr>`;
   }).join("");
   for (const tr of $("runs").querySelectorAll("tr")) tr.onclick = () => { selected = tr.dataset.id; renderRuns(); };
+  for (const b of $("runs").querySelectorAll("[data-pick]")) b.onclick = e => {
+    e.stopPropagation();
+    togglePick(b.dataset.pick);
+  };
   renderDetail();
 }
 
@@ -684,6 +718,7 @@ async function renderDetail() {
   const hand = handLabel(run);
   $("detailHead").innerHTML = `${chip(finalLabel(run))}${hand ? '<span class="by-hand">✋ by hand</span>' : ""} <strong>${esc(run.task)}</strong><div class="muted" style="font-size:13px">${when(run.started_at)} · ${fmt(run.sim_seconds || 0)} s · ${esc(extra)}</div>`;
   for (const b of document.querySelectorAll("[data-hand]")) b.classList.toggle("on", !!hand && b.dataset.hand === hand.label);
+  $("detailSettings").innerHTML = settingsRows(run, v).map(([k, val]) => `<dt>${esc(k)}</dt><dd>${esc(val)}</dd>`).join("");
   if ($("handNote").dataset.run !== run.id) { $("handNote").value = hand && hand.reason !== "set by hand" ? hand.reason : ""; $("handNote").dataset.run = run.id; }
   $("handState").innerHTML = `Rules say ${chip(v.label)} ${esc(words(v.reason))}`
     + (hand ? ` · you set ${chip(hand.label)} ${when(hand.saved_at)}` : " · not labeled by hand")
@@ -742,6 +777,81 @@ function drawChart(v) {
     : sw("var(--accent)", "distance") + sw("var(--touch)", "gripping"))
     + sw("var(--muted)", "limit") + sw("var(--ok)", "success", "opacity:.35");
 }
+
+/* ---------- each run's settings ---------- */
+
+const MODE_TEXT = { collect: "data collection", test: "test", human: "human only", resumed: "resumed", plain: "Dream-1 only", assist: "Dream-1 + script + human" };
+const startText = run => run.layout === "custom" ? "custom layout" : run.layout === "sandbox" ? "Sandbox table"
+  : run.seed != null ? `seed ${run.seed}${run.split === "eval" ? " (eval)" : ""}` : "default scene";
+/** One line under the task in the list: mode · start · robot / room. */
+function settingsBrief(run) {
+  return [MODE_TEXT[run.mode] || run.mode, startText(run),
+          run.robot && run.robot !== "yam" ? (simCatalog?.robots[run.robot] || run.robot) : "",
+          run.room && run.room !== "yam_tabletop" ? (simCatalog?.rooms[run.room] || run.room) : "",
+          run.ood_random?.length ? `random ×${run.ood_random.length}` : ""].filter(Boolean).join(" · ");
+}
+/** Every setting the run was made with (meta.json), for its detail. */
+function settingsRows(run, v) {
+  const rows = [["Mode", MODE_TEXT[run.mode] || run.mode || "—"],
+                ["Robot · room", `${simCatalog?.robots[run.robot] || run.robot || "YAM"} · ${simCatalog?.rooms[run.room] || run.room || "YAM tabletop"}`],
+                ["Start", run.layout === "custom" ? `custom layout: ${Object.keys(run.scene?.items || {}).map(itemName).join(", ")}`
+                  : `${startText(run)}${run.setting ? `, setting ${run.setting}` : ""}${run.scene_version ? `, scene v${run.scene_version}` : ""}`]];
+  const changed = Object.entries(run.ood || {}).filter(([k]) => k !== "camera_views");
+  if (run.ood?.camera_views) changed.push(["camera", Object.keys(run.ood.camera_views).join(", ")]);
+  rows.push(["Scene settings", changed.length ? changed.map(([k, val]) => `${k} ${typeof val === "object" ? JSON.stringify(val) : val}`).join(", ") : "defaults"]);
+  if (run.ood_random?.length) rows.push(["Drawn from the seed", run.ood_random.join(", ")]);
+  const c = run.collection;
+  if (c) rows.push(["Data collection", `hand over after ${c.stall_s ?? 12} s${c.quick_fail ? " + missed grasp / pushed away" : ""} · script ${c.script_goal === "finish" ? "finishes the task" : "picks it up"} · ${c.script_speed ?? 1}× speed${c.end_on_success ? " · ends when done" : ""}`]);
+  rows.push(["Time limit", `${fmt(run.seconds || 0, 0)} s (ran ${fmt(run.sim_seconds || 0)} s simulated${run.ended_early ? `, ended: ${run.ended_early}` : ""})`]);
+  if (run.batch_id) rows.push(["Batch", batchName(run.batch_id)]);
+  if (run.resumed_from) rows.push(["Resumed from", `${run.resumed_from.run} at step ${run.resumed_from.step}`]);
+  const spec = run.judge || v.spec;
+  rows.push(["Judged as", spec ? `${TYPE_UI[spec.type || "pick_place"]?.label}: ${specText(spec)}` : "not judged"]);
+  if (run.steps_by_source) rows.push(["Who acted (steps)", Object.entries(run.steps_by_source).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(", ")]);
+  if (run.model_responses != null) rows.push(["Dream-1 answers", String(run.model_responses)]);
+  return rows;
+}
+
+/* ---------- a dataset: the runs picked with + / − ---------- */
+
+const picked = new Set((() => { try { return JSON.parse(localStorage.getItem("picked") || "[]"); } catch { return []; } })());
+function keepPicked() { try { localStorage.setItem("picked", JSON.stringify([...picked])); } catch {} }
+function togglePick(id) {
+  picked.has(id) ? picked.delete(id) : picked.add(id);
+  keepPicked();
+  renderRuns();
+}
+function showPicked() {
+  for (const id of [...picked]) if (!runs.some(r => r.id === id)) picked.delete(id);  // deleted runs drop out
+  const chosen = runs.filter(r => picked.has(r.id));
+  const n = label => chosen.filter(r => finalLabel(r) === label).length;
+  $("pickedCount").textContent = chosen.length;
+  $("pickedCount").title = `success ${n("success")} · failure ${n("failure")} · invalid ${n("invalid")}`;
+  $("saveDataset").disabled = !chosen.length;
+  $("pickClear").disabled = !chosen.length;
+}
+$("pickSuccesses").onclick = () => {
+  for (const run of shownRuns()) if (finalLabel(run) === "success") picked.add(run.id);
+  keepPicked();
+  renderRuns();
+};
+$("pickClear").onclick = () => { picked.clear(); keepPicked(); renderRuns(); };
+$("saveDataset").onclick = async () => {
+  const ids = runs.filter(r => picked.has(r.id)).map(r => r.id);
+  if (!ids.length) return;
+  $("saveDataset").disabled = true;
+  try {
+    const r = await api("/api/datasets", { run_ids: ids, name: $("datasetName").value });
+    $("datasetNote").className = "dataset-note ok";
+    $("datasetNote").textContent = `Saved ${r.folder}: ${r.count} runs (success ${r.labels.success}, failure ${r.labels.failure}, invalid ${r.labels.invalid})`
+      + (r.skipped.length ? ` · ${r.skipped.length} skipped (still going or gone)` : "") + " · with manifest.json";
+    picked.clear(); keepPicked(); renderRuns();
+  } catch (err) {
+    $("datasetNote").className = "dataset-note";
+    $("datasetNote").textContent = "Not saved: " + err.message;
+  }
+  showPicked();
+};
 
 /** Label the selected run by hand ("" = back to the rules). */
 async function setHand(label) {
