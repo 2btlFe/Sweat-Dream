@@ -84,8 +84,26 @@
   svg.chart text { fill: var(--muted); font-size: 11px; }
   .chart-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--muted); margin-top: 4px; }
   .sw { display: inline-block; width: 12px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+  /* Scene setup */
+  .scene { display: grid; grid-template-columns: 230px 1fr; gap: 16px; align-items: start; }
+  .side { display: flex; flex-direction: column; gap: 12px; }
+  .robot { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--bg); }
+  .robot strong { display: block; font-size: 15px; }
+  .robot span { font-size: 12px; color: var(--muted); }
+  .items { display: flex; flex-wrap: wrap; gap: 6px; }
+  .item { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--text); font-weight: 500; font-size: 13px; }
+  .item i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .item.off { opacity: .45; text-decoration: line-through; }
+  .scene-buttons { display: flex; gap: 6px; }
+  .scene-buttons button { padding: 6px 12px; font-size: 13px; }
+  svg.map { width: 100%; max-width: 560px; height: auto; display: block; border-radius: 8px; touch-action: none; user-select: none; }
+  svg.map text { font-size: 13px; fill: #3b3326; pointer-events: none; }
+  svg.map [data-item] { cursor: grab; }
+  .scene-note { font-size: 13px; color: var(--muted); margin-top: 6px; min-height: 20px; }
+  .scene-note.bad, .task-note.bad { color: var(--bad); }
+  .task-note { font-size: 13px; margin-top: 6px; min-height: 0; }
   @media (max-width: 760px) {
-    .banners, .detail { grid-template-columns: 1fr; }
+    .banners, .detail, .scene { grid-template-columns: 1fr; }
     .hide-sm { display: none; }
   }
 </style>
@@ -105,12 +123,42 @@
   </section>
 
   <section class="panel">
+    <h2>Scene</h2>
+    <p class="hint">Pick what is on the table. Drag to move.</p>
+    <div class="scene">
+      <div class="side">
+        <div>
+          <label>Robot</label>
+          <div class="robot"><strong>YAM · 2 arms</strong><span>The only robot in this simulator</span></div>
+        </div>
+        <div>
+          <label>Objects</label>
+          <div class="items" id="objectToggles"></div>
+        </div>
+        <div>
+          <label>Targets</label>
+          <div class="items" id="targetToggles"></div>
+        </div>
+        <div class="scene-buttons">
+          <button id="shuffle" class="ghost">Shuffle</button>
+          <button id="resetScene" class="ghost">Reset</button>
+        </div>
+      </div>
+      <div>
+        <svg class="map" id="map" viewBox="0 0 720 540" role="img" aria-label="Top view of the table. Drag objects to move them."></svg>
+        <div class="scene-note" id="sceneNote"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
     <div class="row">
       <div class="grow"><label for="task">Task</label><input id="task" value="put apple into the bowl"></div>
       <div><label for="seconds">Seconds</label><input id="seconds" type="number" min="10" max="300" value="60"></div>
       <button id="run">Run</button>
       <button id="stop" class="stop" hidden>Stop</button>
     </div>
+    <div class="task-note" id="taskNote"></div>
     <div class="examples" id="examples"></div>
   </section>
 
@@ -218,6 +266,7 @@ function parseTask(task) {
 function judge(run, traj, r) {
   const parsed = parseTask(run.task);
   if (!parsed) return { label: "unknown", reason: "Unknown task (use: put apple into the bowl)" };
+  if (!traj.positions[parsed.object] || !traj.positions[parsed.target]) return { label: "unknown", reason: "Not on the table" };
   const t = traj.t, P = traj.positions[parsed.object], T = traj.positions[parsed.target], touch = traj.touching[parsed.object];
   const n = t.length;
   if (n < 2) return { label: "unknown", reason: "Too short" };
@@ -376,6 +425,146 @@ $("saveLabels").onclick = async () => {
   } catch (err) { alert(err.message); }
 };
 
+/* ---------- scene ---------- */
+
+// World frame, metres. The map shows the table from above as the top camera does: +x to the left, +y toward the arms.
+const ITEMS = {
+  apple:        { label: "apple",   r: 0.040, color: "#c62828", home: [0.15, 0.105] },
+  orange:       { label: "orange",  r: 0.033, color: "#f97316", home: [0.0, 0.13] },
+  banana:       { label: "banana",  r: 0.050, color: "#eab308", home: [-0.115, 0.085] },
+  water_bottle: { label: "bottle",  r: 0.030, color: "#5b9aa9", home: [0.22, -0.11] },
+  bowl:         { label: "bowl",    r: 0.083, color: "#8b5e3c", home: [0.0, -0.04], target: true },
+  plate:        { label: "plate",   r: 0.072, color: "#3b6ea8", home: [-0.22, -0.045], target: true },
+};
+const AREA = { x: [-0.30, 0.30], y: [-0.22, 0.18] };   // where items may go (both arms reach it)
+const VIEW = { x0: 0.36, y0: -0.24, scale: 1000 };       // world -> map pixels (720 x 540: the area and both arms)
+const toMap = ([x, y]) => [(VIEW.x0 - x) * VIEW.scale, (y - VIEW.y0) * VIEW.scale];
+const fromMap = (px, py) => [VIEW.x0 - px / VIEW.scale, py / VIEW.scale + VIEW.y0];
+const clampArea = ([x, y]) => [Math.min(Math.max(x, AREA.x[0]), AREA.x[1]), Math.min(Math.max(y, AREA.y[0]), AREA.y[1])];
+
+let sceneOn = {}, scenePos = {}, dragging = null;
+function resetScene() {
+  for (const [name, item] of Object.entries(ITEMS)) { sceneOn[name] = true; scenePos[name] = [...item.home]; }
+  drawScene();
+}
+
+/** Pairs of items on the table that touch each other. */
+function overlaps() {
+  const names = Object.keys(ITEMS).filter(n => sceneOn[n]), bad = new Set();
+  for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++) {
+    const a = names[i], b = names[j];
+    if (Math.hypot(scenePos[a][0] - scenePos[b][0], scenePos[a][1] - scenePos[b][1]) < ITEMS[a].r + ITEMS[b].r + 0.005) { bad.add(a); bad.add(b); }
+  }
+  return bad;
+}
+
+function sceneProblem() {
+  const on = Object.keys(ITEMS).filter(n => sceneOn[n]);
+  if (!on.some(n => !ITEMS[n].target)) return "Pick at least one object.";
+  if (!on.some(n => ITEMS[n].target)) return "Pick a bowl or a plate.";
+  if (overlaps().size) return "Some items overlap. Move them apart.";
+  return "";
+}
+
+function drawScene() {
+  // Toggles
+  for (const [box, wantTarget] of [["objectToggles", false], ["targetToggles", true]]) {
+    $(box).innerHTML = Object.entries(ITEMS).filter(([, it]) => !!it.target === wantTarget).map(([name, it]) =>
+      `<button class="item ${sceneOn[name] ? "" : "off"}" data-toggle="${name}" aria-pressed="${sceneOn[name]}"><i style="background:${it.color}"></i>${it.label}</button>`).join("");
+  }
+  document.querySelectorAll("[data-toggle]").forEach(b => b.onclick = () => { sceneOn[b.dataset.toggle] = !sceneOn[b.dataset.toggle]; drawScene(); });
+
+  // Map
+  const bad = overlaps();
+  const [ax0, ay0] = toMap([AREA.x[1], AREA.y[0]]), [ax1, ay1] = toMap([AREA.x[0], AREA.y[1]]);
+  let out = `<rect x="0" y="0" width="720" height="540" fill="#dcc59b"/>
+    <rect x="${ax0}" y="${ay0}" width="${ax1 - ax0}" height="${ay1 - ay0}" fill="none" stroke="#a88f63" stroke-dasharray="6 5" rx="6"/>`;
+  for (const [side, x] of [["left arm", 0.305], ["right arm", -0.305]]) {
+    const [px, py] = toMap([x, 0.24]);
+    out += `<circle cx="${px}" cy="${py}" r="34" fill="#2b2f36"/><text x="${px}" y="${py - 42}" text-anchor="middle">${side}</text>`;
+  }
+  const order = Object.keys(ITEMS).sort((a, b) => !!ITEMS[b].target - !!ITEMS[a].target);  // targets first, below
+  for (const name of order) {
+    if (!sceneOn[name]) continue;
+    const it = ITEMS[name], [px, py] = toMap(scenePos[name]), r = it.r * VIEW.scale;
+    out += `<g data-item="${name}">
+      <circle cx="${px}" cy="${py}" r="${r}" fill="${it.color}" fill-opacity="${it.target ? 0.55 : 0.95}" stroke="${bad.has(name) ? "#dc2626" : "#00000055"}" stroke-width="${bad.has(name) ? 4 : 1.5}"/>
+      <text x="${px}" y="${it.target ? py + 4 : py + r + 15}" text-anchor="middle">${it.label}</text></g>`;
+  }
+  $("map").innerHTML = out;
+
+  const problem = sceneProblem();
+  $("sceneNote").textContent = problem || "Ready. The next run uses this scene.";
+  $("sceneNote").classList.toggle("bad", !!problem);
+  drawExamples();
+  checkTask();
+}
+
+function eventToWorld(e) {
+  const pt = $("map").createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  const p = pt.matrixTransform($("map").getScreenCTM().inverse());
+  return fromMap(p.x, p.y);
+}
+$("map").addEventListener("pointerdown", e => {
+  const g = e.target.closest("[data-item]");
+  if (!g) return;
+  dragging = g.dataset.item;
+  $("map").setPointerCapture(e.pointerId);
+});
+$("map").addEventListener("pointermove", e => {
+  if (!dragging) return;
+  scenePos[dragging] = clampArea(eventToWorld(e));
+  drawScene();
+});
+for (const type of ["pointerup", "pointercancel"]) $("map").addEventListener(type, () => { dragging = null; });
+
+$("shuffle").onclick = () => {
+  const placed = [];
+  for (const name of Object.keys(ITEMS).filter(n => sceneOn[n])) {
+    const r = ITEMS[name].r;
+    for (let tries = 0; tries < 300; tries++) {
+      const p = [AREA.x[0] + Math.random() * (AREA.x[1] - AREA.x[0]), AREA.y[0] + Math.random() * (AREA.y[1] - AREA.y[0])];
+      if (placed.every(q => Math.hypot(p[0] - q.p[0], p[1] - q.p[1]) > r + q.r + 0.02)) { scenePos[name] = p; break; }
+    }
+    placed.push({ p: scenePos[name], r });
+  }
+  drawScene();
+};
+$("resetScene").onclick = resetScene;
+
+function sceneForRun() {
+  const items = {};
+  for (const name of Object.keys(ITEMS)) if (sceneOn[name]) items[name] = scenePos[name].map(v => Math.round(v * 1e4) / 1e4);
+  return { items };
+}
+
+/** Example tasks for what is on the table. */
+function drawExamples() {
+  const objects = Object.keys(ITEMS).filter(n => sceneOn[n] && !ITEMS[n].target);
+  const targets = Object.keys(ITEMS).filter(n => sceneOn[n] && ITEMS[n].target);
+  const words = { apple: "apple", orange: "orange", banana: "banana", water_bottle: "water bottle" };
+  const list = [];
+  for (const t of targets) for (const o of objects) list.push(t === "bowl" ? `put ${words[o]} into the bowl` : `put ${words[o]} on the plate`);
+  $("examples").innerHTML = "";
+  for (const text of list.slice(0, 8)) {
+    const b = document.createElement("button");
+    b.className = "ghost"; b.textContent = text;
+    b.onclick = () => { $("task").value = text; checkTask(); };
+    $("examples").appendChild(b);
+  }
+}
+
+/** Warn when the task names something that is not on the table. */
+function checkTask() {
+  const parsed = parseTask($("task").value);
+  const missing = parsed ? [parsed.object, parsed.target].filter(n => !sceneOn[n]) : [];
+  $("taskNote").textContent = missing.length ? `Not on the table: ${missing.map(n => ITEMS[n].label).join(", ")}` : "";
+  $("taskNote").classList.toggle("bad", missing.length > 0);
+  return !missing.length;
+}
+$("task").addEventListener("input", checkTask);
+
 /* ---------- API key ---------- */
 
 function showKey(key) {
@@ -406,14 +595,6 @@ async function refresh() {
   catch { $("statusText").textContent = "Server is off (run python app.py)"; return; }
 
   showKey(s.key);
-  if (!$("examples").childElementCount) {
-    for (const text of s.examples) {
-      const b = document.createElement("button");
-      b.className = "ghost"; b.textContent = text;
-      b.onclick = () => { $("task").value = text; };
-      $("examples").appendChild(b);
-    }
-  }
   if (s.running && s.run_id) pageRuns.add(s.run_id);
   $("run").disabled = s.running || !s.key.source;
   $("stop").hidden = !s.running;
@@ -439,7 +620,10 @@ async function refresh() {
 
 $("run").onclick = async () => {
   try {
-    const started = await api("/api/run", { task: $("task").value, seconds: $("seconds").value });
+    const problem = sceneProblem();
+    if (problem) { alert(problem); return; }
+    if (!checkTask()) { alert($("taskNote").textContent); return; }
+    const started = await api("/api/run", { task: $("task").value, seconds: $("seconds").value, scene: sceneForRun() });
     pageRuns.add(started.run_id);
     $("live").hidden = true;
     $("placeholder").hidden = false;
@@ -457,6 +641,7 @@ $("stop").onclick = async () => {
 (async () => {
   try { rules = await api("/api/rules"); } catch {}
   showRules();
+  resetScene();
   await loadRuns().catch(() => {});
   refresh();
   setInterval(refresh, 1000);

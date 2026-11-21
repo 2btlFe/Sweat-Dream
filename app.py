@@ -28,6 +28,10 @@ PAGE = HERE / "static" / "index.html"
 RUNS = HERE / "runs"
 RULES = RUNS / "rules.json"
 DEFAULT_RULES = {"distance_cm": 6.5, "release": True, "still_seconds": 1.0}
+## What can be on the table, and the area objects may be placed in (metres, world frame; reachable by both arms).
+OBJECTS = ["apple", "orange", "banana", "water_bottle"]
+TARGETS = ["bowl", "plate"]
+AREA = {"x": (-0.30, 0.30), "y": (-0.22, 0.18)}
 ID_RE = re.compile(r"^[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$")
 WORK = Path(tempfile.mkdtemp(prefix="dream-web-"))
 LIVE = WORK / "live.jpg"
@@ -87,7 +91,7 @@ class Runner:
     def running(self):
         return self.process is not None and self.process.poll() is None
 
-    def start(self, task, seconds):
+    def start(self, task, seconds, scene=None):
         with self.lock:
             if self.running():
                 raise RuntimeError("A run is already going.")
@@ -100,6 +104,8 @@ class Runner:
                    "LIVE_FRAME": str(LIVE), "STOP_FILE": str(STOP), "RUN_DIR": str(RUNS / run_id)}
             if PAGE_KEY["value"]:
                 env["DREAM_API_KEY"] = PAGE_KEY["value"]
+            if scene:
+                env["SCENE_JSON"] = json.dumps(scene)
             self.process = subprocess.Popen(
                 [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds)], cwd=str(HERE), env=env,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
@@ -134,6 +140,26 @@ class Runner:
 
 
 RUNNER = Runner()
+
+
+def parse_scene(scene):
+    """Check a scene from the page: {"items": {name: [x, y]}} with at least one object and one bowl or plate.
+    @return The scene with positions clamped to AREA, or None for the simulator's own scene.
+    @throws ValueError When it names an unknown item or has no object or no target.
+    """
+    if not scene:
+        return None
+    items = {}
+    for name, position in (scene.get("items") or {}).items():
+        if name not in OBJECTS + TARGETS:
+            raise ValueError(f"Unknown item: {name}")
+        x, y = (float(v) for v in position)
+        items[name] = [round(min(max(x, AREA["x"][0]), AREA["x"][1]), 4), round(min(max(y, AREA["y"][0]), AREA["y"][1]), 4)]
+    if not any(name in items for name in OBJECTS):
+        raise ValueError("Put at least one object on the table.")
+    if not any(name in items for name in TARGETS):
+        raise ValueError("Put a bowl or a plate on the table.")
+    return {"items": items}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -187,8 +213,12 @@ class Handler(BaseHTTPRequestHandler):
             if not task:
                 return self.send_json({"error": "Type a task, such as: put apple into the bowl"}, 400)
             try:
+                scene = parse_scene(body.get("scene"))
+            except (ValueError, TypeError, AttributeError) as error:
+                return self.send_json({"error": f"Scene: {error}"}, 400)
+            try:
                 seconds = min(300, max(10, int(float(body.get("seconds") or 60))))
-                RUNNER.start(task, seconds)
+                RUNNER.start(task, seconds, scene)
             except (ValueError, TypeError):
                 return self.send_json({"error": "The time limit must be a number."}, 400)
             except RuntimeError as error:

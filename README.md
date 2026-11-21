@@ -21,9 +21,10 @@ python app.py
 Open http://localhost:8000.
 
 1. Paste your API key → **Use key** (kept in memory only; **Clear** removes it)
-2. Type a task → **Run**
-3. Set the 3 rules
-4. **Save labels**
+2. Set up the scene: pick objects and a bowl/plate, drag them on the map (robot: YAM, the only one in this simulator)
+3. Type a task → **Run**
+4. Set the 3 rules
+5. **Save labels**
 
 ## Rules
 

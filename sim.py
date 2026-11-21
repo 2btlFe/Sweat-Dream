@@ -10,6 +10,8 @@ Every run is saved in runs/<id>/:
 
 app.py starts this for every run. Environment variables connect it to the website:
   RUN_DIR     the folder to save the run in (default: runs/<new id>)
+  SCENE_JSON  which objects are on the table and where: {"items": {"apple": [x, y], "bowl": [x, y], ...}} in metres
+              (world frame); objects left out are removed. Without it, the simulator's own scene is used.
   LIVE_FRAME  path of a JPEG that is replaced with the latest camera view (top camera + both wrist cameras)
   STOP_FILE   when this file appears, the run stops and the Dream session is released
 """
@@ -23,6 +25,7 @@ import sys
 import threading
 import time
 import warnings
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
 
@@ -44,6 +47,7 @@ LIVE_FRAME = os.environ.get("LIVE_FRAME")
 STOP_FILE = os.environ.get("STOP_FILE")
 OBJECTS = ["apple", "orange", "banana", "water_bottle"]
 TARGETS = ["bowl", "plate"]
+SCENE = json.loads(os.environ.get("SCENE_JSON") or "{}")
 FINGERTIPS = [f"{side}_{part}" for side in ("left", "right") for part in ("tip_left", "tip_right", "gripper")]
 
 
@@ -66,21 +70,56 @@ def save_jpeg(image, path):
     os.replace(str(path) + ".tmp", path)
 
 
+# Build the scene the user set up: remove the objects left out, and move the others (their height stays as it is).
+original_build_xml = yam_env.build_xml
+
+
+def build_xml():
+    xml = original_build_xml()
+    items = SCENE.get("items")
+    if not items:
+        return xml
+    root = ET.fromstring(xml)
+    world = root.find("worldbody")
+    for body in list(world.findall("body")):
+        name = body.get("name")
+        if name not in OBJECTS + TARGETS:
+            continue
+        if name not in items:
+            world.remove(body)
+        else:
+            x, y = items[name]
+            z = body.get("pos").split()[2]
+            body.set("pos", f"{float(x):.4f} {float(y):.4f} {z}")
+    return ET.tostring(root, encoding="unicode")
+
+
+yam_env.build_xml = build_xml
+
+
 class Trajectory:
     """Positions of the objects and targets, and fingertip contact, after every control step."""
 
     def __init__(self):
         self.t = []
-        self.positions = {name: [] for name in OBJECTS + TARGETS}
-        self.touching = {name: [] for name in OBJECTS}
+        self.positions = {}
+        self.touching = {}
         self.ids = None
 
     def record(self, env):
         m, d = env.model, env.data
         if self.ids is None:
-            self.ids = {name: m.body(name).id for name in OBJECTS + TARGETS}
+            self.ids = {}
+            for name in OBJECTS + TARGETS:  # only the ones on the table
+                try:
+                    self.ids[name] = m.body(name).id
+                except KeyError:
+                    continue
+                self.positions[name] = []
+                if name in OBJECTS:
+                    self.touching[name] = []
             self.tips = {m.body(name).id for name in FINGERTIPS}
-            self.object_of = {self.ids[name]: name for name in OBJECTS}
+            self.object_of = {self.ids[name]: name for name in OBJECTS if name in self.ids}
         touching = set()
         for contact in d.contact[: d.ncon]:
             a, b = m.geom_bodyid[contact.geom1], m.geom_bodyid[contact.geom2]
@@ -91,7 +130,7 @@ class Trajectory:
         self.t.append(round(float(d.time), 3))
         for name, body in self.ids.items():
             self.positions[name].append([round(float(v), 4) for v in d.xpos[body]])
-        for name in OBJECTS:
+        for name in self.touching:
             self.touching[name].append(int(name in touching))
 
     def to_json(self):
@@ -152,7 +191,8 @@ def main():
     run_dir = Path(os.environ.get("RUN_DIR") or HERE / "runs" / new_run_id())
     run_dir.mkdir(parents=True, exist_ok=True)
     meta = {"id": run_dir.name, "task": args.task, "seconds": args.seconds,
-            "started_at": datetime.now().isoformat(timespec="seconds"), "stopped_by_user": False, "error": None}
+            "started_at": datetime.now().isoformat(timespec="seconds"), "stopped_by_user": False, "error": None,
+            "scene": SCENE or None}
 
     stop = threading.Event()
     if STOP_FILE:
