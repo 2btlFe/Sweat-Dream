@@ -605,8 +605,9 @@ BATCH_ID_RE = re.compile(r"^b[0-9]{8}-[0-9]{6}$")
 
 def original_episodes(batch_id):
     """The baseline of a finished batch: as many episodes, with each run's task and judge spec and the batch's time
-    limit, but none of our method: every episode starts from the simulator's own default scene (the same object
-    layout each time, no seed), with default scene settings, and Dream-1 runs alone (the caller's "plain" mode).
+    limit, but the seed and the environment fixed: every episode starts from the simulator's own default scene (the
+    same object layout each time, no seed) with default scene settings. The caller runs it in data collection mode
+    (Dream-1 with the failure monitor and the recovery script).
     @return (tasks, seeds: None per episode = the default scene, seconds, changes {}, random_names [], split)
     @throws ValueError When the batch is unknown or has no runs."""
     if not BATCH_ID_RE.match(batch_id):
@@ -1165,15 +1166,16 @@ class Handler(BaseHTTPRequestHandler):
             PAGE_KEY["value"] = key or None
             return self.send_json(key_status())
         if self.path == "/api/batch" and body.get("original_of"):
-            # The baseline: the same episodes as a finished batch (each one's seed, so the same object layout, task,
-            # judge, scene settings and time limit), run by Dream-1 alone: no failure monitor, recovery script or human.
+            # The baseline of a finished batch: its task, judge and time limit, with the seed and the environment fixed
+            # (the default scene and settings every episode) and Dream-1 with the recovery script (data collection).
             try:
                 tasks, seeds, seconds, changes, random_names, split = original_episodes(str(body["original_of"]))
                 robot = robot_args(changes, ["--ood-random"] if random_names else [], None)
                 workers = int(body.get("workers") or 1)
                 if not 1 <= workers <= MAX_WORKERS:
                     raise ValueError(f"Run 1 to {MAX_WORKERS} episodes at once.")
-                BATCH.start(tasks, seeds, seconds, changes, random_names, split, robot, "plain", workers, None,
+                collection, _args = collection_args(body.get("collection"))
+                BATCH.start(tasks, seeds, seconds, changes, random_names, split, robot, "collect", workers, collection,
                             original_of=str(body["original_of"]))
             except (ValueError, TypeError, AttributeError) as error:
                 return self.send_json({"error": str(error)}, 400)
@@ -1210,8 +1212,8 @@ class Handler(BaseHTTPRequestHandler):
                 if mode == "script" and "openyam" in robot:
                     raise ValueError("The rule-based script needs YAM.")
                 original = mode == "original"
-                if original:  # none of our method: the default scene every episode, default settings, Dream-1 alone
-                    seeds, changes, random_names, split, mode = [None] * count, {}, [], "default", "plain"
+                if original:  # the seed and the environment fixed (default scene and settings); the recovery stays
+                    seeds, changes, random_names, split, mode = [None] * count, {}, [], "default", "collect"
                     robot = robot_args(changes, [], None)
                 workers = int(body.get("workers") or 1)
                 if not 1 <= workers <= MAX_WORKERS:

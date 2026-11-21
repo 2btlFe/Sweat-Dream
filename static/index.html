@@ -423,18 +423,18 @@
       </div>
       <div class="grid2" style="margin: 12px 0 0; grid-template-columns: minmax(0, 2fr) minmax(90px, 1fr)">
         <div><label>Each episode</label>
-          <div class="toggle" role="group" aria-label="Batch mode" style="grid-template-columns: repeat(3, 1fr)">
+          <div class="toggle" role="group" aria-label="Batch mode" style="grid-template-columns: repeat(2, 1fr)">
             <button id="batchCollect" class="on" aria-pressed="true" title="Dream-1; when it fails, the recovery script takes over">Data collection</button>
             <button id="batchScript" aria-pressed="false" title="The rule-based script does the whole task; no Dream-1, no credits">Rule-based only</button>
             <button id="batchPlain" aria-pressed="false" title="Dream-1 only">Dream-1 only</button>
-            <button id="batchOriginal" aria-pressed="false" title="None of our method: Dream-1 alone, every episode from the simulator's default scene (the same object layout each time), default scene settings, no seed">Original</button>
+            <button id="batchOriginal" aria-pressed="false" title="The baseline: the seed and the environment fixed (every episode from the simulator's default scene, the same object layout, with default scene settings); Dream-1 with the recovery script, as in Data collection">Original</button>
           </div>
         </div>
         <div><label for="batchWorkers">At once</label><input id="batchWorkers" type="number" min="1" max="4" value="2" title="Episodes run at the same time (1 to 4)"></div>
       </div>
       <div id="batchCollectSlot"></div>
       <p class="muted small" style="margin: 8px 0 12px" id="batchHow">The seed is the whole batch: it gives each episode its own layout (the same episodes again with the same seed; other seeds share none). The scene settings below apply to every episode; the ones marked <em>random</em> are drawn from each episode's seed. Runs in the background.</p>
-      <p class="muted small" style="margin: 8px 0 12px" id="batchHowOriginal" hidden>Original: every episode starts from the simulator's default scene (the same object layout each time) with default scene settings; the seed and the scene settings below are not used. Dream-1 runs alone. Runs in the background.</p>
+      <p class="muted small" style="margin: 8px 0 12px" id="batchHowOriginal" hidden>Original: the seed and the environment are fixed: every episode starts from the simulator's default scene (the same object layout) with default scene settings; the seed and the scene settings below are not used. Dream-1 runs with the failure monitor and the recovery script, as in Data collection (its settings above).</p>
       <p class="small" style="margin: 0 0 4px">Every episode runs <b>the task above</b> (<span id="batchTaskName"></span>).</p>
       <div id="batchTaskList" hidden>
       <label>Tasks <span class="muted">(taken in turn)</span></label>
@@ -559,7 +559,7 @@
       <summary>Runs</summary>
       <div class="hrow" style="justify-content: space-between">
         <select id="runFilter" aria-label="Which runs" style="width: auto; max-width: 100%"></select>
-        <span class="hrow"><button id="saveLabels" class="ghost small">Save labels</button><button id="deleteShown" class="ghost small danger" title="Delete every run shown in the list, with its recording">Delete shown</button><button id="runOriginal" class="ghost small" hidden title="The baseline: as many episodes with the same task, judge and time limit, but none of our method: Dream-1 alone (no failure monitor, recovery script or human), every episode from the simulator's default scene (the same object layout each time) with default scene settings">Run as original</button></span>
+        <span class="hrow"><button id="saveLabels" class="ghost small">Save labels</button><button id="deleteShown" class="ghost small danger" title="Delete every run shown in the list, with its recording">Delete shown</button><button id="runOriginal" class="ghost small" hidden title="The baseline of this batch: the same task, judge and time limit, with the seed and the environment fixed (the simulator's default scene and settings every episode) and Dream-1 with the recovery script">Run as original</button></span>
       </div>
       <div class="muted small" id="runSummary" style="margin-top: 8px"></div>
       <div class="dataset-bar" role="group" aria-label="Dataset">
@@ -816,7 +816,7 @@ async function loadRuns() {
 const batchName = id => {
   const m = /^b(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/.exec(id || "");
   const name = m ? `Batch ${when(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`)}` : `Batch ${id}`;
-  const of = originalOf(id);  // an "original" batch: none of our method (default scene, Dream-1 alone)
+  const of = originalOf(id);  // an "original" batch: the seed and environment fixed (default scene), with recovery
   return of ? `${name} · original of ${batchName(of)}` : isOriginal(id) ? `${name} · original` : name;
 };
 const originalOf = id => (batchState?.id === id && batchState.original_of)
@@ -862,14 +862,14 @@ function renderRuns() {
       + (byHand ? ` · ${byHand} by hand (${list.filter(disagrees).length} differ from the rules)` : "")
     : "";
   $("deleteShown").disabled = !list.length;
-  // A batch picked in the filter: run its episodes again as the original (Dream-1 alone); with its pair, compare them.
+  // A batch picked in the filter: run its original (fixed default scene, with recovery); with its pair, compare them.
   const isBatch = /^b\d{8}-\d{6}$/.test(runFilter);
   $("runOriginal").hidden = !isBatch || isOriginal(runFilter);
   if (isBatch) {
     const of = originalOf(runFilter), pair = of || runs.find(r => r.original_of === runFilter)?.batch_id;
     if (pair) {
       const [method, original] = of ? [of, runFilter] : [runFilter, pair];
-      $("runSummary").textContent += ` · ours ${batchRate(method)} vs original (default scene, Dream-1 only) ${batchRate(original)}`;
+      $("runSummary").textContent += ` · ours ${batchRate(method)} vs original (fixed default scene) ${batchRate(original)}`;
     }
   }
   showPicked();
@@ -1199,9 +1199,9 @@ async function deleteRuns(ids, what) {
 $("deleteRun").onclick = () => selected && deleteRuns([selected], "this run");
 $("runOriginal").onclick = async () => {
   const id = runFilter, n = runs.filter(r => r.batch_id === id && r.seed != null).length;
-  if (!(await ask(`Run ${n} original episodes for ${batchName(id)}: the same task, judge and time limit, but Dream-1 alone (no failure monitor, recovery script or human), every episode from the simulator's default scene (the same object layout each time) with default settings?`, "Run original"))) return;
+  if (!(await ask(`Run ${n} original episodes for ${batchName(id)}: the same task, judge and time limit, with the seed and the environment fixed (the simulator's default scene and settings every episode) and Dream-1 with the recovery script (as in Data collection)?`, "Run original"))) return;
   try {
-    await api("/api/batch", { original_of: id, workers: Number($("batchWorkers").value) || 1 });
+    await api("/api/batch", { original_of: id, workers: Number($("batchWorkers").value) || 1, collection: collectionSettings() });
     setMode("batch"); followBatch = true; refresh();
   } catch (err) { showError(err, "Original"); }
 };
@@ -1591,7 +1591,7 @@ function estimate() {
   // Every mode runs in real time; rule-based runs start up faster (no Dream-1 session).
   const each = batchMode === "script" ? secs + 10 : secs + 20;
   const minutes = Math.round(Math.ceil(count / workers) * each / 60);
-  const seeds = batchMode === "original" ? "original: default scene each episode, default settings, Dream-1 only"
+  const seeds = batchMode === "original" ? "original: fixed default scene and settings, with the recovery script"
     : split === "eval" ? `eval seeds 1-${Math.min(count, 50)}` : `batch seed ${$("seed")?.value || "?"} (${count} different layouts, the same again with this seed)`;
   $("batchEstimate").textContent = count && secs ? `${count} episodes · ${workers} at once · ${seeds} · about ${minutes} min · ${batchTasks.size} task${batchTasks.size > 1 ? "s" : ""}` : "";
   return minutes;
@@ -1606,7 +1606,7 @@ $("startBatch").onclick = async () => {
   const count = Number($("batchCount").value);
   // Every episode runs the task set above (its words, and its goal scene when it has one).
   if (goalSpec && !goalRelational()) { notify("The task's goal scene has a fixed table spot, which only fits one seed: for batches, tie every object to an item (in the bowl, beside the plate, ...)."); return; }
-  const how = batchMode === "original" ? " as the original (Dream-1 alone, the default scene every episode, default settings)"
+  const how = batchMode === "original" ? " as the original (the default scene and settings every episode, Dream-1 with the recovery script)"
     : batchMode === "script" ? " rule-based (the script alone, no Dream-1 use)" : "";
   const use = batchMode === "script" ? "" : " of Dream-1 use";
   if (!(await ask(`Run ${count} episodes${how} in the background (about ${estimate()} min${use})?`, "Start batch"))) return;
@@ -1649,7 +1649,7 @@ function showBatch(b) {
     + (valid ? ` <span class="muted">· ${Math.round(100 * b.counts.success / valid)}% success of valid</span>` : "");
   const now = b.active?.length ? b.active : (b.current ? [b.current] : []);
   $("batchNow").textContent = now.length ? `Now${b.workers > 1 ? ` (${now.length} at once)` : ""}: ` + now.map(e => `#${e.index} ${e.task} (${e.seed != null ? `seed ${e.seed}` : "default scene"})`).join(" · ")
-    : b.original ? `Original: default scene every episode (same object layout), default settings, Dream-1 alone · ${b.seconds} s each`
+    : b.original ? `Original: the default scene and settings every episode (fixed), Dream-1 with the recovery script · ${b.seconds} s each`
     : `${b.split === "eval" ? "Eval seeds" : `Batch seed ${b.batch_seed ?? b.seed}`}${b.ood_random?.length ? ` · random: ${b.ood_random.join(", ")}` : ""} · ${b.seconds} s each · labeled with the rules as at the start`;
   $("batchEnd").textContent = (b.running ? "" : b.stopped_reason || "Finished.")
     + (b.capacity_retries ? ` Dream-1 was at capacity ${b.capacity_retries} time${b.capacity_retries > 1 ? "s" : ""}: those episodes were tried again.` : "");
@@ -2240,8 +2240,8 @@ const collectionSettings = () => ({
 /** The settings show under whichever form runs in data collection or rule-based mode; a rule-based run has no
  *  Dream-1 to hand over from, so only the script's speed and ending on success apply. */
 function placeCollectBox() {
-  const scripted = ["collect", "script"];
-  const single = mode === "single" && scripted.includes(runMode()), batch = mode === "batch" && scripted.includes(batchMode);
+  const scripted = ["collect", "script"];  // Original runs in data collection mode too (fixed scene, with recovery)
+  const single = mode === "single" && scripted.includes(runMode()), batch = mode === "batch" && [...scripted, "original"].includes(batchMode);
   const ruleBased = (single ? runMode() : batchMode) === "script";
   $("collectBox").hidden = !(single || batch);
   for (const id of ["stallRow", "quickRow", "goalRow"]) $(id).hidden = ruleBased;
