@@ -13,6 +13,10 @@ A run's task has a type, and each type has its own rules (set on the page, kept 
 
 The type and its objects come from the task's words (classify), or from the spec chosen for a typed prompt
 (meta["judge"]). Add a type: its rules to RULES, a judge_<type> function, and a branch in classify().
+
+The numbers of the YAM table are the defaults (HEIGHT_BANDS, OFF_TABLE_Z, WORKSPACE_CENTER). A run on another
+table (OpenYAM's Sandbox table) says its own in meta.json: "relative_height_bands" (above the bowl / plate),
+"off_table_z", and "workspace" ({"center", "left", "front"}: its middle and the camera's left and front directions).
 """
 
 import math
@@ -189,15 +193,19 @@ def evaluate(meta, trajectory, rules):
     except (KeyError, TypeError, ValueError, IndexError):
         return invalid("incomplete_trajectory")
 
+    try:
+        frame = table_frame(meta)
+    except (KeyError, TypeError, ValueError):
+        return invalid("invalid_height_band")
     model = {"model_responses": meta["model_responses"], "model_actions": meta["model_actions"]}
     type_rules = rules[kind]
     if kind == "pick_place":
-        results = [judge_pair(t, p, q, touch, obj, target, type_rules)
+        results = [judge_pair(t, p, q, touch, obj, target, type_rules, frame)
                    for (obj, target), (p, q, touch) in zip(jobs, series)]
         chart = {"y": "distance to target (cm)", "limit": type_rules["distance_cm"]}
     else:
         judge_one = {"move_to_area": judge_area, "lift": judge_lift, "push": judge_push}[kind]
-        results = [judge_one(t, p, touch, obj, spec, type_rules) for (obj, _), (p, _, touch) in zip(jobs, series)]
+        results = [judge_one(t, p, touch, obj, spec, type_rules, frame) for (obj, _), (p, _, touch) in zip(jobs, series)]
         chart = {"move_to_area": {"y": f"distance to the {spec.get('area')} area (cm)", "limit": 0},
                  "lift": {"y": "height above start (cm)", "limit": type_rules.get("height_cm")},
                  "push": {"y": "moved from start (cm)", "limit": type_rules.get("distance_cm")}}[kind]
@@ -235,6 +243,24 @@ def evaluate(meta, trajectory, rules):
                         "per_pair": [{"object": r["object"], **r["metrics"]} for r in results]}}
 
 
+def table_frame(meta):
+    """The table a run was on: height bands of the bowl and plate (absolute, or relative to them), the floor level,
+    and the workspace (its middle, and the unit vectors the top camera sees as left and as front)."""
+    bands = meta.get("relative_height_bands")
+    if bands is not None:
+        for low, high in bands.values():
+            if not (math.isfinite(float(low)) and math.isfinite(float(high)) and low < high):
+                raise ValueError("bad height band")
+    ws = meta.get("workspace") or {}
+    return {"bands": bands, "off_table_z": float(meta.get("off_table_z", OFF_TABLE_Z)),
+            "center": tuple(ws.get("center", WORKSPACE_CENTER)), "left": tuple(ws.get("left", (1.0, 0.0))),
+            "front": tuple(ws.get("front", (0.0, 1.0)))}
+
+
+DEFAULT_FRAME = {"bands": None, "off_table_z": OFF_TABLE_Z, "center": WORKSPACE_CENTER, "left": (1.0, 0.0),
+                 "front": (0.0, 1.0)}
+
+
 def final_window(t, ok, required):
     """The final stretch where ok holds: (index where it began, whether it lasted `required` seconds)."""
     n = len(t)
@@ -244,26 +270,32 @@ def final_window(t, ok, required):
     return start, bool(ok[-1]) and t[-1] - t[start] >= required - 1e-9
 
 
-def in_area(x, y, area, zone):
-    dx, dy = x - WORKSPACE_CENTER[0], y - WORKSPACE_CENTER[1]
+def _offsets(x, y, frame):
+    """A point's offset from the workspace's middle, along the camera's left and front directions (m)."""
+    ex, ey = x - frame["center"][0], y - frame["center"][1]
+    return ex * frame["left"][0] + ey * frame["left"][1], ex * frame["front"][0] + ey * frame["front"][1]
+
+
+def in_area(x, y, area, zone, frame=DEFAULT_FRAME):
+    dx, dy = _offsets(x, y, frame)
     return {"center": math.hypot(dx, dy) <= zone, "left": dx >= zone, "right": dx <= -zone,
             "front": dy >= zone, "back": dy <= -zone}[area]
 
 
-def area_gap_cm(x, y, area, zone):
+def area_gap_cm(x, y, area, zone, frame=DEFAULT_FRAME):
     """How far (cm) a point is from the area; 0 inside."""
-    dx, dy = x - WORKSPACE_CENTER[0], y - WORKSPACE_CENTER[1]
+    dx, dy = _offsets(x, y, frame)
     gap = {"center": math.hypot(dx, dy) - zone, "left": zone - dx, "right": dx + zone,
            "front": zone - dy, "back": dy + zone}[area]
     return max(0.0, gap) * 100
 
 
-def judge_area(t, p, touch, obj, spec, rules):
+def judge_area(t, p, touch, obj, spec, rules, frame=DEFAULT_FRAME):
     """move_to_area: the object ends in the area, resting on the table (released if required) and still."""
     n, area, zone = len(t), spec["area"], rules["zone_cm"] / 100
     z0 = p[0][2]
-    gap = [area_gap_cm(p[i][0], p[i][1], area, zone) for i in range(n)]
-    resting = [OFF_TABLE_Z < p[i][2] < z0 + LIFTED_M for i in range(n)]
+    gap = [area_gap_cm(p[i][0], p[i][1], area, zone, frame) for i in range(n)]
+    resting = [frame["off_table_z"] < p[i][2] < z0 + LIFTED_M for i in range(n)]
     inside = [gap[i] == 0 and resting[i] for i in range(n)]
     released = [not bool(touch[i]) for i in range(n)]
     placed = [inside[i] and (released[i] or not rules["release"]) for i in range(n)]
@@ -276,7 +308,7 @@ def judge_area(t, p, touch, obj, spec, rules):
     success = bool(long_enough and stable and moved > MOVED_M)
     if success:
         reason = "moved_to_area"
-    elif min(pos[2] for pos in p) < OFF_TABLE_Z:
+    elif min(pos[2] for pos in p) < frame["off_table_z"]:
         reason = "object_fell_off_table"
     elif moved <= MOVED_M:
         reason = "already_there" if inside[0] else ("touched_but_not_moved" if any(touch) else "object_not_moved")
@@ -301,7 +333,7 @@ def judge_area(t, p, touch, obj, spec, rules):
             "metrics": {"object_moved_m": round(moved, 4), "distance_to_area_cm": round(gap[-1], 2)}}
 
 
-def judge_lift(t, p, touch, obj, spec, rules):
+def judge_lift(t, p, touch, obj, spec, rules, frame=DEFAULT_FRAME):
     """lift: the object rises height_cm above its start and stays that high for hold_seconds (in one stretch)."""
     n, need = len(t), rules["height_cm"]
     height = [(p[i][2] - p[0][2]) * 100 for i in range(n)]
@@ -342,12 +374,12 @@ def judge_lift(t, p, touch, obj, spec, rules):
             "metrics": {"max_height_cm": round(top, 2), "held_s": round(held, 2), "object_moved_m": round(moved, 4)}}
 
 
-def judge_push(t, p, touch, obj, spec, rules):
+def judge_push(t, p, touch, obj, spec, rules, frame=DEFAULT_FRAME):
     """push: the object ends distance_cm or more from its start, on the table (and never lifted, if required)."""
     n, need = len(t), rules["distance_cm"]
     moved = [math.hypot(p[i][0] - p[0][0], p[i][1] - p[0][1]) * 100 for i in range(n)]
     lift = max((pos[2] - p[0][2]) * 100 for pos in p)
-    on_table = p[-1][2] > OFF_TABLE_Z
+    on_table = p[-1][2] > frame["off_table_z"]
     lifted = lift >= LIFTED_M * 100
     far = [m >= need for m in moved]
     start, _ = final_window(t, far, 0)
@@ -373,15 +405,19 @@ def judge_push(t, p, touch, obj, spec, rules):
             "metrics": {"moved_cm": round(moved[-1], 2), "max_lift_cm": round(lift, 2)}}
 
 
-def judge_pair(t, p, target_positions, touch, obj, target, rules):
+def judge_pair(t, p, target_positions, touch, obj, target, rules, frame=DEFAULT_FRAME):
     """Judge one object against one target with the rules.
     @return {success, reason, checks, start (when the final placement began), dist, touch, metrics, object, target}.
     """
     n = len(t)
-    z_min, z_max = HEIGHT_BANDS[target]
+    if frame["bands"] is not None:  # heights above the bowl / plate itself (another table)
+        low, high = frame["bands"][target]
+        bands = [(target_positions[i][2] + low, target_positions[i][2] + high) for i in range(n)]
+    else:
+        bands = [HEIGHT_BANDS[target]] * n
     dist = [math.hypot(p[i][0] - target_positions[i][0], p[i][1] - target_positions[i][1]) * 100
             for i in range(n)]
-    in_target = [dist[i] < rules["distance_cm"] and z_min < p[i][2] < z_max for i in range(n)]
+    in_target = [dist[i] < rules["distance_cm"] and bands[i][0] < p[i][2] < bands[i][1] for i in range(n)]
     released = [not bool(touch[i]) for i in range(n)]
     placed = [in_target[i] and (released[i] or not rules["release"]) for i in range(n)]
     speed = [math.dist(p[i], p[i - 1]) / (t[i] - t[i - 1]) for i in range(1, n)]
@@ -396,7 +432,7 @@ def judge_pair(t, p, target_positions, touch, obj, target, rules):
     moved = max(math.dist(pos, p[0]) for pos in p)
     if success:
         reason = "placed_and_stable"
-    elif min(pos[2] for pos in p) < OFF_TABLE_Z:
+    elif min(pos[2] for pos in p) < frame["off_table_z"]:
         reason = "object_fell_off_table"
     elif in_target[-1] and rules["release"] and not released[-1]:
         reason = "still_holding"

@@ -148,6 +148,22 @@ class TaskTypeTests(unittest.TestCase):
         allowed = {"push": {"distance_cm": 5, "no_lift": False}}
         self.assertEqual(judge.evaluate(meta, carried, allowed)["label"], "success")
 
+    def test_other_table_frame(self):
+        """OpenYAM's Sandbox table: z near 0, heights relative to the bowl, and the camera's left along -y."""
+        times = [0, 0.5, 1.0, 1.5, 2.0]
+        trace = {"t": times, "positions": {"apple": [[0.4, 0.2, 0.03]] + [[0.48, 0.1, 0.03]] * 4,
+                                           "bowl": [[0.48, 0.1, 0.0]] * 5},
+                 "touching": {"apple": [0] * 5}}
+        meta = {**META, "relative_height_bands": {"bowl": [0.01, 0.12], "plate": [0.0, 0.09]}, "off_table_z": -0.1}
+        self.assertEqual(judge.evaluate(meta, trace, judge.DEFAULT_RULES)["label"], "success")
+        self.assertEqual(judge.evaluate({k: v for k, v in meta.items() if k != "relative_height_bands"},
+                                        trace, judge.DEFAULT_RULES)["reason"], "outside_target")
+        area = {**meta, "task": "move the apple to the left",
+                "workspace": {"center": [0.4, 0.0], "left": [0.0, -1.0], "front": [1.0, 0.0]}}
+        moved_left = {**trace, "positions": {**trace["positions"],
+                      "apple": [[0.4, 0.0, 0.03]] + [[0.4, -0.15, 0.03]] * 4}}
+        self.assertEqual(judge.evaluate(area, moved_left, judge.DEFAULT_RULES)["label"], "success")
+
     def test_rules_old_flat_form_is_pick_place(self):
         rules = judge.normalize_rules({"distance_cm": 9, "release": False, "still_seconds": 2})
         self.assertEqual(rules["pick_place"], {"distance_cm": 9.0, "release": False, "still_seconds": 2.0})

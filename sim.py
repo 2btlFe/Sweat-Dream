@@ -53,8 +53,14 @@ import dream_control  # noqa: E402
 import yam_env  # noqa: E402
 from PIL import Image  # noqa: E402
 
+import mujoco  # noqa: E402
+import numpy as np  # noqa: E402
+
 import ood  # noqa: E402  scene controls: camera, arm angles, blur, light, table
 import scene  # noqa: E402  the seed's start scene; imported before build_xml is patched below (it keeps the original)
+import simulator_settings as sim_settings  # noqa: E402  robot and room choices
+from local_rooms import desk_texture, themed_xml  # noqa: E402  Sandbox room styling for the YAM table
+from sandbox_env import SandboxEnv  # noqa: E402  OpenYAM on the Sandbox table (needs Node.js to fetch it)
 
 HERE = Path(__file__).resolve().parent
 LIVE_FRAME = os.environ.get("LIVE_FRAME")
@@ -123,16 +129,18 @@ class Trajectory:
     def record(self, env):
         m, d = env.model, env.data
         if self.ids is None:
+            bodies = getattr(env, "object_bodies", {name: name for name in OBJECTS + TARGETS})  # OpenYAM: "apple/object"
+            fingertips = getattr(env, "fingertip_bodies", FINGERTIPS)
             self.ids = {}
             for name in OBJECTS + TARGETS:  # only the ones on the table
                 try:
-                    self.ids[name] = m.body(name).id
+                    self.ids[name] = m.body(bodies[name]).id
                 except KeyError:
                     continue
                 self.positions[name] = []
                 if name in OBJECTS:
                     self.touching[name] = []
-            self.tips = {m.body(name).id for name in FINGERTIPS}
+            self.tips = {m.body(name).id for name in fingertips}
             self.object_of = {self.ids[name]: name for name in OBJECTS if name in self.ids}
         touching = set()
         for contact in d.contact[: d.ncon]:
@@ -202,6 +210,79 @@ def get_action(self, *args, **kwargs):
 
 yam_env.YamEnv.step = step
 dream_control.capture = capture
+
+original_sandbox_step = SandboxEnv.step
+
+
+def sandbox_step(self, left, right):
+    result = original_sandbox_step(self, left, right)
+    if RECORDING["on"]:
+        TRAJECTORY.record(self)
+    if STATS["model_responses"]:
+        STATS["model_actions"] += 1
+    return result
+
+
+SandboxEnv.step = sandbox_step
+
+## OpenYAM's Sandbox table is in its own frame: the judge reads heights relative to the bowl and plate, the floor
+## level, and the workspace's middle and directions (see workspace_frame), instead of the YAM table's numbers.
+OPENYAM_HEIGHT_BANDS = {"bowl": [0.01, 0.12], "plate": [0.0, 0.09]}
+OPENYAM_OFF_TABLE_Z = -0.1
+
+
+def theme_yam_room(room):
+    """Style the YAM table as a Sandbox room (desk, background, light); the objects and physics stay the same."""
+    if room == "yam_tabletop":
+        return
+    try:
+        texture = desk_texture(room)
+    except (OSError, ValueError) as error:
+        texture = None
+        print(f"Room desk texture unavailable; using the room's colour: {error}", flush=True)
+    base = yam_env.build_xml
+    yam_env.build_xml = lambda: themed_xml(base(), room, texture)
+
+
+def build_openyam(args):
+    """OpenYAM on the Sandbox table. The table has no seed scenes: a seed shifts each object by up to 2 cm and turns
+    the fruit by up to 25 degrees (reproducibly)."""
+    env = SandboxEnv(args.room)
+    if args.seed is not None:
+        rng = np.random.default_rng(args.seed)
+        for body in OBJECTS:
+            try:
+                qpos = env.data.joint(f"{body}/free").qpos
+            except KeyError:
+                continue
+            qpos[:2] += rng.uniform(-0.02, 0.02, 2)
+            if body != "water_bottle":
+                yaw = np.deg2rad(rng.uniform(-25, 25)) / 2
+                turned = np.empty(4)
+                mujoco.mju_mulQuat(turned, np.array([np.cos(yaw), 0, 0, np.sin(yaw)]), qpos[3:7].copy())
+                qpos[3:7] = turned
+        mujoco.mj_forward(env.model, env.data)
+    print(f"Scene: OpenYAM, Sandbox table, room {args.room}"
+          + (f", seed {args.seed} (objects shifted up to 2 cm)" if args.seed is not None else ""), flush=True)
+    return env
+
+
+def workspace_frame(env, camera):
+    """The workspace for judging areas: the middle of the items on the table, and the directions the camera sees
+    as left and as front (towards the bottom of its image)."""
+    m, d = env.model, env.data
+    xmat = d.cam_xmat[m.camera(camera).id].reshape(3, 3)
+    left, front = -xmat[:2, 0], -xmat[:2, 1]
+    bodies = getattr(env, "object_bodies", {name: name for name in OBJECTS + TARGETS})
+    points = []
+    for name in OBJECTS + TARGETS:
+        try:
+            points.append(d.body(bodies[name]).xpos[:2].copy())
+        except KeyError:
+            continue
+    center = np.mean(points, axis=0)
+    unit = lambda v: [round(float(x), 4) for x in v / (np.linalg.norm(v) or 1)]
+    return {"center": [round(float(x), 4) for x in center], "left": unit(left), "front": unit(front)}
 dream.DreamClient.get_action = get_action
 
 
@@ -211,8 +292,13 @@ def main():
     parser.add_argument("--seconds", type=float, default=60)
     parser.add_argument("--ood", type=json.loads, default={}, help="Scene settings (ood.py) as a JSON object")
     parser.add_argument("--preview", type=Path, help="Render the initial camera view to a JPEG and exit")
+    parser.add_argument("--robot", choices=("yam", "openyam"), default="yam", help="The robot (simulator_settings.py)")
+    parser.add_argument("--room", choices=sim_settings.ROOMS, default="yam_tabletop", help="The room's styling")
     scene.add_arguments(parser)  # --seed, --default-scene, --split, --setting, --ood-random
     args = parser.parse_args()
+    openyam = args.robot == "openyam"
+    if openyam and (SCENE or args.ood or args.ood_random):
+        parser.error("Scene settings, random settings and custom layouts are for YAM; OpenYAM uses the Sandbox table.")
     try:
         ood.validate(args.ood)
     except ValueError as error:
@@ -223,9 +309,15 @@ def main():
         args.default_scene = True
     if not args.default_scene:
         args.seed = scene.pick_seed(args)  # the seed the scene is built from, kept in meta.json
+    if not openyam:
+        theme_yam_room(args.room)
+
+    def build():
+        """The run's simulator and the scene settings in effect."""
+        return (build_openyam(args), {}) if openyam else scene.build_env(args)
 
     if args.preview:
-        env, _changes = scene.build_env(args)
+        env, _changes = build()
         try:
             state = env.state()
             env.step(state["left"], state["right"])
@@ -245,7 +337,8 @@ def main():
     meta = {"id": run_dir.name, "task": args.task, "seconds": args.seconds,
             "seed": args.seed, "split": scene.split_of(args.seed) if args.seed is not None else None,
             "setting": args.setting, "scene_version": scene.SCENE_VERSION,
-            "layout": "custom" if SCENE else "default" if args.seed is None else "seed",
+            "robot": args.robot, "room": args.room,
+            "layout": "sandbox" if openyam else "custom" if SCENE else "default" if args.seed is None else "seed",
             "ood_random": args.ood_random, "ood": None,
             "started_at": datetime.now().isoformat(timespec="seconds"), "stopped_by_user": False,
             "error": None, "error_type": None, "scene": SCENE or None,
@@ -266,12 +359,21 @@ def main():
         print(f"Saved to runs/{run_dir.name}", flush=True)
 
     try:
-        env, changes = scene.build_env(args)  # the seed's layout (or the custom one) and the scene controls
+        env, changes = build()  # the seed's layout (or the custom one) and the scene controls
     except SystemExit:  # build_env printed why it stopped (a bad seed, a pose that overlaps, ...)
         meta["error"], meta["error_type"] = "The start scene could not be built (see the log).", "SceneError"
         save()
         sys.exit(1)
+    except Exception as error:  # noqa: BLE001  OpenYAM: Node.js missing, the Sandbox package not reachable, ...
+        meta["error"], meta["error_type"] = f"The simulator could not be built: {error}", type(error).__name__
+        print(f"Stopped: {meta['error']}", flush=True)
+        save()
+        sys.exit(1)
     meta["ood"] = changes or None
+    if openyam:
+        meta["relative_height_bands"] = OPENYAM_HEIGHT_BANDS
+        meta["off_table_z"] = OPENYAM_OFF_TABLE_Z
+        meta["workspace"] = workspace_frame(env, "overhead")
 
     stop = threading.Event()
     if STOP_FILE:

@@ -33,12 +33,14 @@ from pathlib import Path
 
 import judge
 import ood
-import seed_web  # the seed (scene.py): seed field, random scene controls
+import seed_web
+import simulator_settings as sim_settings  # the seed (scene.py): seed field, random scene controls
 
 HERE = Path(__file__).resolve().parent
 PAGE = HERE / "static" / "index.html"
 RUNS = HERE / "runs"
 RULES = RUNS / "rules.json"
+SETTINGS = RUNS / "simulator_settings.json"  # the robot and room picked on the page (simulator_settings.py)
 DEFAULT_RULES = judge.DEFAULT_RULES
 ## What can be on the table, and the area objects may be placed in (metres, world frame; reachable by both arms).
 OBJECTS = ["apple", "orange", "banana", "water_bottle"]
@@ -90,6 +92,27 @@ def current_rules():
         return judge.normalize_rules({})
 
 
+def current_settings():
+    """The robot and room picked on the page (runs/simulator_settings.json)."""
+    try:
+        return sim_settings.normalize(read_json(SETTINGS, {}) or {})
+    except ValueError:
+        return dict(sim_settings.DEFAULT)
+
+
+def robot_args(changes, seeding, scene):
+    """sim.py's --robot / --room for the picked settings, checked against what can run here.
+    @return The arguments. @throws ValueError When the robot runs only in the Dream Labs Sandbox, or when OpenYAM
+    is asked for YAM-only things (scene settings, settings marked random, a custom layout)."""
+    settings = current_settings()
+    if not sim_settings.local_supported(settings):
+        raise ValueError(f"{sim_settings.ROBOTS[settings['robot']]} runs only in the Dream Labs Sandbox "
+                         f"({sim_settings.catalog()['sandbox_url']}). Choose YAM or OpenYAM to run here.")
+    if settings["robot"] == "openyam" and (changes or scene or "--ood-random" in seeding):
+        raise ValueError("Scene settings, random settings and custom layouts are for YAM; OpenYAM uses the Sandbox table.")
+    return ["--robot", settings["robot"], "--room", settings["room"]]
+
+
 def run_dir(run_id):
     """The folder of a saved run, or None for an unknown or malformed id."""
     if not ID_RE.match(run_id or ""):
@@ -129,7 +152,7 @@ class Runner:
     def running(self):
         return self.process is not None and self.process.poll() is None
 
-    def start(self, task, seconds, changes=None, seeding=(), scene=None, live=True, extra_env=None):
+    def start(self, task, seconds, changes=None, seeding=(), scene=None, live=True, extra_env=None, robot=()):
         """Start one run of sim.py.
         @param changes Scene settings (ood.validate output).
         @param seeding sim.py's seed arguments (seed_web.seeding_args): --seed, --ood-random.
@@ -151,7 +174,7 @@ class Runner:
                 env["LIVE_FRAME"] = str(LIVE)
             if PAGE_KEY["value"]:
                 env["DREAM_API_KEY"] = PAGE_KEY["value"]
-            command = [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds)]
+            command = [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds), *robot]
             if changes:
                 command.extend(["--ood", json.dumps(changes)])
             if scene:
@@ -254,7 +277,7 @@ class Batch:
     def running(self):
         return self.thread is not None and self.thread.is_alive()
 
-    def start(self, tasks, seeds, seconds, changes, random_names, split):
+    def start(self, tasks, seeds, seconds, changes, random_names, split, robot=()):
         """@param seeds One seed per episode. @param changes, random_names The scene settings, and the ones drawn
         from each seed. @param split "train" or "eval" (shown on the page)."""
         if self.running() or RUNNER.running():
@@ -264,7 +287,7 @@ class Batch:
         self.stop_requested = False
         self.info = {"id": "b" + datetime.now().strftime("%Y%m%d-%H%M%S"), "tasks": tasks, "total": len(seeds),
                      "seconds": seconds, "seeds": seeds, "seed": seeds[0], "split": split, "ood": changes,
-                     "ood_random": random_names, "rules": current_rules(),
+                     "ood_random": random_names, "rules": current_rules(), "robot": list(robot),
                      "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
                      "started": time.time(), "ended": None, "current": None, "stopped_reason": None, "durations": []}
         self.thread = threading.Thread(target=self._loop, daemon=True)
@@ -287,7 +310,7 @@ class Batch:
                 info["current"] = {"index": i + 1, "task": prompt, "seed": seed}
                 started = time.time()
                 seeding = ["--seed", str(seed)] + (["--ood-random", ",".join(info["ood_random"])] if info["ood_random"] else [])
-                RUNNER.start(prompt, info["seconds"], info["ood"], seeding, live=False,
+                RUNNER.start(prompt, info["seconds"], info["ood"], seeding, live=False, robot=info["robot"],
                              extra_env={"BATCH_ID": info["id"], "JUDGE_SPEC": json.dumps(task["judge"])})
                 run_id, process = RUNNER.run_id, RUNNER.process
                 while process.poll() is None:  # a run that hangs is stopped, then killed
@@ -422,7 +445,7 @@ def run_options(body):
     except (TypeError, AttributeError) as error:
         raise ValueError(f"Scene: {error}") from error
     seeding = () if scene else seed_web.seeding_args(body, ood.FIELDS)
-    return changes, seeding, scene
+    return changes, seeding, scene, robot_args(changes, seeding, scene)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -459,6 +482,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "no frame yet"}, 404)
         if path == "/api/rules":
             return self.send_json(current_rules())
+        if path == "/api/simulator-settings":
+            return self.send_json({"settings": current_settings(), "catalog": sim_settings.catalog()})
         if path == "/api/task-types":  # each type's rules: default, minimum, maximum (the page builds its controls)
             return self.send_json({"rules": judge.RULES, "areas": judge.AREAS})
         if path == "/api/classify":  # ?task=...: what a task would be judged on
@@ -486,7 +511,7 @@ class Handler(BaseHTTPRequestHandler):
     def preview(self, body):
         """The start scene as a JPEG (sim.py --preview: no Dream API), with the values the seed drew in a header."""
         try:
-            changes, seeding, scene = run_options(body)
+            changes, seeding, scene, robot = run_options(body)
         except ValueError as error:
             return self.send_json({"error": str(error)}, 400)
         if RUNNER.running() or BATCH.running() or not PREVIEW_LOCK.acquire(blocking=False):
@@ -497,7 +522,7 @@ class Handler(BaseHTTPRequestHandler):
                 frame = Path(folder) / "initial.jpg"
                 result = subprocess.run(
                     [sys.executable, str(HERE / "sim.py"), "--preview", str(frame), "--ood", json.dumps(changes),
-                     *seeding], cwd=HERE, env=env, capture_output=True, text=True, timeout=60)
+                     *seeding, *robot], cwd=HERE, env=env, capture_output=True, text=True, timeout=120)
                 if result.returncode:
                     error = (result.stderr or result.stdout).strip().splitlines()
                     return self.send_json({"error": error[-1] if error else "Camera rendering failed."}, 422)
@@ -521,7 +546,7 @@ class Handler(BaseHTTPRequestHandler):
             if not task:
                 return self.send_json({"error": "Describe what to pick up and where to place it."}, 400)
             try:
-                changes, seeding, scene = run_options(body)
+                changes, seeding, scene, robot = run_options(body)
                 # Judged on the spec sent, or the one the task's words give; a task with neither runs, not judged.
                 spec = task_spec(task, body.get("judge"), scene or FULL_TABLE)
             except ValueError as error:
@@ -531,12 +556,19 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 seconds = min(300, max(10, int(float(body.get("seconds") or 60))))
                 RUNNER.start(task, seconds, changes, seeding, scene,
-                             extra_env={"JUDGE_SPEC": json.dumps(spec)} if spec else None)
+                             extra_env={"JUDGE_SPEC": json.dumps(spec)} if spec else None, robot=robot)
             except (ValueError, TypeError):
                 return self.send_json({"error": "The time limit must be a number."}, 400)
             except RuntimeError as error:
                 return self.send_json({"error": str(error)}, 409)
             return self.send_json(RUNNER.status())
+        if self.path == "/api/simulator-settings":
+            try:
+                settings = sim_settings.normalize(body)
+            except ValueError as error:
+                return self.send_json({"error": str(error)}, 400)
+            write_json(SETTINGS, settings)
+            return self.send_json({"settings": settings, "catalog": sim_settings.catalog()})
         if self.path == "/api/rules":
             try:
                 rules = judge.normalize_rules(body)
@@ -590,6 +622,7 @@ class Handler(BaseHTTPRequestHandler):
                 changes = ood.validate(body.get("ood") or {})
                 seed_web.seeding_args({"ood_random": body.get("ood_random")}, ood.FIELDS)  # checks the names
                 random_names = list(body.get("ood_random") or [])
+                robot = robot_args(changes, ["--ood-random"] if random_names else [], None)
                 split = body.get("split") or "train"
                 if split == "eval":  # the fixed evaluation seeds, in order
                     seeds = eval_seeds()[:count]
@@ -603,7 +636,7 @@ class Handler(BaseHTTPRequestHandler):
                     seeds = list(range(first, first + count))
                 else:
                     raise ValueError("Seeds must be 'train' or 'eval'.")
-                BATCH.start(tasks, seeds, seconds, changes, random_names, split)
+                BATCH.start(tasks, seeds, seconds, changes, random_names, split, robot)
             except (ValueError, TypeError, AttributeError) as error:
                 return self.send_json({"error": str(error)}, 400)
             except RuntimeError as error:

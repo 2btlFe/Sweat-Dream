@@ -74,6 +74,12 @@
   /* API key, mode and task notes */
   .keyrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: end; }
   .keystate { font-size: 12px; margin: 6px 0 14px; color: var(--ok); }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .robot-note { font-size: 12px; color: var(--muted); margin: -6px 0 14px; min-height: 0; }
+  .robot-note:empty { display: none; }
+  .robot-note.bad { color: var(--warn); }
+  .robot-note a { color: var(--accent); }
+  .yam-only.off { opacity: .45; pointer-events: none; }
   .keystate.none { color: var(--warn); }
   .toggle { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
   .toggle button { border-radius: 0; background: var(--well); color: var(--muted); font-weight: 550; padding: 7px 6px; line-height: 1.25; min-width: 0; overflow-wrap: anywhere; }
@@ -204,6 +210,11 @@
       <button type="button" id="clearKey" class="ghost" hidden>Clear</button>
     </form>
     <div class="keystate" id="keyState"></div>
+    <div class="grid2">
+      <div><label for="robot">Robot</label><select id="robot" aria-describedby="robotNote"></select></div>
+      <div><label for="room">Room</label><select id="room"></select></div>
+    </div>
+    <div class="robot-note" id="robotNote"></div>
 
     <div class="toggle mode" role="group" aria-label="Mode">
       <button id="modeSingle" class="on" aria-pressed="true">Single run</button>
@@ -258,7 +269,7 @@
     </div>
   </section>
 
-  <section class="panel ood-panel" aria-label="Camera, robot &amp; environment settings">
+  <section class="panel ood-panel yam-only" aria-label="Camera, robot &amp; environment settings">
     <details class="ood" open>
       <summary>Camera, robot &amp; environment settings</summary>
       <form id="ood" class="ood-grid" aria-label="Camera, robot &amp; environment settings"></form>
@@ -268,7 +279,7 @@
   </section>
 
   <section class="panel">
-    <details class="fold" id="layoutPanel">
+    <details class="fold yam-only" id="layoutPanel">
       <summary>Custom layout</summary>
       <label class="check"><input type="checkbox" id="customOn"> Use my own layout instead of the seed's (single runs)</label>
       <p class="muted small" style="margin: -6px 0 12px">Pick what is on the table and drag it. Settings marked <em>random</em> need the seed's layout, so they are not drawn with a custom layout. Batches always start from seeds.</p>
@@ -522,6 +533,8 @@ async function renderDetail() {
   $("detailImage").src = `/api/runs/${run.id}/last.jpg`;
   const extra = [run.batch_id ? batchName(run.batch_id) : "Single run",
                  run.layout === "custom" ? "custom layout" : run.seed != null ? `seed ${run.seed}${run.split === "eval" ? " (eval)" : ""}` : "",
+                 run.robot && run.robot !== "yam" ? (simCatalog?.robots[run.robot] || run.robot) : "",
+                 run.room && run.room !== "yam_tabletop" ? (simCatalog?.rooms[run.room] || run.room) : "",
                  run.ood_random?.length ? `random: ${run.ood_random.join(", ")}` : "",
                  (run.judge || v.spec) ? `${TYPE_UI[(run.judge || v.spec).type || "pick_place"]?.label || ""}: ${specText(run.judge || v.spec)}` : "not judged"].filter(Boolean).join(" · ");
   const hand = handLabel(run);
@@ -980,7 +993,7 @@ $("batchCount").oninput = estimate;
 $("batchSeconds").oninput = estimate;
 
 $("startBatch").onclick = async () => {
-  const ood = readOOD();
+  const ood = isOpenYAM() ? {} : readOOD();
   if (ood === null) return;
   const count = Number($("batchCount").value);
   if (!confirm(`Run ${count} episodes in the background (about ${estimate()} min of Dream-1 use)?`)) return;
@@ -988,7 +1001,8 @@ $("startBatch").onclick = async () => {
     const tasks = taskOptions().filter(o => o.usable && batchTasks.has(o.prompt))
       .map(({ prompt, judge }) => ({ prompt, judge }));
     const { seed, ood_random } = seeding();
-    await api("/api/batch", { tasks, count, seconds: $("batchSeconds").value, split, seed, ood, ood_random });
+    await api("/api/batch", { tasks, count, seconds: $("batchSeconds").value, split, seed, ood,
+                              ood_random: isOpenYAM() ? [] : ood_random });
     followBatch = true;
     refresh();
   } catch (err) { alert(err.message); }
@@ -1026,6 +1040,56 @@ function showBatch(b) {
 }
 
 
+/* ---------- robot and room ---------- */
+
+let simSettings = null, simCatalog = null;
+const robotRunsHere = () => !simCatalog || simCatalog.local_robots.includes($("robot").value);
+const isOpenYAM = () => $("robot").value === "openyam";
+
+async function loadSimulator() {
+  const { settings, catalog } = await api("/api/simulator-settings");
+  simSettings = settings;
+  simCatalog = catalog;
+  $("robot").innerHTML = Object.entries(catalog.robots).map(([key, label]) =>
+    `<option value="${key}">${esc(label)}${catalog.local_robots.includes(key) ? "" : " · Sandbox only"}</option>`).join("");
+  $("room").innerHTML = Object.entries(catalog.rooms).map(([key, label]) => `<option value="${key}">${esc(label)}</option>`).join("");
+  $("robot").value = settings.robot;
+  $("room").value = settings.room;
+  showRobot();
+}
+
+/** What the picked robot can do here, and the YAM-only parts of the page. */
+function showRobot() {
+  const note = $("robotNote");
+  note.classList.toggle("bad", !robotRunsHere());
+  if (!robotRunsHere()) {
+    note.innerHTML = `${esc(simCatalog.robots[$("robot").value])} runs only in the <a href="${simCatalog.sandbox_url}" target="_blank" rel="noopener">Dream Labs Sandbox</a>. Choose YAM or OpenYAM to run here.`;
+  } else if (isOpenYAM()) {
+    note.textContent = "OpenYAM on the Sandbox table (needs Node.js). The scene settings and custom layout below are for YAM; the seed shifts the objects by up to 2 cm.";
+  } else {
+    note.textContent = "";
+  }
+  for (const part of document.querySelectorAll(".yam-only")) part.classList.toggle("off", isOpenYAM());
+  if (isOpenYAM() && customOn()) { $("customOn").checked = false; $("layoutBody").classList.add("off"); }
+}
+
+async function saveSimulator() {
+  try {
+    ({ settings: simSettings } = await api("/api/simulator-settings", { ...simSettings, robot: $("robot").value, room: $("room").value }));
+  } catch (err) { alert(err.message); }
+  showRobot();
+  checkTask();
+  schedulePreview();
+}
+$("robot").onchange = saveSimulator;
+$("room").onchange = saveSimulator;
+
+/** The start-scene part of a request: OpenYAM takes the seed only (no YAM scene settings or layout). */
+function startScene(ood) {
+  if (isOpenYAM()) return { ood: {}, seed: seeding().seed, scene: null };
+  return { ood, ...seeding(), scene: customOn() ? sceneForRun() : null };
+}
+
 /* ---------- custom layout ---------- */
 
 const customOn = () => !!$("customOn")?.checked;
@@ -1048,7 +1112,8 @@ function schedulePreview() {
 
 async function renderPreview() {
   if (running || starting || previewPending) return;
-  const ood = readOOD(false);
+  if (!robotRunsHere()) { $("previewStatus").hidden = false; $("previewStatus").textContent = "No preview: this robot runs only in the Sandbox."; return; }
+  const ood = isOpenYAM() ? {} : readOOD(false);
   if (ood === null) return;
   if (customOn() && sceneProblem()) return;
   const revision = previewRevision;
@@ -1059,13 +1124,13 @@ async function renderPreview() {
   try {
     const response = await fetch("/api/preview", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ood, ...seeding(), scene: customOn() ? sceneForRun() : null }),
+      body: JSON.stringify(startScene(ood)),
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       throw new Error(response.status === 404 ? "Restart app.py and reload the page." : error.error || "Rendering failed.");
     }
-    if (!customOn()) afterPreview(response);
+    if (!customOn() && !isOpenYAM()) afterPreview(response);
     const frame = await response.blob();
     if (revision !== previewRevision || running || starting) return;
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -1104,8 +1169,9 @@ async function refresh() {
   if (running) $("previewStatus").hidden = true;
   if (batchRunning && mode !== "batch") setMode("batch");
   $("modeSingle").disabled = $("modeBatch").disabled = running;
-  $("run").disabled = running || !s.key.source;
-  $("startBatch").disabled = running || !s.key.source;
+  $("run").disabled = running || !s.key.source || !robotRunsHere();
+  $("startBatch").disabled = running || !s.key.source || !robotRunsHere();
+  $("robot").disabled = $("room").disabled = running;
   $("stop").hidden = !s.running || batchRunning;
   $("stopBatch").hidden = !batchRunning;
   $("dot").classList.toggle("on", running);
@@ -1144,15 +1210,14 @@ async function refresh() {
 
 $("run").onclick = async () => {
   try {
-    const ood = readOOD();
+    const ood = isOpenYAM() ? {} : readOOD();
     if (ood === null) return;
     if (customOn()) { const problem = sceneProblem(); if (problem) { alert(problem); return; } }
     starting = true;
     previewRevision++;
     clearTimeout(previewTimer);
     $("previewStatus").hidden = true;
-    await api("/api/run", { task: $("task").value, seconds: $("seconds").value, ood, ...seeding(),
-                            scene: customOn() ? sceneForRun() : null });
+    await api("/api/run", { task: $("task").value, seconds: $("seconds").value, ...startScene(ood) });
     $("live").hidden = true;
     $("placeholder").hidden = false;
     $("placeholder").textContent = "Starting the simulator… (the first picture takes a few seconds)";
@@ -1175,6 +1240,7 @@ $("ood").addEventListener("reset", schedulePreview);
   try { rules = await api("/api/rules"); } catch {}
   showRules();
   resetScene();
+  await loadSimulator().catch(() => {});
   const ready = await loadOOD(api);
   settingsReady = ready;
   if (ready) {

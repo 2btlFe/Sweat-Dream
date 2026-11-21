@@ -21,17 +21,21 @@ python app.py
 Open http://localhost:8000.
 
 1. Paste your API key → **Use key**. It is kept in memory only; **Clear** removes it.
-2. **Seed**: the start scene comes from it (objects placed around their usual spots, within reach of both arms; see
+2. **Robot** and **Room**: YAM (with the seed scenes and scene settings below) or OpenYAM (on the Dream Labs Sandbox
+   table; needs [Node.js](https://nodejs.org) to fetch it, and a seed only shifts its objects by up to 2 cm). The other
+   robots in the list run only in the [Dream Labs Sandbox](https://platform.dreamlabs.ai/sandbox). A room styles the
+   table and background (kitchen, cottage, ...). The choice is kept in `runs/simulator_settings.json`.
+3. **Seed**: the start scene comes from it (objects placed around their usual spots, within reach of both arms; see
    [SCENE_SEED.md](SCENE_SEED.md)). **↻** draws a new one; the same seed always gives the same start.
-3. **Camera, robot & environment settings**: workspace viewpoint and camera offsets, the arms' initial angles, blur,
+4. **Camera, robot & environment settings**: workspace viewpoint and camera offsets, the arms' initial angles, blur,
    light and table. Tick **random** on a setting to draw it from the seed instead. The camera view shows the start
    scene as you change these (no Dream API call).
-4. Type a task such as `put apple into the bowl` → **Run**. The note under the task says what the run is judged on;
+5. Type a task such as `put apple into the bowl` → **Run**. The note under the task says what the run is judged on;
    open-ended tasks (such as "Move an object to the center of the workspace") run but are not judged.
-5. Set the distance, release, and still-time rules. Existing runs are re-evaluated immediately.
-6. Select a run to inspect its final frame, checks, and distance chart. **Save labels** writes the current
+6. Set the distance, release, and still-time rules. Existing runs are re-evaluated immediately.
+7. Select a run to inspect its final frame, checks, and distance chart. **Save labels** writes the current
    server-side verdicts to `label.json`.
-7. **Your label**: decide a run yourself with **Success / Failure / Invalid** (keys **1 / 2 / 3**; **0** goes back to
+8. **Your label**: decide a run yourself with **Success / Failure / Invalid** (keys **1 / 2 / 3**; **0** goes back to
    the rules), with an optional note. **J / K** move to the next / previous run. A label set by hand wins over the
    rules: changing the rules or **Save labels** never replaces it, and `label.json` keeps the rules' verdict beside
    it (`source: "human"`, `rules_verdict`). The run list marks these runs with ✋, and its filter can show only them
@@ -104,3 +108,5 @@ a `judge_<type>` function and a branch in `judge.classify()`, and its controls i
 | `ood.py`, `seed_web.py` | Scene settings (camera, arms, blur, light, table); the web side of the seed |
 | `judge.py`, `test_judge.py` | Success / failure from a trajectory and the rules; its tests |
 | `batch.py` | Batches from the command line |
+| `simulator_settings.py`, `test_simulator_settings.py` | Robot and room choices, and which run here; its tests |
+| `sandbox_env.py`, `sandbox_scene.mjs`, `local_rooms.py` | OpenYAM on the Sandbox table (fetched at run time); room styling |
