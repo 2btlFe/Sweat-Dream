@@ -20,6 +20,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import ood
+import seed_web  # the seed (scene.py): seed field, random scene controls
 
 HERE = Path(__file__).resolve().parent
 PAGE = HERE / "static" / "index.html"
@@ -104,17 +105,6 @@ class Runner:
 RUNNER = Runner()
 
 
-def seeding_args(body):
-    """sim.py arguments for the run's seed and the scene controls drawn from it (scene.py); empty seed: a new one."""
-    seed = "" if body.get("seed") is None else str(body["seed"]).strip()
-    if seed and not seed.isdigit():
-        raise ValueError("The seed must be a whole number 0 or above, or empty.")
-    names = body.get("ood_random") or []
-    if not isinstance(names, list) or any(name not in ood.FIELDS for name in names):
-        raise ValueError("Unknown random scene control.")
-    return (["--seed", seed] if seed else []) + (["--ood-random", ",".join(names)] if names else [])
-
-
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -136,8 +126,8 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split("?", 1)[0]
         if path in ("/", "/index.html"):
             return self.send(PAGE.read_bytes(), "text/html; charset=utf-8")
-        if path == "/ood.js":
-            script = PAGE.with_name("ood.js")
+        if path in ("/ood.js", "/seed.js"):
+            script = PAGE.with_name(path[1:])
             return self.send(script.read_bytes(), "text/javascript; charset=utf-8")
         if path == "/api/ood":
             return self.send_json(ood.GROUPS)
@@ -153,7 +143,7 @@ class Handler(BaseHTTPRequestHandler):
     def preview(self, body):
         try:
             changes = ood.validate(body.get("ood", {}))
-            seeding = seeding_args(body)
+            seeding = seed_web.seeding_args(body, ood.FIELDS)
         except ValueError as error:
             return self.send_json({"error": str(error)}, 400)
         if RUNNER.running() or not PREVIEW_LOCK.acquire(blocking=False):
@@ -162,18 +152,13 @@ class Handler(BaseHTTPRequestHandler):
             with tempfile.TemporaryDirectory(prefix="dream-preview-") as folder:
                 frame = Path(folder) / "initial.jpg"
                 result = subprocess.run(
-                    [sys.executable, str(HERE / "sim.py"), "--preview", str(frame), "--ood", json.dumps(changes),
-                     *seeding],
+                    [sys.executable, str(HERE / "sim.py"), "--preview", str(frame), "--ood", json.dumps(changes), *seeding],
                     cwd=HERE, capture_output=True, text=True, timeout=60,
-                    env={**os.environ, "PYTHONWARNINGS": "ignore"},
                 )
                 if result.returncode:
                     error = (result.stderr or result.stdout).strip().splitlines()
                     return self.send_json({"error": error[-1] if error else "Camera rendering failed."}, 422)
-                # The scene-control values the seed drew, so the page can show them.
-                drawn = next((line.split(":", 1)[1].split(" (from the seed")[0].strip()
-                              for line in result.stdout.splitlines() if line.startswith("Scene controls:")), "{}")
-                return self.send(frame.read_bytes(), "image/jpeg", headers={"X-Scene-Controls": drawn})
+                return self.send(frame.read_bytes(), "image/jpeg", headers=seed_web.drawn_header(result.stdout))
         except (OSError, subprocess.TimeoutExpired):
             return self.send_json({"error": "Could not render the initial camera view."}, 500)
         finally:
@@ -198,7 +183,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "The time limit must be a number."}, 400)
             try:
                 changes = ood.validate(body.get("ood", {}))
-                RUNNER.start(task, seconds, changes, seeding_args(body))
+                RUNNER.start(task, seconds, changes, seed_web.seeding_args(body, ood.FIELDS))
             except ValueError as error:
                 return self.send_json({"error": str(error)}, 400)
             except RuntimeError as error:

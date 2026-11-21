@@ -43,11 +43,6 @@
   .ood fieldset { min-width: 0; margin: 0; padding: 9px 11px 11px; background: var(--well); border: 1px solid var(--line); border-radius: 10px; }
   .ood legend { padding: 0 5px; font-weight: 650; font-size: 12px; }
   .ood-field + .ood-field { margin-top: 9px; }
-  .seed-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; margin-top: 12px; }
-  .seed-note { font-size: 11px; margin: 6px 0 0; }
-  .ood-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  .ood-random { display: inline-flex; align-items: center; gap: 4px; margin: 0; font-size: 11px; font-weight: 500; white-space: nowrap; cursor: pointer; }
-  .ood-random input { width: auto; margin: 0; accent-color: var(--accent); }
   .ood-slider { display: grid; grid-template-columns: minmax(0, 1fr) 4.4rem; gap: 8px; align-items: center; }
   .ood-slider input[type="range"] { background: transparent; border: 0; margin: 0; padding: 0; accent-color: var(--accent); cursor: pointer; }
   .ood-slider input[type="number"], .ood select { padding: 5px 7px; font-size: 12px; }
@@ -92,21 +87,16 @@
       <div class="grow"><label for="task">Task</label><input id="task" value="Move an object to the center of the workspace"></div>
       <div><label for="seconds">Limit (s)</label><input id="seconds" type="number" min="10" max="300" value="60"></div>
     </div>
-    <div class="seed-row">
-      <div><label for="seed">Seed</label><input id="seed" type="number" min="0" step="1" placeholder="new on Run"></div>
-      <button id="newSeed" type="button" title="New random seed" aria-label="New random seed">↻</button>
-    </div>
-    <p class="muted seed-note">Same seed, same start: object layout and every scene setting marked <em>random</em> come from it.</p>
     <div class="examples" id="examples"></div>
     <div class="actions">
       <button id="run">Run</button>
       <button id="stop" class="stop" hidden>Stop</button>
     </div>
   </section>
-  <section class="panel ood-panel" aria-label="Camera &amp; environment settings">
+  <section class="panel ood-panel" aria-label="Camera, robot &amp; environment settings">
     <details class="ood" open>
-      <summary>Camera &amp; environment settings</summary>
-      <form id="ood" class="ood-grid" aria-label="Camera &amp; environment settings"></form>
+      <summary>Camera, robot &amp; environment settings</summary>
+      <form id="ood" class="ood-grid" aria-label="Camera, robot &amp; environment settings"></form>
       <button id="oodReset" type="reset" form="ood" hidden>Reset scene settings</button>
       <p id="oodError" class="muted" role="status" hidden></p>
     </details>
@@ -119,7 +109,7 @@
     </div>
     <img id="live" class="view" alt="Live camera view" hidden>
     <div id="placeholder" class="view placeholder">Preparing the initial camera view…</div>
-    <div class="legend"><span>Top camera</span><span>Wrist cameras</span></div>
+    <div class="legend"><span>Workspace camera</span><span>Wrist cameras</span></div>
     <p class="muted" id="previewStatus" role="status" hidden></p>
     <p class="muted" id="statusMore"></p>
     <pre id="log" hidden></pre>
@@ -128,11 +118,8 @@
 </main>
 
 <script type="module">
-import { loadOOD, readOOD, readRandom, showDrawn } from "/ood.js";
-
-// The seed (scene.py): object layout and random scene settings. Always filled in, so every run can be repeated.
-const newSeed = () => { $("seed").value = Math.floor(Math.random() * 1000000); };  // a train seed: 0..999999
-const seeding = () => ({ seed: $("seed").value.trim() || null, ood_random: readRandom() });
+import { loadOOD, readOOD } from "/ood.js";
+import { initSeed, seeding, afterPreview } from "/seed.js";
 
 const $ = id => document.getElementById(id);
 let liveTimer = null;
@@ -175,6 +162,7 @@ async function renderPreview() {
       const error = await response.json().catch(() => ({}));
       throw new Error(response.status === 404 ? "Restart app.py and reload the page." : error.error || "Rendering failed.");
     }
+    afterPreview(response);
     const frame = await response.blob();
     if (revision !== previewRevision || running || starting) return;
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -182,8 +170,7 @@ async function renderPreview() {
     $("live").src = previewUrl;
     $("live").hidden = false;
     $("placeholder").hidden = true;
-    try { showDrawn(JSON.parse(response.headers.get("X-Scene-Controls") || "{}")); } catch {}
-    note.textContent = `Initial scene · seed ${$("seed").value || "(new on Run)"} · current scene settings`;
+    note.textContent = "Initial scene · settings apply on Run";
   } catch (error) {
     if (revision === previewRevision && !running && !starting) {
       note.textContent = "Preview unavailable: " + error.message;
@@ -244,7 +231,6 @@ $("run").onclick = async () => {
     previewRevision++;
     clearTimeout(previewTimer);
     $("previewStatus").hidden = true;
-    if (!$("seed").value.trim()) newSeed();
     await api("/api/run", { task: $("task").value, seconds: $("seconds").value, ood, ...seeding() });
     $("live").hidden = true;
     $("placeholder").hidden = false;
@@ -262,12 +248,10 @@ $("stop").onclick = async () => {
 };
 
 $("ood").addEventListener("input", schedulePreview);
-$("seed").addEventListener("input", schedulePreview);
-$("newSeed").onclick = () => { newSeed(); schedulePreview(); };
-newSeed();
 $("ood").addEventListener("reset", schedulePreview);
 loadOOD(api).then(ready => {
   settingsReady = ready;
+  if (ready) initSeed(schedulePreview);
   refresh();
   if (ready) {
     schedulePreview();

@@ -1,14 +1,50 @@
 const $ = id => document.getElementById(id);
+let cameraEditor;
+
+function editCameras(form, target, controls) {
+  const saved = new Map();
+  let selected = target.value;
+  const snapshot = () => Object.fromEntries(Array.from(controls, ([name, { input }]) => [
+    name, input.valueAsNumber,
+  ]));
+
+  target.addEventListener("input", () => {
+    if (target.value === selected) return;
+    const invalid = Array.from(controls.values()).find(({ input }) => !input.validity.valid);
+    if (invalid) {
+      target.value = selected;
+      invalid.input.reportValidity();
+      return;
+    }
+    saved.set(selected, snapshot());
+    selected = target.value;
+    const values = saved.get(selected);
+    for (const [name, { input, slider }] of controls) {
+      input.value = values?.[name] ?? input.defaultValue;
+      slider.value = input.value;
+    }
+  });
+  form.addEventListener("reset", () => {
+    saved.clear();
+    selected = Array.from(target.options).find(option => option.defaultSelected).value;
+  });
+
+  return {
+    manages: name => name === target.name || controls.has(name),
+    read: () => Object.fromEntries([...saved, [selected, snapshot()]]),
+  };
+}
 
 export async function loadOOD(api) {
   const form = $("ood");
   form.addEventListener("submit", event => event.preventDefault());
   try {
     const groups = await api("/api/ood");
-    const supported = ["Camera view", "Image effects", "Lighting & surface"];
+    const supported = ["Start camera view", "Left arm · initial angles", "Right arm · initial angles", "Image effects", "Lighting & surface"];
     if (Object.keys(groups).length !== supported.length || supported.some(group => !(group in groups))) {
       throw new Error("Outdated scene settings");
     }
+    const cameraControls = new Map();
     for (const [title, fields] of Object.entries(groups)) {
       const group = document.createElement("fieldset");
       const legend = document.createElement("legend");
@@ -23,17 +59,7 @@ export async function loadOOD(api) {
         control.name = name;
         control.id = "ood-" + name;
         label.htmlFor = control.id;
-        // "random": the value is drawn from the run's seed (scene.py draw_controls), so it is reproducible.
-        const dice = document.createElement("label");
-        dice.className = "ood-random";
-        const box = document.createElement("input");
-        Object.assign(box, { type: "checkbox", title: "Draw this value from the seed" });
-        box.dataset.random = name;
-        dice.append(box, " random");
-        const head = document.createElement("div");
-        head.className = "ood-head";
-        head.append(label, dice);
-        fieldRow.append(head);
+        fieldRow.append(label);
         if (field.choices) {
           for (const [value, text] of Object.entries(field.choices)) {
             control.add(new Option(text, value, value === field.default));
@@ -52,14 +78,14 @@ export async function loadOOD(api) {
           const pair = document.createElement("div");
           pair.className = "ood-slider";
           pair.append(slider, control);
+          if (title === "Start camera view") cameraControls.set(name, { input: control, slider });
           fieldRow.append(pair);
         }
-        box.addEventListener("change", () => syncRandom(fieldRow));
         group.append(fieldRow);
       }
       form.append(group);
     }
-    form.addEventListener("reset", () => setTimeout(() => form.querySelectorAll(".ood-field").forEach(syncRandom)));
+    cameraEditor = editCameras(form, $("ood-camera_target"), cameraControls);
     $("oodReset").hidden = false;
     return true;
   } catch (err) {
@@ -69,36 +95,12 @@ export async function loadOOD(api) {
   }
 }
 
-// A control marked random is drawn by the server from the seed: its own inputs are locked and show the drawn value.
-function syncRandom(fieldRow) {
-  const random = fieldRow.querySelector("[data-random]").checked;
-  fieldRow.querySelectorAll("input:not([data-random]), select").forEach(input => { input.disabled = random; });
-}
-
-/** The names of the scene controls marked random. */
-export function readRandom() {
-  return Array.from($("ood").querySelectorAll("[data-random]:checked"), box => box.dataset.random);
-}
-
-/** Show the values the seed drew for the random controls (from the preview's X-Scene-Controls header). */
-export function showDrawn(values) {
-  for (const name of readRandom()) {
-    const control = $("ood-" + name);
-    let value = values[name];
-    if (value === undefined) {  // not in the changes: the seed drew the default value
-      value = control.tagName === "SELECT"
-        ? Array.from(control.options).find(option => option.defaultSelected).value : control.defaultValue;
-    }
-    control.value = value;
-    const slider = control.parentElement.querySelector("input[type=range]");
-    if (slider) slider.value = value;
-  }
-}
-
 export function readOOD(report = true) {
   const form = $("ood");
   if (!(report ? form.reportValidity() : form.checkValidity())) return null;
-  return Object.fromEntries(Array.from(form.querySelectorAll("input[name], select[name]"), control => [
-    control.name, control.type === "number" ? control.valueAsNumber : control.value,
-  ]));
+  const values = Object.fromEntries(Array.from(form.querySelectorAll("input[name], select[name]"))
+    .filter(control => !cameraEditor?.manages(control.name))
+    .map(control => [control.name, control.type === "number" ? control.valueAsNumber : control.value]));
+  if (cameraEditor) values.camera_views = cameraEditor.read();
+  return values;
 }

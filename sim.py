@@ -31,7 +31,7 @@ import dream  # noqa: E402
 import dream_control  # noqa: E402
 from PIL import Image  # noqa: E402
 
-import scene  # noqa: E402  random start scene from a seed (--seed, --split): see scene.py
+import scene  # noqa: E402  seed: object layout + random scene controls (scene.py)
 
 LIVE_FRAME = os.environ.get("LIVE_FRAME")
 STOP_FILE = os.environ.get("STOP_FILE")
@@ -87,21 +87,18 @@ def main():
     parser.add_argument("--preview", type=Path, help="Render the initial camera view to a JPEG and exit")
     scene.add_arguments(parser)
     args = parser.parse_args()
-    seed = scene.pick_seed(args)
     try:
-        controls = scene.resolve_controls(seed, args.ood, args.ood_random, args.setting)
-        changes = ood.validate(controls)
+        changes = ood.validate(args.ood)
     except ValueError as error:
         parser.error(str(error))
 
-    import yam_env
-
-    def make_env():
-        return ood.build_environment(yam_env, changes) if changes else yam_env.YamEnv()
-
     if args.preview:
-        env = scene.prepare_env(args, seed, make_env, changes)
+        import yam_env
+
+        env, changes = scene.build_env(args)
         try:
+            state = env.state()
+            env.step(state["left"], state["right"])
             save_live_frame(env.images(), str(args.preview))
         finally:
             env.close()
@@ -118,9 +115,10 @@ def main():
 
         threading.Thread(target=watch, daemon=True).start()
 
-    env = scene.prepare_env(args, seed, make_env, changes)
     print(f"Starting the simulator: {args.task} ({args.seconds:g} s)", flush=True)
+    env = None
     try:
+        env, changes = scene.build_env(args)
         dream_control.main(["--task", args.task, "--seconds", str(args.seconds), "--headless", "--quiet"],
                            shared_env=env, stop_event=stop)
     except (RuntimeError, ValueError, KeyError, OSError) as error:
@@ -128,7 +126,8 @@ def main():
         sys.exit(1)
     finally:
         stop.set()
-        env.close()
+        if env is not None:
+            env.close()
     print("Done.", flush=True)
 
 

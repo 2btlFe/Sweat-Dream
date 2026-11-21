@@ -1,6 +1,6 @@
 """Random start scenes from a seed: where the tabletop objects start, reproducible from (setting, seed).
 
-Self-contained module; sim.py only calls add_arguments() and prepare_env():
+Self-contained module; sim.py only calls add_arguments() and build_env() (the website side is seed_web.py + static/seed.js):
 
     python sim.py "put apple into the bowl"                       a new random train seed (printed)
     python sim.py "put apple into the bowl" --seed 42             the start scene of seed 42
@@ -115,7 +115,7 @@ REFERENCE = {
     "fruits_only": {0: "e1af86a63042200c", 42: "b8db6b7a9a9572b1"},
 }
 EVAL_FINGERPRINT = "f885497727d1d571"
-CONTROLS_FINGERPRINT = "e9baa099e4647720"  # the ood.py scene controls drawn from seeds (draw_controls)
+CONTROLS_FINGERPRINT = "86b9558a52e56a0f"  # the ood.py scene controls drawn from seeds (draw_controls)
 # The fixed eval set of the default setting: 17 easy, 17 medium, 16 hard (select_eval_seeds() remakes it).
 EVAL_SEEDS = (1000000, 1000001, 1000002, 1000003, 1000004, 1000005, 1000006, 1000007, 1000008, 1000009, 1000010,
               1000011, 1000012, 1000013, 1000014, 1000015, 1000016, 1000017, 1000018, 1000019, 1000020, 1000021,
@@ -418,19 +418,32 @@ def settle(env, seconds=1.0):
 
 # ---------------------------------------------------------------------------------------------- scene controls
 
-def draw_controls(seed, names, setting="default"):
-    """Values for the ood.py scene controls named (camera, blur, light, table, ...), drawn from the seed within
-    each control's range and step. Same (setting, seed, control), same value; each control has its own stream,
-    so choosing more or fewer random controls never changes the others' values.
+NOT_RANDOM = {"camera_target"}  # ood.py controls that pick what to edit in the page, not a scene value
+ARM_ATTEMPTS = 30  # random arm angles that collide are drawn again (deterministically) up to this many times
+
+
+def random_controls():
+    """@return The ood.py scene controls that can be drawn from the seed."""
+    import ood
+
+    return sorted(set(ood.FIELDS) - NOT_RANDOM)
+
+
+def draw_controls(seed, names, setting="default", attempt=0):
+    """Values for the ood.py scene controls named (camera, arm angles, blur, light, table, ...), drawn from the seed
+    within each control's range and step. Same (setting, seed, control), same value; each control has its own
+    stream, so choosing more or fewer random controls never changes the others' values. `attempt` > 0 redraws only
+    the arm angles (after a drawn pose collided).
     """
     import ood
 
     values = {}
     for name in sorted(names):
         field = ood.FIELDS.get(name)
-        if field is None:
-            raise ValueError(f"Unknown scene control: {name}")
-        rng = rng_for(seed, "ood", name, setting=setting)
+        if field is None or name in NOT_RANDOM:
+            raise ValueError(f"Not a random scene control: {name}")
+        redraw = (attempt,) if attempt and name in ood.ARM_FIELDS else ()
+        rng = rng_for(seed, "ood", name, *redraw, setting=setting)
         if "choices" in field:
             options = sorted(field["choices"])
             values[name] = options[int(rng.integers(len(options)))]
@@ -440,11 +453,27 @@ def draw_controls(seed, names, setting="default"):
     return values
 
 
-def resolve_controls(seed, manual, random_names, setting="default"):
-    """@return The scene-control values of a run: the manual ones, with the random ones drawn from the seed."""
+def resolve_controls(seed, manual, random_names, setting="default", attempt=0):
+    """The scene-control values of a run: the manual ones, with the random ones drawn from the seed.
+    Random camera fine-tuning goes to the workspace (top) camera; other cameras keep their manual values.
+    """
+    import ood
+
     if random_names and seed is None:
         raise ValueError("Random scene controls need a seed (not --default-scene).")
-    return {**manual, **draw_controls(seed, random_names, setting)} if random_names else dict(manual)
+    controls = {**manual}
+    drawn = draw_controls(seed, random_names, setting, attempt) if random_names else {}
+    camera = {k: v for k, v in drawn.items() if k in ood.CAMERA_FIELDS}
+    controls.update({k: v for k, v in drawn.items() if k not in camera})
+    if camera:
+        target = controls.pop("camera_target", "top")
+        manual_camera = {k: controls.pop(k) for k in list(controls) if k in ood.CAMERA_FIELDS}
+        views = {name: dict(view) for name, view in controls.pop("camera_views", {}).items()}
+        if manual_camera:
+            views[target] = {**views.get(target, {}), **manual_camera}
+        views["top"] = {**views.get("top", {}), **camera}
+        controls["camera_views"] = views
+    return controls
 
 
 # ---------------------------------------------------------------------------------------------- reproducibility
@@ -464,9 +493,7 @@ def reference_now(model=None):
 
 def controls_fingerprint():
     """@return A hash of every ood.py scene control drawn at random for a few seeds."""
-    import ood
-
-    return fingerprint([draw_controls(seed, ood.FIELDS) for seed in (0, 42, 1000000)])
+    return fingerprint([draw_controls(seed, random_controls()) for seed in (0, 42, 1000000)])
 
 
 def check_reproducible(model=None):
@@ -500,6 +527,8 @@ def add_arguments(parser):
                         help="refuse a seed of the other split; with no --seed, draw a new seed of this split")
     parser.add_argument("--setting", default="default", choices=sorted(SETTINGS),
                         help="which objects move and how (scene.py SETTINGS)")
+    if not any("--ood" in action.option_strings for action in parser._actions):
+        parser.add_argument("--ood", type=json.loads, default={}, help="scene settings (ood.py) as a JSON object")
     parser.add_argument("--ood-random", default="", type=lambda text: [n for n in text.split(",") if n],
                         help="comma-separated ood.py scene controls to draw from the seed (others: --ood values)")
 
@@ -517,44 +546,68 @@ def pick_seed(args):
     return seed
 
 
-def prepare_env(args, seed=None, make_env=None, controls=None):
-    """Make the simulator with the seed's start scene, and print what a rerun needs.
-    @param seed The run's seed (pick_seed(args) when left out).
-    @param make_env Builds the environment (e.g. ood.build_environment with the run's scene controls).
-    @param controls The run's scene-control values, printed so the run can be repeated.
-    @return The YamEnv to pass to dream_control.main(shared_env=...).
+def build_env(args):
+    """Make the run's simulator: the seed's object layout, the scene controls (ood.py: --ood values, with the
+    --ood-random ones drawn from the seed) and the arms' initial angles; print what a rerun needs.
+    @return The environment (for dream_control.main(shared_env=...)) and the scene-control changes in effect.
     """
-    from yam_env import YamEnv
+    import ood
+    import yam_env
 
-    layout_for()  # from the unchanged package scene, before make_env may patch it
-    if seed is None and not args.default_scene:
-        seed = pick_seed(args)
-    env = make_env() if make_env else YamEnv()
-    if seed is None:
-        print("Scene: default (not random)", flush=True)
-        if controls:
-            print(f"Scene controls: {json.dumps(controls, sort_keys=True)}", flush=True)
-        return env
-    try:
-        scene = sample_scene(seed, None, args.setting)
-    except (ValueError, RuntimeError) as error:
-        print(f"Stopped: {error}", flush=True)
+    layout_for()  # from the unchanged package scene, before ood.py patches it
+    seed = pick_seed(args)
+
+    def stop(message):
+        print(f"Stopped: {message}", flush=True)
         sys.exit(1)
-    apply_scene(env, scene)
+
+    random_arm = set(args.ood_random) & ood.ARM_FIELDS
+    for attempt in range(ARM_ATTEMPTS if random_arm else 1):
+        try:
+            changes = ood.validate(resolve_controls(seed, args.ood, args.ood_random, args.setting, attempt))
+        except ValueError as error:
+            stop(error)
+        if seed is None:
+            print("Scene: default (not random)", flush=True)
+            env = ood.build_environment(yam_env, changes) if changes else yam_env.YamEnv()
+            break
+        # The arms are posed after the objects are placed, so the pose is checked against the seed's objects.
+        angles = {name: value for name, value in changes.items() if name in ood.ARM_FIELDS}
+        rest = {name: value for name, value in changes.items() if name not in ood.ARM_FIELDS}
+        env = ood.build_environment(yam_env, rest) if rest else yam_env.YamEnv()
+        try:
+            scene = sample_scene(seed, None, args.setting)
+        except (ValueError, RuntimeError) as error:
+            stop(error)
+        apply_scene(env, scene)
+        try:
+            if angles:
+                ood._set_arm_pose(env, angles)
+                # A pose deep inside something can overflow MuJoCo's contact memory, and then the overlap check
+                # above may not see every contact: count that as an overlap too.
+                if any(env.data.warning[w].number for w in (mujoco.mjtWarning.mjWARN_CONTACTFULL,
+                                                            mujoco.mjtWarning.mjWARN_CNSTRFULL)):
+                    raise ValueError("Initial arm pose overlaps another part of the scene. Adjust the joint angles.")
+            break
+        except ValueError as error:
+            env.close()
+            if not random_arm or attempt == ARM_ATTEMPTS - 1:
+                stop(error)
+    if seed is None:
+        return env, changes
     _report, settled = settle(env)
     again = f"--seed {seed}" + (f" --setting {args.setting}" if args.setting != "default" else "")
-    if getattr(args, "ood_random", None):
+    if args.ood_random:
         again += f" --ood-random {','.join(args.ood_random)}"
     print(f"Scene: seed {seed} ({scene['split']}, setting {args.setting}); run again with {again} for the same start",
           flush=True)
-    if controls:
-        print(f"Scene controls: {json.dumps(controls, sort_keys=True)}"
-              + (f" (from the seed: {', '.join(sorted(args.ood_random))})" if getattr(args, "ood_random", None) else ""),
-              flush=True)
+    if changes:
+        print(f"Scene controls: {json.dumps(changes, sort_keys=True)}"
+              + (f" (from the seed: {', '.join(sorted(args.ood_random))})" if args.ood_random else ""), flush=True)
     if not settled:
         print("  Note: an object did not come to rest before the start.", flush=True)
     warn_if_not_reproducible()
-    return env
+    return env, changes
 
 
 # ---------------------------------------------------------------------------------------------- reach map
