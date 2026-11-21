@@ -29,7 +29,7 @@
   .row { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
   .row .grow { flex: 1 1 260px; }
   label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
-  input[type=text], input[type=number], input:not([type]) { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
+  input[type=text], input[type=number], input[type=password], input:not([type]) { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
   #seconds { width: 110px; }
   button { padding: 9px 20px; border: 0; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; background: var(--accent); color: var(--accent-text); }
   button.stop { background: var(--stop); color: #fff; }
@@ -37,7 +37,8 @@
   button:disabled { opacity: .45; cursor: default; }
   .examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   .examples button { padding: 4px 10px; font-size: 13px; }
-  .notice { padding: 10px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); margin-bottom: 16px; }
+  .keystate { font-size: 13px; margin-top: 8px; color: var(--ok); }
+  .keystate.none { color: var(--warn); }
   .status { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
   .dot.on { background: var(--ok); animation: pulse 1.2s infinite; }
@@ -94,7 +95,14 @@
   <h1>Dream-1 Simulator</h1>
   <p class="sub">Run a task → set the rules → save labels.</p>
 
-  <div id="keyNotice" class="notice" hidden>No API key. See README.</div>
+  <section class="panel">
+    <form class="row" id="keyForm" autocomplete="off">
+      <div class="grow"><label for="apiKey">API key</label><input id="apiKey" type="password" placeholder="Paste your Dream API key" spellcheck="false"></div>
+      <button type="submit" id="useKey">Use key</button>
+      <button type="button" id="clearKey" class="ghost" hidden>Clear</button>
+    </form>
+    <div class="keystate" id="keyState"></div>
+  </section>
 
   <section class="panel">
     <div class="row">
@@ -292,6 +300,7 @@ async function loadRuns() {
 
 function verdict(run) {
   const traj = trajectories[run.id];
+  if (run.error) return { label: "unknown", reason: "Run error" };
   return traj ? judge(run, traj, rules) : { label: "unknown", reason: "No data" };
 }
 
@@ -367,6 +376,26 @@ $("saveLabels").onclick = async () => {
   } catch (err) { alert(err.message); }
 };
 
+/* ---------- API key ---------- */
+
+function showKey(key) {
+  const text = {
+    page: `✓ Using your key (…${key.hint}). Kept in memory only, not saved.`,
+    env: "✓ Using DREAM_API_KEY from the environment.",
+    file: "✓ Using the key saved on this computer.",
+  }[key.source] || "No key yet. Paste one to run.";
+  $("keyState").textContent = text;
+  $("keyState").classList.toggle("none", !key.source);
+  $("clearKey").hidden = key.source !== "page";
+}
+$("keyForm").onsubmit = async e => {
+  e.preventDefault();
+  if (!$("apiKey").value.trim()) return;
+  try { showKey(await api("/api/key", { key: $("apiKey").value })); $("apiKey").value = ""; refresh(); }
+  catch (err) { alert(err.message); }
+};
+$("clearKey").onclick = async () => { showKey(await api("/api/key", { key: "" })); refresh(); };
+
 /* ---------- running ---------- */
 
 function showLive() {
@@ -380,7 +409,7 @@ async function refresh() {
   try { s = await api("/api/status"); }
   catch { $("statusText").textContent = "Server is off (run python app.py)"; return; }
 
-  $("keyNotice").hidden = s.api_key;
+  showKey(s.key);
   if (!$("examples").childElementCount) {
     for (const text of s.examples) {
       const b = document.createElement("button");
@@ -390,14 +419,16 @@ async function refresh() {
     }
   }
   if (s.running && s.run_id) pageRuns.add(s.run_id);
-  $("run").disabled = s.running;
+  $("run").disabled = s.running || !s.key.source;
   $("stop").hidden = !s.running;
   $("dot").classList.toggle("on", s.running);
   if (s.running) {
     $("statusText").textContent = "Running";
     $("statusMore").textContent = `${s.task} · ${s.elapsed_s} s`;
   } else if (s.task && pageRuns.has(s.run_id)) {
-    $("statusText").textContent = s.exit_code === 0 ? "Done" : "Error";
+    const rejected = s.log.some(line => line.includes("UNAUTHORIZED"));
+    $("statusText").textContent = s.exit_code === 0 ? "Done" : rejected ? "Error: API key rejected" : "Error (see Log)";
+    if (s.exit_code !== 0 && wasRunning) $("logBox").open = true;
     $("statusMore").textContent = `${s.task} · ${s.elapsed_s} s`;
   }
   $("logBox").hidden = !s.log.length || !pageRuns.has(s.run_id);

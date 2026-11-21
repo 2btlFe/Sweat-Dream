@@ -56,13 +56,34 @@ def run_dir(run_id):
     return d if (d / "meta.json").exists() else None
 
 
-def has_api_key():
-    if os.environ.get("DREAM_API_KEY"):
-        return True
+## A key typed on the page: kept in this process's memory only (never written to disk or logged), and handed to
+## each run as DREAM_API_KEY, which the simulator prefers over the credentials files.
+PAGE_KEY = {"value": None}
+
+
+def file_has_key():
+    """Whether a key is saved where the simulator looks: ~/.dreamlabs/credentials or the sim's /login file."""
     try:
-        return "DREAM_API_KEY=" in (Path.home() / ".dreamlabs" / "credentials").read_text(encoding="utf-8")
+        if "DREAM_API_KEY=" in (Path.home() / ".dreamlabs" / "credentials").read_text(encoding="utf-8"):
+            return True
     except OSError:
-        return False
+        pass
+    return bool(read_json(Path.home() / ".config" / "dream-yam-sim" / "credentials.json", {}).get("api_key"))
+
+
+def key_status():
+    """Which key the next run uses: typed on the page, from the environment, from a file, or none.
+    @return {"source": "page" | "env" | "file" | None, "hint": the last 4 characters of a page key}.
+    """
+    if PAGE_KEY["value"]:
+        return {"source": "page", "hint": PAGE_KEY["value"][-4:]}
+    if os.environ.get("DREAM_API_KEY"):
+        return {"source": "env", "hint": None}
+    return {"source": "file" if file_has_key() else None, "hint": None}
+
+
+def has_api_key():
+    return key_status()["source"] is not None
 
 
 class Runner:
@@ -84,11 +105,15 @@ class Runner:
         with self.lock:
             if self.running():
                 raise RuntimeError("A run is already going.")
+            if not has_api_key():
+                raise RuntimeError("Enter your API key first.")
             STOP.unlink(missing_ok=True)
             LIVE.unlink(missing_ok=True)
             run_id = datetime.now().strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
             env = {**os.environ, "PYTHONUTF8": "1", "PYTHONUNBUFFERED": "1", "PYTHONWARNINGS": "ignore",
                    "LIVE_FRAME": str(LIVE), "STOP_FILE": str(STOP), "RUN_DIR": str(RUNS / run_id)}
+            if PAGE_KEY["value"]:
+                env["DREAM_API_KEY"] = PAGE_KEY["value"]
             self.process = subprocess.Popen(
                 [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds)], cwd=str(HERE), env=env,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
@@ -117,7 +142,7 @@ class Runner:
             "exit_code": None if running or self.process is None else self.process.returncode,
             "run_id": self.run_id,
             "log": list(self.log),
-            "api_key": has_api_key(),
+            "key": key_status(),
             "examples": EXAMPLES,
         }
 
@@ -201,6 +226,12 @@ class Handler(BaseHTTPRequestHandler):
                                                   "saved_at": datetime.now().isoformat(timespec="seconds")})
                     saved += 1
             return self.send_json({"saved": saved})
+        if self.path == "/api/key":
+            key = str(body.get("key") or "").strip()
+            if key and (len(key) > 512 or any(c.isspace() for c in key)):
+                return self.send_json({"error": "That does not look like an API key."}, 400)
+            PAGE_KEY["value"] = key or None
+            return self.send_json(key_status())
         if self.path == "/api/stop":
             RUNNER.stop()
             return self.send_json(RUNNER.status())
@@ -215,7 +246,7 @@ def main():
     server.daemon_threads = True
     print(f"Open http://localhost:{args.port}  (Ctrl-C to quit)", flush=True)
     if not has_api_key():
-        print("No API key yet: put DREAM_API_KEY=... in ~/.dreamlabs/credentials (see README).", flush=True)
+        print("No API key yet: enter it at the top of the page.", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

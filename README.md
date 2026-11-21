@@ -10,11 +10,7 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install dreamlabs
 ```
 
-Put your API key (from https://platform.dreamlabs.ai) in `~/.dreamlabs/credentials`:
-
-```
-DREAM_API_KEY=your-key-here
-```
+Get an API key at https://platform.dreamlabs.ai.
 
 ## Run
 
@@ -24,9 +20,10 @@ python app.py
 
 Open http://localhost:8000.
 
-1. Type a task → **Run**
-2. Set the 3 rules
-3. **Save labels**
+1. Paste your API key → **Use key** (kept in memory only; or put `DREAM_API_KEY=...` in `~/.dreamlabs/credentials`)
+2. Type a task → **Run**
+3. Set the 3 rules
+4. **Save labels**
 
 ## Rules
 
