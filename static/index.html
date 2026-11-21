@@ -90,6 +90,9 @@
   .examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
   .examples button { padding: 4px 10px; font-size: 13px; }
   .notice { padding: 10px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); margin-bottom: 16px; }
+  .run-notice { margin: 12px 0 0; font-size: 13px; color: var(--warn); }
+  .run-notice a, .run-notice button { color: var(--accent); }
+  .run-notice button { padding: 0; background: none; font-size: inherit; text-decoration: underline; }
   .status { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
   .dot.on { background: var(--ok); animation: pulse 1.2s infinite; }
@@ -160,6 +163,7 @@
       <button id="stop" class="stop" hidden>Stop</button>
     </div>
     <div class="examples" id="examples"></div>
+    <p id="runNotice" class="run-notice" hidden></p>
   </section>
 
   <section class="panel camera-panel">
@@ -292,6 +296,9 @@ function showSettings() {
   $("lightingSelect").disabled = !local;
   $("seedInput").disabled = !local || settings.layout !== "varied";
   $("run").disabled = !local || wasRunning;
+  $("runNotice").hidden = local;
+  if (!local) $("runNotice").innerHTML = `Local Run is unavailable for ${esc(catalog.robots[settings.robot])} in ${esc(catalog.rooms[settings.room])}. <button type="button" id="useLocal">Use local YAM tabletop</button> or <a href="${esc(catalog.sandbox_url)}" target="_blank" rel="noopener noreferrer">open Dream Labs Sandbox ↗</a> to select this setup there.`;
+  if (!local) $("useLocal").onclick = () => changeSettings({ robot: "yam", room: "yam_tabletop" });
   $("settingsNote").classList.toggle("remote", !local);
   $("settingsNote").innerHTML = local
     ? "Local YAM tabletop: the starting layout and lighting affect the next run. The table contains apple, orange, banana, bottle, bowl, and plate."
