@@ -6,7 +6,7 @@ On close it writes one folder per episode:
 
     episodes/<episode_id>/
         meta.json      instruction, model, source, timings, request stats, errors
-        steps.npz      t, state (N,14), action (N,14), objects (N,4,3), held (N,4), frame_t (F,)
+        steps.npz      t, state (N,14), action (N,14), objects (N,4,3), objects_quat (N,4,4), held (N,4), frame_t (F,)
         top.mp4 left.mp4 right.mp4   the cameras at 5 fps of simulated time (H.264 when available)
         outcome.json   the simulator ground-truth judgement (judge.py)
 """
@@ -54,6 +54,7 @@ class EpisodeRecorder:
         self.stop_on_success = stop_on_success and judge.parse_task(task) is not None
         self.extra = dict(extra or {})
         self.t, self.state, self.action, self.objects, self.held = [], [], [], [], []
+        self.objects_quat = []  # orientations (w, x, y, z), so rerender.py can replay the scene exactly
         self.frames = {name: [] for name in CAMERAS}
         self.frame_t = []
         self.rtts, self.errors = [], []
@@ -93,6 +94,7 @@ class EpisodeRecorder:
         self.state.append(np.r_[s["left"], s["right"]])
         self.action.append(np.r_[np.asarray(left, float), np.asarray(right, float)])
         self.objects.append(np.array([d.xpos[b] for b in self._body_ids]))
+        self.objects_quat.append(np.array([d.xquat[b] for b in self._body_ids]))
         self.held.append(self._held())
         if self.stop_on_success and len(self.t) % 10 == 0 and not self.stop_event.is_set():
             if judge.is_success_now(self.task, self.t, self.objects, self.held, self.targets):
@@ -143,7 +145,8 @@ class EpisodeRecorder:
         held = np.array(self.held, dtype=bool).reshape(-1, len(judge.BODIES))
         np.savez_compressed(
             self.dir / "steps.npz", t=t, state=np.array(self.state), action=np.array(self.action),
-            objects=objects, held=held, frame_t=np.array(self.frame_t),
+            objects=objects, objects_quat=np.array(self.objects_quat).reshape(-1, len(judge.BODIES), 4),
+            held=held, frame_t=np.array(self.frame_t),
             targets=np.array([self.targets[k] for k in judge.TARGETS]), bodies=np.array(judge.BODIES),
         )
         codec = None

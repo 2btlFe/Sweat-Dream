@@ -80,6 +80,7 @@ def episode_detail(d):
             "info": read_json(d / "pca" / "info.json"),
             "videos": sorted(f.name for f in (d / "pca").iterdir() if f.name in VIDEO_FILES) if (d / "pca").is_dir() else [],
         },
+        "aug": read_json(d / "aug" / "index.json"),  # appearance variants made by rerender.py (same motion and label)
     }
 
 
@@ -171,10 +172,10 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             d = episode_dir(m.group(1))
             return self.send_json(episode_detail(d)) if d else self.send_json({"error": "not found"}, 404)
-        m = re.match(r"^/media/([^/]+)/(pca/)?([a-z]+\.mp4)$", path)
+        m = re.match(r"^/media/([^/]+)/(pca/|aug/[0-9]{1,3}/)?([a-z]+\.mp4)$", path)
         if m:
             d = episode_dir(m.group(1))
-            folder = (d / "pca") if d and m.group(2) else d
+            folder = (d / m.group(2)) if d and m.group(2) else d
             if folder and m.group(3) in VIDEO_FILES and (folder / m.group(3)).exists():
                 return self.send_file(folder / m.group(3))
         self.send_json({"error": "not found"}, 404)

@@ -39,6 +39,8 @@ C:\dream\.venv\Scripts\python.exe batch.py --resume <batch_id>                  
 C:\dream\.venv\Scripts\python.exe summary.py [--batch <batch_id>]                               # rates, reasons, index.csv
 C:\dream\.venv\Scripts\python.exe pca.py --all                                                  # feature PCA videos (after episodes)
 C:\dream\.venv\Scripts\python.exe pca.py --all --watch                                          # ...and keep doing new ones
+C:\dream\.venv\Scripts\python.exe rerender.py --all --variants 4                                 # appearance augmentation
+C:\dream\.venv\Scripts\python.exe rerender.py <episode_id> --check                              # replay vs recorded video
 ```
 
 Labeling UI: `C:\dream\.venv\Scripts\python.exe label_server.py --labeler <name>` then open http://localhost:8765.
@@ -52,7 +54,20 @@ progress is saved in `batches/<batch_id>.json`, and Dream-1 episodes stop being 
 their wall time is used ($3/hour list price).
 
 Each episode is written to `episodes/<id>/`: `meta.json`, `steps.npz` (t, state, action, object positions,
-fingertip contact), `top.mp4` / `left.mp4` / `right.mp4` (H.264, 5 fps), `outcome.json`.
+fingertip contact; object orientations from now on), `top.mp4` / `left.mp4` / `right.mp4` (H.264, 5 fps), `outcome.json`.
+
+## Appearance augmentation (re-rendering)
+
+`rerender.py` replays a recorded episode from `steps.npz` (the arms' joints and gripper opening, every object's
+position, and orientation: `objects_quat`, recorded from now on) and renders the three cameras again under a new
+look: light colour, strength and direction, table / bowl / plate / floor colours, the water bottle's colour, a mild
+tint on the fruit (they stay recognisable for their instruction), and small camera moves (top 1.5 cm / 2 degrees,
+wrists 0.5 cm / 1.5 degrees). The motion is the recorded one, so `outcome.json` (the simulator's judgement) is the
+label of every variant: more labelled data without API calls. Output: `episodes/<id>/aug/<k>/{top,left,right}.mp4`
+(same frames and fps) and `params.json` (seed and every drawn value); `aug/index.json` lists them. The labeling UI
+switches between the recorded look and each variant. `--strength` scales every range; `--check` compares the plain
+replay with the recorded video. Episodes recorded before `objects_quat` replay objects in their starting orientation.
+It waits while an episode is being recorded, like `pca.py`.
 
 ## Feature PCA (DINOv2 + NAF)
 
@@ -91,6 +106,7 @@ upsamples bilinearly; the NAF weights download on first use (torch hub cache), t
 | `summary.py` | `episodes/index.csv` and success rates / failure reasons per source and task |
 | `live_view.py` | Plain viewer run without recording |
 | `pca.py` | Feature PCA videos for recorded episodes (DINOv2 + NAF, 224x224), paused while an episode records |
+| `rerender.py` | Appearance augmentation: re-render recorded episodes under new lighting, colours and camera poses |
 | `feature_pca.py` | DINOv2 patch features and the per-episode PCA basis |
 | `naf_upsampler.py` | NAF upsampling of the PCA projection, with the speed-ups; `third_party/naf` is the vendored NAF |
 

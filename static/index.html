@@ -175,7 +175,7 @@ function renderList() {
 }
 
 async function select(id) {
-  state.sel = id;
+  state.sel = id; look = 0;
   renderList();
   const ep = await fetch("/api/episodes/" + id).then(r => r.json());
   state.ep = ep;
@@ -188,6 +188,7 @@ let speed = Number(store.get("speed", "2"));
 function vids() { return [...document.querySelectorAll("main video")]; }
 function primary() { return $("#v-top") || $("#p-top") || vids()[0]; }
 let view = store.get("view", "both");  // camera | pca | both
+let look = 0;  // 0: the recorded cameras; k: rerender.py appearance variant k (same motion and label)
 function pcaState(pca) {
   const s = pca && pca.status;
   if (!s) return "PCA not made yet (python pca.py --all)";
@@ -215,7 +216,10 @@ function renderMain() {
   const ep = state.ep, cams = ["top", "left", "right"].filter(c => ep.videos.includes(c + ".mp4"));
   const hasPca = cams.length > 0 && cams.every(c => (ep.pca?.videos || []).includes(c + ".mp4"));
   const mode = hasPca ? view : "camera";
-  const v = c => `<div class="cam"><video id="v-${c}" src="/media/${ep.id}/${c}.mp4" preload="auto" muted playsinline></video><span>${c}</span></div>`;
+  const variants = (ep.aug && ep.aug.variants) || [];
+  if (look && !variants.some(x => x.variant === look)) look = 0;
+  const camSrc = c => look ? `/media/${ep.id}/aug/${look}/${c}.mp4` : `/media/${ep.id}/${c}.mp4`;
+  const v = c => `<div class="cam"><video id="v-${c}" src="${camSrc(c)}" preload="auto" muted playsinline></video><span>${c}${look ? " · look " + look : ""}</span></div>`;
   const pv = c => `<div class="cam"><video id="p-${c}" class="pca" src="/media/${ep.id}/pca/${c}.mp4" preload="auto" muted playsinline></video><span>${c} · PCA</span></div>`;
   const layout = items => `<div class="videos">${items[0]}<div class="side">${items.slice(1).join("")}</div></div>`;
   const videos = !cams.length ? `<div class="empty">No video for this episode.</div>`
@@ -230,6 +234,7 @@ function renderMain() {
       <select id="speed">${[0.5, 1, 2, 4].map(s => `<option value="${s}" ${s === speed ? "selected" : ""}>${s}× sim speed</option>`).join("")}</select>
       <span class="time" id="time"></span>
       <select id="view" title="Camera, feature PCA, or both">${[["camera", "Camera"], ["pca", "Feature PCA"], ["both", "Camera + PCA"]].map(([k, n]) => `<option value="${k}" ${k === mode ? "selected" : ""} ${k !== "camera" && !hasPca ? "disabled" : ""}>${n}</option>`).join("")}</select>
+      ${variants.length ? `<select id="look" title="Appearance variants re-rendered from the same motion (rerender.py)"><option value="0">Recorded look</option>${variants.map(x => `<option value="${x.variant}" ${x.variant === look ? "selected" : ""}>Look ${x.variant} (re-rendered)</option>`).join("")}</select>` : ""}
       <span class="pca-state">${esc(pcaState(ep.pca))}</span>
     </div>
     <div class="timeline" id="tl"><div class="track"></div><div class="fill" id="fill"></div><div class="head" id="head"></div><div id="pins"></div></div>
@@ -243,6 +248,8 @@ function renderMain() {
   p.addEventListener("ended", () => { $("#play").textContent = "Play"; });
   $("#play").onclick = togglePlay; $("#back").onclick = () => stepFrame(-1); $("#fwd").onclick = () => stepFrame(1);
   $("#speed").onchange = e => { speed = Number(e.target.value); store.set("speed", speed); vids().forEach(x => x.playbackRate = speed); };
+  const lk = $("#look");
+  if (lk) lk.onchange = e => { const t = primary().currentTime; look = Number(e.target.value); renderMain(); const q = primary(); if (q) q.addEventListener("loadedmetadata", () => seek(t), { once: true }); };
   $("#view").onchange = e => { const t = primary().currentTime; view = e.target.value; store.set("view", view); renderMain(); const q = primary(); if (q) q.addEventListener("loadedmetadata", () => seek(t), { once: true }); };
   const tl = $("#tl"); let drag = false;
   const seekTo = ev => { const r = tl.getBoundingClientRect(); seek(Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)) * duration()); };
