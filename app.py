@@ -701,8 +701,7 @@ class Batch:
                **({"ORIGINAL_OF": info["original_of"]} if info.get("original_of") else {})}
         if PAGE_KEY["value"]:
             env["DREAM_API_KEY"] = PAGE_KEY["value"]
-        # --fast: Dream-1's chunks are played without wall-clock waits (the same run, sooner; the limit is simulated time).
-        command = [sys.executable, str(HERE / "sim.py"), task["prompt"], "--seconds", str(info["seconds"]), "--fast",
+        command = [sys.executable, str(HERE / "sim.py"), task["prompt"], "--seconds", str(info["seconds"]),
                    *info["robot"], *(["--seed", str(seed)] if seed is not None else ["--default-scene"]),
                    {"collect": "--collect", "script": "--script-only", "plain": "--plain"}[info["mode"]]]
         if info["mode"] in ("collect", "script"):
