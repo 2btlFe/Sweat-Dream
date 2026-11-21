@@ -126,7 +126,12 @@ like any other run (Stop is its normal end).
 
 ### Batch (many episodes in the background)
 
-**Run as original** (the baseline): pick a finished batch in the run list's filter and press **Run as original**. It
+**Original** (the baseline, in **Each episode**: Data collection / Dream-1 only / **Original**): none of our method.
+Dream-1 runs alone (no failure monitor, recovery script or human), every episode starts from the simulator's default
+scene (the same object layout each time, no seed) with default scene settings; the task, its judge, the episode count
+and the seconds are the ones set above. The seed choice does not apply.
+
+**Run as original**: pick a finished batch in the run list's filter and press **Run as original**. It
 runs as many episodes with the same task, judge and time limit, but none of our method: Dream-1 alone (no failure
 monitor, recovery script or human), and every episode from the simulator's default scene (`--default-scene`: the same
 object layout each time, no seed) with default scene settings. Its runs are named "original of <batch>"
