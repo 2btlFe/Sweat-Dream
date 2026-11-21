@@ -59,6 +59,7 @@ if spec is None:
 sys.path.insert(0, str(Path(next(iter(spec.submodule_search_locations))) / "yam_mujoco"))
 
 import mujoco  # noqa: E402
+from yam_env import build_xml as _package_xml  # noqa: E402  taken now, before ood.py can patch it
 
 REACH_MAP = Path(__file__).resolve().parent / "scene_reach_map.npz"
 
@@ -114,6 +115,7 @@ REFERENCE = {
     "fruits_only": {0: "e1af86a63042200c", 42: "b8db6b7a9a9572b1"},
 }
 EVAL_FINGERPRINT = "f885497727d1d571"
+CONTROLS_FINGERPRINT = "e9baa099e4647720"  # the ood.py scene controls drawn from seeds (draw_controls)
 # The fixed eval set of the default setting: 17 easy, 17 medium, 16 hard (select_eval_seeds() remakes it).
 EVAL_SEEDS = (1000000, 1000001, 1000002, 1000003, 1000004, 1000005, 1000006, 1000007, 1000008, 1000009, 1000010,
               1000011, 1000012, 1000013, 1000014, 1000015, 1000016, 1000017, 1000018, 1000019, 1000020, 1000021,
@@ -285,14 +287,17 @@ class Layout:
         return affinity.translate(affinity.rotate(self.outlines[name], yaw, origin=(0, 0), use_radians=True), x, y)
 
 
-_LAYOUTS = {}
+_LAYOUT = None
 
 
-def layout_for(model):
-    """The Layout of a model, built once (before any scene changes the model)."""
-    if id(model) not in _LAYOUTS:
-        _LAYOUTS[id(model)] = Layout(model)
-    return _LAYOUTS[id(model)]
+def layout_for(model=None):
+    """The Layout every scene is drawn from, built once from the package's UNCHANGED scene (default camera,
+    lights and table), whatever model is passed: camera or lighting changes (ood.py) never move a seed's objects.
+    """
+    global _LAYOUT
+    if _LAYOUT is None:
+        _LAYOUT = Layout(mujoco.MjModel.from_xml_string(_package_xml()))
+    return _LAYOUT
 
 
 # ---------------------------------------------------------------------------------------------- sample and apply
@@ -411,6 +416,37 @@ def settle(env, seconds=1.0):
     return report, ok
 
 
+# ---------------------------------------------------------------------------------------------- scene controls
+
+def draw_controls(seed, names, setting="default"):
+    """Values for the ood.py scene controls named (camera, blur, light, table, ...), drawn from the seed within
+    each control's range and step. Same (setting, seed, control), same value; each control has its own stream,
+    so choosing more or fewer random controls never changes the others' values.
+    """
+    import ood
+
+    values = {}
+    for name in sorted(names):
+        field = ood.FIELDS.get(name)
+        if field is None:
+            raise ValueError(f"Unknown scene control: {name}")
+        rng = rng_for(seed, "ood", name, setting=setting)
+        if "choices" in field:
+            options = sorted(field["choices"])
+            values[name] = options[int(rng.integers(len(options)))]
+        else:
+            steps = int(round((field["max"] - field["min"]) / field["step"]))
+            values[name] = round(field["min"] + field["step"] * int(rng.integers(steps + 1)), 6)
+    return values
+
+
+def resolve_controls(seed, manual, random_names, setting="default"):
+    """@return The scene-control values of a run: the manual ones, with the random ones drawn from the seed."""
+    if random_names and seed is None:
+        raise ValueError("Random scene controls need a seed (not --default-scene).")
+    return {**manual, **draw_controls(seed, random_names, setting)} if random_names else dict(manual)
+
+
 # ---------------------------------------------------------------------------------------------- reproducibility
 
 def fingerprint(value):
@@ -418,36 +454,45 @@ def fingerprint(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()[:16]
 
 
-def reference_now(model):
-    """@return What REFERENCE, EVAL_FINGERPRINT and EVAL_SEEDS would be with the current code and package."""
+def reference_now(model=None):
+    """@return What REFERENCE, EVAL_FINGERPRINT, EVAL_SEEDS and CONTROLS_FINGERPRINT would be now."""
     reference = {name: {seed: fingerprint(sample_scene(seed, model, name)) for seed in seeds}
                  for name, seeds in REFERENCE.items()}
     seeds = select_eval_seeds(model)
-    return reference, fingerprint(list(seeds)), seeds
+    return reference, fingerprint(list(seeds)), seeds, controls_fingerprint()
 
 
-def check_reproducible(model):
+def controls_fingerprint():
+    """@return A hash of every ood.py scene control drawn at random for a few seeds."""
+    import ood
+
+    return fingerprint([draw_controls(seed, ood.FIELDS) for seed in (0, 42, 1000000)])
+
+
+def check_reproducible(model=None):
     """@return What no longer matches the recorded fingerprints, as text lines (empty: everything reproduces)."""
     changed = [f"setting {name} seed {seed}" for name, seeds in REFERENCE.items() for seed, expected in seeds.items()
                if fingerprint(sample_scene(seed, model, name)) != expected]
     if fingerprint(list(EVAL_SEEDS)) != EVAL_FINGERPRINT:
         changed.append("EVAL_SEEDS was edited")
+    if controls_fingerprint() != CONTROLS_FINGERPRINT:
+        changed.append("random scene controls (ood.py ranges or drawing)")
     return changed
 
 
-def warn_if_not_reproducible(model):
+def warn_if_not_reproducible(model=None):
     """Print a warning when a seed would no longer give the same scene as recorded."""
     changed = check_reproducible(model)
     if changed:
-        print(f"  WARNING: {', '.join(changed)}: not the scene SCENE_VERSION {SCENE_VERSION} recorded. The "
-              "environment changed (dreamlabs, reach map or scene.py); seeds from before may not reproduce.",
+        print(f"  WARNING: {', '.join(changed)}: not what SCENE_VERSION {SCENE_VERSION} recorded. The "
+              "environment changed (dreamlabs, reach map, ood.py or scene.py); seeds from before may not reproduce.",
               flush=True)
 
 
 # ---------------------------------------------------------------------------------------------- hook for sim.py
 
 def add_arguments(parser):
-    """Add --seed, --split, --setting and --default-scene to a run's argument parser."""
+    """Add --seed, --split, --setting, --ood-random and --default-scene to a run's argument parser."""
     group = parser.add_mutually_exclusive_group()
     group.add_argument("--seed", type=int, help="the start scene's seed (a new random one when left out)")
     group.add_argument("--default-scene", action="store_true", help="the package's fixed scene, not random")
@@ -455,33 +500,60 @@ def add_arguments(parser):
                         help="refuse a seed of the other split; with no --seed, draw a new seed of this split")
     parser.add_argument("--setting", default="default", choices=sorted(SETTINGS),
                         help="which objects move and how (scene.py SETTINGS)")
+    parser.add_argument("--ood-random", default="", type=lambda text: [n for n in text.split(",") if n],
+                        help="comma-separated ood.py scene controls to draw from the seed (others: --ood values)")
 
 
-def prepare_env(args):
-    """Make the simulator with the start scene the arguments ask for, and print its seed.
+def pick_seed(args):
+    """@return The run's seed (None with --default-scene): --seed, or a new one of --split. Stops on a bad seed."""
+    if args.default_scene:
+        return None
+    try:
+        seed = args.seed if args.seed is not None else new_seed(args.split or "train", args.setting)
+        check_split(seed, args.split or split_of(seed))
+    except ValueError as error:
+        print(f"Stopped: {error}", flush=True)
+        sys.exit(1)
+    return seed
+
+
+def prepare_env(args, seed=None, make_env=None, controls=None):
+    """Make the simulator with the seed's start scene, and print what a rerun needs.
+    @param seed The run's seed (pick_seed(args) when left out).
+    @param make_env Builds the environment (e.g. ood.build_environment with the run's scene controls).
+    @param controls The run's scene-control values, printed so the run can be repeated.
     @return The YamEnv to pass to dream_control.main(shared_env=...).
     """
     from yam_env import YamEnv
 
-    env = YamEnv()
-    if args.default_scene:
+    layout_for()  # from the unchanged package scene, before make_env may patch it
+    if seed is None and not args.default_scene:
+        seed = pick_seed(args)
+    env = make_env() if make_env else YamEnv()
+    if seed is None:
         print("Scene: default (not random)", flush=True)
+        if controls:
+            print(f"Scene controls: {json.dumps(controls, sort_keys=True)}", flush=True)
         return env
     try:
-        seed = args.seed if args.seed is not None else new_seed(args.split or "train", args.setting, env.model)
-        check_split(seed, args.split or split_of(seed))
-        scene = sample_scene(seed, env.model, args.setting)
+        scene = sample_scene(seed, None, args.setting)
     except (ValueError, RuntimeError) as error:
         print(f"Stopped: {error}", flush=True)
         sys.exit(1)
     apply_scene(env, scene)
     _report, settled = settle(env)
     again = f"--seed {seed}" + (f" --setting {args.setting}" if args.setting != "default" else "")
+    if getattr(args, "ood_random", None):
+        again += f" --ood-random {','.join(args.ood_random)}"
     print(f"Scene: seed {seed} ({scene['split']}, setting {args.setting}); run again with {again} for the same start",
           flush=True)
+    if controls:
+        print(f"Scene controls: {json.dumps(controls, sort_keys=True)}"
+              + (f" (from the seed: {', '.join(sorted(args.ood_random))})" if getattr(args, "ood_random", None) else ""),
+              flush=True)
     if not settled:
         print("  Note: an object did not come to rest before the start.", flush=True)
-    warn_if_not_reproducible(env.model)
+    warn_if_not_reproducible()
     return env
 
 
@@ -570,17 +642,18 @@ def main():
     env = YamEnv()
     if args.check:
         if args.update:
-            reference, eval_print, seeds = reference_now(env.model)
-            print(f"REFERENCE = {reference!r}\nEVAL_FINGERPRINT = {eval_print!r}\nEVAL_SEEDS = {seeds!r}")
+            reference, eval_print, seeds, controls_print = reference_now()
+            print(f"REFERENCE = {reference!r}\nEVAL_FINGERPRINT = {eval_print!r}\nEVAL_SEEDS = {seeds!r}\n"
+                  f"CONTROLS_FINGERPRINT = {controls_print!r}")
             return
-        changed = check_reproducible(env.model)
+        changed = check_reproducible()
         count = sum(len(s) for s in REFERENCE.values())
         print(f"reproducible: all {count} reference scenes and the eval set match" if not changed
               else "NOT reproducible: " + ", ".join(changed))
         sys.exit(1 if changed else 0)
     if args.seed is None:
         parser.error("give a seed, --check or --build-reach-map")
-    warn_if_not_reproducible(env.model)
+    warn_if_not_reproducible()
     scene = sample_scene(args.seed, env.model, args.setting)
     apply_scene(env, scene)
     report, ok = settle(env)

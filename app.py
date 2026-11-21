@@ -19,12 +19,19 @@ from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import ood
+
 HERE = Path(__file__).resolve().parent
 PAGE = HERE / "static" / "index.html"
 WORK = Path(tempfile.mkdtemp(prefix="dream-web-"))
 LIVE = WORK / "live.jpg"
 STOP = WORK / "stop"
-EXAMPLES = ["put apple into the bowl", "put orange into the bowl", "put banana on the plate"]
+PREVIEW_LOCK = threading.Lock()
+EXAMPLES = [
+    "Move an object to the center of the workspace",
+    "Move an object to the left side of the workspace",
+    "Move an object to the right side of the workspace",
+]
 
 
 def has_api_key():
@@ -50,7 +57,7 @@ class Runner:
     def running(self):
         return self.process is not None and self.process.poll() is None
 
-    def start(self, task, seconds, seed=None):
+    def start(self, task, seconds, changes, seeding=()):
         with self.lock:
             if self.running():
                 raise RuntimeError("A run is already going.")
@@ -58,9 +65,12 @@ class Runner:
             LIVE.unlink(missing_ok=True)
             env = {**os.environ, "PYTHONUTF8": "1", "PYTHONUNBUFFERED": "1", "PYTHONWARNINGS": "ignore",
                    "LIVE_FRAME": str(LIVE), "STOP_FILE": str(STOP)}
+            command = [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds)]
+            if changes:
+                command.extend(["--ood", json.dumps(changes)])
+            command.extend(seeding)
             self.process = subprocess.Popen(
-                [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds)]
-                + (["--seed", str(seed)] if seed is not None else []), cwd=str(HERE), env=env,
+                command, cwd=str(HERE), env=env,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
             self.task, self.started, self.ended = task, time.time(), None
             self.log.clear()
@@ -94,15 +104,28 @@ class Runner:
 RUNNER = Runner()
 
 
+def seeding_args(body):
+    """sim.py arguments for the run's seed and the scene controls drawn from it (scene.py); empty seed: a new one."""
+    seed = "" if body.get("seed") is None else str(body["seed"]).strip()
+    if seed and not seed.isdigit():
+        raise ValueError("The seed must be a whole number 0 or above, or empty.")
+    names = body.get("ood_random") or []
+    if not isinstance(names, list) or any(name not in ood.FIELDS for name in names):
+        raise ValueError("Unknown random scene control.")
+    return (["--seed", seed] if seed else []) + (["--ood-random", ",".join(names)] if names else [])
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
-    def send(self, body, content_type, status=200):
+    def send(self, body, content_type, status=200, headers=None):
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
 
@@ -113,22 +136,13 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split("?", 1)[0]
         if path in ("/", "/index.html"):
             return self.send(PAGE.read_bytes(), "text/html; charset=utf-8")
+        if path == "/ood.js":
+            script = PAGE.with_name("ood.js")
+            return self.send(script.read_bytes(), "text/javascript; charset=utf-8")
+        if path == "/api/ood":
+            return self.send_json(ood.GROUPS)
         if path == "/api/status":
             return self.send_json(RUNNER.status())
-        if path == "/api/preview":  # the start scene of a seed, rendered by scene.py without calling Dream
-            seed = self.path.partition("seed=")[2].split("&")[0]
-            if not seed.isdigit():
-                return self.send_json({"error": "The seed must be a whole number 0 or above."}, 400)
-            version = int((HERE / "scene.py").stat().st_mtime_ns)  # a changed scene.py never shows an old preview
-            image = WORK / f"preview_{int(seed)}_{version}.jpg"
-            if not image.exists():
-                done = subprocess.run([sys.executable, str(HERE / "scene.py"), str(int(seed)), "--image", str(image)],
-                                      cwd=str(HERE), capture_output=True, text=True, timeout=120,
-                                      env={**os.environ, "PYTHONWARNINGS": "ignore"})
-                if done.returncode != 0 or not image.exists():
-                    lines = (done.stdout + done.stderr).strip().splitlines()
-                    return self.send_json({"error": lines[-1] if lines else "Preview failed."}, 500)
-            return self.send(image.read_bytes(), "image/jpeg")
         if path == "/api/live.jpg":
             try:
                 return self.send(LIVE.read_bytes(), "image/jpeg")
@@ -136,23 +150,57 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "no frame yet"}, 404)
         self.send_json({"error": "not found"}, 404)
 
+    def preview(self, body):
+        try:
+            changes = ood.validate(body.get("ood", {}))
+            seeding = seeding_args(body)
+        except ValueError as error:
+            return self.send_json({"error": str(error)}, 400)
+        if RUNNER.running() or not PREVIEW_LOCK.acquire(blocking=False):
+            return self.send_json({"error": "The simulator is busy."}, 409)
+        try:
+            with tempfile.TemporaryDirectory(prefix="dream-preview-") as folder:
+                frame = Path(folder) / "initial.jpg"
+                result = subprocess.run(
+                    [sys.executable, str(HERE / "sim.py"), "--preview", str(frame), "--ood", json.dumps(changes),
+                     *seeding],
+                    cwd=HERE, capture_output=True, text=True, timeout=60,
+                    env={**os.environ, "PYTHONWARNINGS": "ignore"},
+                )
+                if result.returncode:
+                    error = (result.stderr or result.stdout).strip().splitlines()
+                    return self.send_json({"error": error[-1] if error else "Camera rendering failed."}, 422)
+                # The scene-control values the seed drew, so the page can show them.
+                drawn = next((line.split(":", 1)[1].split(" (from the seed")[0].strip()
+                              for line in result.stdout.splitlines() if line.startswith("Scene controls:")), "{}")
+                return self.send(frame.read_bytes(), "image/jpeg", headers={"X-Scene-Controls": drawn})
+        except (OSError, subprocess.TimeoutExpired):
+            return self.send_json({"error": "Could not render the initial camera view."}, 500)
+        finally:
+            PREVIEW_LOCK.release()
+
     def do_POST(self):
         try:
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
         except ValueError:
             return self.send_json({"error": "Invalid request."}, 400)
+        if not isinstance(body, dict):
+            return self.send_json({"error": "Expected a JSON object."}, 400)
+        if self.path == "/api/preview":
+            return self.preview(body)
         if self.path == "/api/run":
             task = re.sub(r"\s+", " ", str(body.get("task") or "")).strip()
             if not task:
-                return self.send_json({"error": "Type a task, such as: put apple into the bowl"}, 400)
-            seed = str(body.get("seed") if body.get("seed") is not None else "").strip()  # empty: a random seed
-            if seed and not seed.isdigit():
-                return self.send_json({"error": "The seed must be a whole number 0 or above, or empty."}, 400)
+                return self.send_json({"error": "Describe what to pick up and where to place it."}, 400)
             try:
                 seconds = min(300, max(10, int(float(body.get("seconds") or 60))))
-                RUNNER.start(task, seconds, int(seed) if seed else None)
             except (ValueError, TypeError):
                 return self.send_json({"error": "The time limit must be a number."}, 400)
+            try:
+                changes = ood.validate(body.get("ood", {}))
+                RUNNER.start(task, seconds, changes, seeding_args(body))
+            except ValueError as error:
+                return self.send_json({"error": str(error)}, 400)
             except RuntimeError as error:
                 return self.send_json({"error": str(error)}, 409)
             return self.send_json(RUNNER.status())

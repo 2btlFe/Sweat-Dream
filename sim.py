@@ -1,6 +1,6 @@
 """Run one Dream-1 task in the Dream Labs simulator (headless).
 
-    python sim.py "put apple into the bowl" --seconds 60
+    python sim.py "Move an object to the center of the workspace" --seconds 60
 
 app.py starts this for every run. Two environment variables connect it to the website:
   LIVE_FRAME  path of a JPEG that is replaced with the latest camera view (top camera + both wrist cameras)
@@ -9,12 +9,15 @@ app.py starts this for every run. Two environment variables connect it to the we
 
 import argparse
 import importlib.util
+import json
 import os
 import sys
 import threading
 import time
 import warnings
 from pathlib import Path
+
+import ood
 
 warnings.filterwarnings("ignore")
 
@@ -78,11 +81,31 @@ dream.DreamClient.get_action = get_action
 
 def main():
     parser = argparse.ArgumentParser(description="Run one Dream-1 task in the simulator")
-    parser.add_argument("task", nargs="?", default="put apple into the bowl")
+    parser.add_argument("task", nargs="?", default="Move an object to the center of the workspace")
     parser.add_argument("--seconds", type=float, default=60)
+    parser.add_argument("--ood", type=json.loads, default={}, help="Scene settings as a JSON object")
+    parser.add_argument("--preview", type=Path, help="Render the initial camera view to a JPEG and exit")
     scene.add_arguments(parser)
     args = parser.parse_args()
-    env = scene.prepare_env(args)
+    seed = scene.pick_seed(args)
+    try:
+        controls = scene.resolve_controls(seed, args.ood, args.ood_random, args.setting)
+        changes = ood.validate(controls)
+    except ValueError as error:
+        parser.error(str(error))
+
+    import yam_env
+
+    def make_env():
+        return ood.build_environment(yam_env, changes) if changes else yam_env.YamEnv()
+
+    if args.preview:
+        env = scene.prepare_env(args, seed, make_env, changes)
+        try:
+            save_live_frame(env.images(), str(args.preview))
+        finally:
+            env.close()
+        return
 
     stop = threading.Event()
     if STOP_FILE:
@@ -95,6 +118,7 @@ def main():
 
         threading.Thread(target=watch, daemon=True).start()
 
+    env = scene.prepare_env(args, seed, make_env, changes)
     print(f"Starting the simulator: {args.task} ({args.seconds:g} s)", flush=True)
     try:
         dream_control.main(["--task", args.task, "--seconds", str(args.seconds), "--headless", "--quiet"],
@@ -104,6 +128,7 @@ def main():
         sys.exit(1)
     finally:
         stop.set()
+        env.close()
     print("Done.", flush=True)
 
 

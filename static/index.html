@@ -6,75 +6,143 @@
 <title>Dream-1 Simulator</title>
 <style>
   :root {
-    --bg: #f6f7f9; --panel: #ffffff; --text: #1b1f24; --muted: #5f6b7a; --line: #dde2e8;
-    --accent: #2563eb; --accent-text: #ffffff; --ok: #15803d; --stop: #dc2626; --warn-bg: #fef3c7; --warn: #92400e;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0f1216; --panel: #181c22; --text: #e6e9ee; --muted: #9aa5b4; --line: #2a313b;
-      --accent: #4f8cff; --accent-text: #0b0d10; --ok: #4ade80; --stop: #ef4444; --warn-bg: #3a2c0b; --warn: #fcd34d;
-    }
+    color-scheme: dark;
+    --bg: #12171d; --panel: #1b222a; --well: #151b22;
+    --line: #343e49; --text: #f2f5f7; --muted: #a7b3bf;
+    --accent: #84e1bd; --accent-text: #112b22;
+    --danger: #ffb3ac; --warn-bg: #33291b; --warn: #f6d092;
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
-  h1 { font-size: 22px; margin: 0 0 4px; }
-  .sub { color: var(--muted); margin: 0 0 20px; }
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
-  .row { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
-  .row .grow { flex: 1 1 260px; }
-  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
-  input { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
-  #seconds { width: 110px; }
-  button { padding: 9px 20px; border: 0; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; background: var(--accent); color: var(--accent-text); }
-  button.stop { background: var(--stop); color: #fff; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, sans-serif; }
+  main { max-width: 1440px; margin: 0 auto; padding: 36px clamp(16px, 4vw, 56px) 48px; }
+  header { margin-bottom: 24px; }
+  h1 { font-size: clamp(28px, 4vw, 40px); line-height: 1.1; letter-spacing: -.045em; margin: 0; }
+  h2 { font-size: 16px; letter-spacing: -.015em; margin: 0 0 16px; }
+  .workspace { display: grid; grid-template-columns: minmax(410px, 1fr) minmax(0, 1.1fr); gap: 16px 20px; align-items: start; grid-template-areas: "setup monitor" "ood monitor"; }
+  .setup { grid-area: setup; }
+  .ood-panel { grid-area: ood; }
+  .panel { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) 72px; gap: 10px; }
+  label, .label { display: block; font-size: 12px; font-weight: 550; color: var(--muted); margin-bottom: 5px; }
+  input, select { width: 100%; min-width: 0; padding: 8px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--well); color: var(--text); font: inherit; }
+  input[type="number"] { font-variant-numeric: tabular-nums; }
+  button, summary, input, select { outline-offset: 3px; }
+  :focus-visible { outline: 2px solid var(--accent); }
+  button { padding: 8px 14px; border: 1px solid transparent; border-radius: 8px; font: inherit; font-weight: 650; cursor: pointer; background: var(--accent); color: var(--accent-text); }
+  button:hover:not(:disabled) { filter: brightness(1.12); }
   button:disabled { opacity: .45; cursor: default; }
+  button.stop { background: var(--danger); color: #441b19; }
+  .actions { display: flex; gap: 8px; margin-top: 14px; }
+  .actions button { min-width: 90px; }
   .examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-  .examples button { background: transparent; color: var(--accent); border: 1px solid var(--line); font-weight: 500; padding: 4px 10px; font-size: 13px; }
+  .examples button, #oodReset { background: transparent; color: var(--muted); border-color: var(--line); font-weight: 500; padding: 4px 9px; font-size: 11px; }
+  .ood summary { cursor: pointer; font-size: 15px; font-weight: 650; }
+  .ood summary::marker { color: var(--accent); }
+  .ood-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 14px 0 10px; }
+  .ood fieldset { min-width: 0; margin: 0; padding: 9px 11px 11px; background: var(--well); border: 1px solid var(--line); border-radius: 10px; }
+  .ood legend { padding: 0 5px; font-weight: 650; font-size: 12px; }
+  .ood-field + .ood-field { margin-top: 9px; }
+  .seed-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; margin-top: 12px; }
+  .seed-note { font-size: 11px; margin: 6px 0 0; }
+  .ood-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .ood-random { display: inline-flex; align-items: center; gap: 4px; margin: 0; font-size: 11px; font-weight: 500; white-space: nowrap; cursor: pointer; }
+  .ood-random input { width: auto; margin: 0; accent-color: var(--accent); }
+  .ood-slider { display: grid; grid-template-columns: minmax(0, 1fr) 4.4rem; gap: 8px; align-items: center; }
+  .ood-slider input[type="range"] { background: transparent; border: 0; margin: 0; padding: 0; accent-color: var(--accent); cursor: pointer; }
+  .ood-slider input[type="number"], .ood select { padding: 5px 7px; font-size: 12px; }
   .notice { padding: 10px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); margin-bottom: 16px; }
-  .status { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
-  .dot.on { background: var(--ok); animation: pulse 1.2s infinite; }
-  @keyframes pulse { 50% { opacity: .3; } }
+  .monitor { grid-area: monitor; position: sticky; top: 20px; }
+  .monitor-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .monitor-header h2 { margin: 0; }
+  .status { display: inline-flex; align-items: center; gap: 7px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 20px; font-size: 11px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .dot.on { background: var(--accent); }
+  .status[data-state="error"] { color: var(--danger); }
+  .status[data-state="error"] .dot { background: var(--danger); }
   .muted { color: var(--muted); }
-  .view { width: 100%; aspect-ratio: 720 / 270; border-radius: 8px; display: block; }
-  img.view { background: #000; object-fit: contain; }
-  .placeholder { border: 1px dashed var(--line); display: grid; place-items: center; color: var(--muted); text-align: center; padding: 8px; }
-  .legend { font-size: 12px; color: var(--muted); margin-top: 6px; }
-  pre { margin: 12px 0 0; max-height: 160px; overflow: auto; font-size: 12px; color: var(--muted); white-space: pre-wrap; }
+  #statusMore { margin: 10px 0 0; font-size: 12px; }
+  #statusMore:empty { display: none; }
+  .view { width: 100%; aspect-ratio: 720 / 270; border-radius: 10px; display: block; }
+  img.view { background: #080c10; object-fit: contain; }
+  .placeholder { border: 1px dashed var(--line); background: var(--well); display: grid; place-items: center; color: var(--muted); text-align: center; padding: 12px; }
+  .legend { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted); margin-top: 9px; }
+  pre { margin: 12px 0 0; padding: 10px; border-radius: 8px; background: var(--well); max-height: 160px; overflow: auto; font-size: 12px; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+  @media (max-width: 900px) {
+    .workspace { grid-template-columns: minmax(0, 1fr); grid-template-areas: "setup" "monitor" "ood"; }
+    .monitor { position: static; }
+  }
+  @media (max-width: 480px) {
+    main { padding-top: 24px; }
+    .panel { padding: 14px; }
+    .ood-grid { grid-template-columns: minmax(0, 1fr); }
+  }
 </style>
 </head>
 <body>
 <main>
-  <h1>Dream-1 Simulator</h1>
-  <p class="sub">Type a task, press Run, and watch Dream-1 move two robot arms in the simulator.</p>
+  <header><h1>Dream-1 Simulator</h1></header>
 
   <div id="keyNotice" class="notice" hidden>No Dream API key found. Put <code>DREAM_API_KEY=...</code> in <code>~/.dreamlabs/credentials</code> and restart (see README).</div>
 
-  <section class="panel">
+  <div class="workspace">
+  <section class="panel setup" aria-labelledby="setupTitle">
+    <h2 id="setupTitle">Run setup</h2>
     <div class="row">
-      <div class="grow"><label for="task">Task</label><input id="task" value="put apple into the bowl"></div>
-      <div><label for="seconds">Time limit (s)</label><input id="seconds" type="number" min="10" max="300" value="60"></div>
-      <div><label for="seed">Seed (empty: new on Run)</label><div style="display:flex;gap:6px"><input id="seed" type="number" min="0" step="1" placeholder="random" style="width:140px"><button id="newSeed" type="button" title="New random seed" aria-label="New random seed" style="padding:9px 12px">↻</button></div></div>
+      <div class="grow"><label for="task">Task</label><input id="task" value="Move an object to the center of the workspace"></div>
+      <div><label for="seconds">Limit (s)</label><input id="seconds" type="number" min="10" max="300" value="60"></div>
+    </div>
+    <div class="seed-row">
+      <div><label for="seed">Seed</label><input id="seed" type="number" min="0" step="1" placeholder="new on Run"></div>
+      <button id="newSeed" type="button" title="New random seed" aria-label="New random seed">↻</button>
+    </div>
+    <p class="muted seed-note">Same seed, same start: object layout and every scene setting marked <em>random</em> come from it.</p>
+    <div class="examples" id="examples"></div>
+    <div class="actions">
       <button id="run">Run</button>
       <button id="stop" class="stop" hidden>Stop</button>
     </div>
-    <div class="examples" id="examples"></div>
+  </section>
+  <section class="panel ood-panel" aria-label="Camera &amp; environment settings">
+    <details class="ood" open>
+      <summary>Camera &amp; environment settings</summary>
+      <form id="ood" class="ood-grid" aria-label="Camera &amp; environment settings"></form>
+      <button id="oodReset" type="reset" form="ood" hidden>Reset scene settings</button>
+      <p id="oodError" class="muted" role="status" hidden></p>
+    </details>
   </section>
 
-  <section class="panel">
-    <div class="status"><span class="dot" id="dot"></span><strong id="statusText">Ready</strong><span class="muted" id="statusMore"></span></div>
+  <section class="panel monitor" aria-labelledby="viewTitle">
+    <div class="monitor-header">
+      <h2 id="viewTitle">Camera feeds</h2>
+      <div class="status" id="statusBadge" role="status"><span class="dot" id="dot"></span><strong id="statusText">Ready</strong></div>
+    </div>
     <img id="live" class="view" alt="Live camera view" hidden>
-    <div id="placeholder" class="view placeholder">The cameras appear here when you press Run.</div>
-    <div class="legend">Left: top camera · Right: left and right wrist cameras <strong id="previewNote"></strong></div>
+    <div id="placeholder" class="view placeholder">Preparing the initial camera view…</div>
+    <div class="legend"><span>Top camera</span><span>Wrist cameras</span></div>
+    <p class="muted" id="previewStatus" role="status" hidden></p>
+    <p class="muted" id="statusMore"></p>
     <pre id="log" hidden></pre>
   </section>
+  </div>
 </main>
 
-<script>
+<script type="module">
+import { loadOOD, readOOD, readRandom, showDrawn } from "/ood.js";
+
+// The seed (scene.py): object layout and random scene settings. Always filled in, so every run can be repeated.
+const newSeed = () => { $("seed").value = Math.floor(Math.random() * 1000000); };  // a train seed: 0..999999
+const seeding = () => ({ seed: $("seed").value.trim() || null, ood_random: readRandom() });
+
 const $ = id => document.getElementById(id);
 let liveTimer = null;
+let running = false;
+let starting = false;
+let settingsReady = false;
+let previewTimer;
+let previewPending = false;
+let previewRevision = 0;
+let previewUrl;
 
 async function api(path, body) {
   const options = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
@@ -82,6 +150,49 @@ async function api(path, body) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
+}
+
+function schedulePreview() {
+  previewRevision++;
+  clearTimeout(previewTimer);
+  if (settingsReady && !starting && !running) previewTimer = setTimeout(renderPreview, 350);
+}
+
+async function renderPreview() {
+  if (running || starting || previewPending) return;
+  const ood = readOOD(false);
+  if (ood === null) return;
+  const revision = previewRevision;
+  previewPending = true;
+  const note = $("previewStatus");
+  note.hidden = false;
+  note.textContent = "Updating initial scene…";
+  try {
+    const response = await fetch("/api/preview", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ood, ...seeding() }),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(response.status === 404 ? "Restart app.py and reload the page." : error.error || "Rendering failed.");
+    }
+    const frame = await response.blob();
+    if (revision !== previewRevision || running || starting) return;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(frame);
+    $("live").src = previewUrl;
+    $("live").hidden = false;
+    $("placeholder").hidden = true;
+    try { showDrawn(JSON.parse(response.headers.get("X-Scene-Controls") || "{}")); } catch {}
+    note.textContent = `Initial scene · seed ${$("seed").value || "(new on Run)"} · current scene settings`;
+  } catch (error) {
+    if (revision === previewRevision && !running && !starting) {
+      note.textContent = "Preview unavailable: " + error.message;
+      if (!$("placeholder").hidden) $("placeholder").textContent = "No initial camera image available.";
+    }
+  } finally {
+    previewPending = false;
+    if (revision !== previewRevision && !running && !starting) schedulePreview();
+  }
 }
 
 function showLive() {
@@ -95,8 +206,10 @@ async function refresh() {
   try { s = await api("/api/status"); }
   catch { $("statusText").textContent = "Cannot reach app.py. Is it running?"; return; }
 
+  running = s.running;
+  if (running) $("previewStatus").hidden = true;
   $("keyNotice").hidden = s.api_key;
-  if (!$("examples").childElementCount) {
+  if (settingsReady && !$("examples").childElementCount) {
     for (const text of s.examples) {
       const b = document.createElement("button");
       b.textContent = text;
@@ -104,11 +217,10 @@ async function refresh() {
       $("examples").appendChild(b);
     }
   }
-  running = s.running;
-  if (running) $("previewNote").textContent = "";
   $("run").disabled = s.running;
   $("stop").hidden = !s.running;
   $("dot").classList.toggle("on", s.running);
+  $("statusBadge").dataset.state = s.exit_code > 0 || s.exit_code < 0 ? "error" : "";
   if (s.running) {
     $("statusText").textContent = "Running";
     $("statusMore").textContent = `${s.task} · ${s.elapsed_s} s`;
@@ -122,39 +234,26 @@ async function refresh() {
 
   if (s.running && !liveTimer) liveTimer = setInterval(showLive, 250);
   if (!s.running && liveTimer) { clearInterval(liveTimer); liveTimer = null; showLive(); }
-  if (!s.running && s.task && $("live").hidden) showLive();  // the last picture of the previous run
 }
 
 $("run").onclick = async () => {
   try {
-    // Every run has a seed you can see: an empty box gets a new random one first, so the run can be repeated.
-    if (!$("seed").value.trim()) $("seed").value = Math.floor(Math.random() * 1000000);
-    await api("/api/run", { task: $("task").value, seconds: $("seconds").value, seed: $("seed").value.trim() });
-    running = true; previewWanted = null; $("previewNote").textContent = "";
+    const ood = readOOD();
+    if (ood === null) return;
+    starting = true;
+    previewRevision++;
+    clearTimeout(previewTimer);
+    $("previewStatus").hidden = true;
+    if (!$("seed").value.trim()) newSeed();
+    await api("/api/run", { task: $("task").value, seconds: $("seconds").value, ood, ...seeding() });
     $("live").hidden = true;
     $("placeholder").hidden = false;
     $("placeholder").textContent = "Starting the simulator… (the first picture takes a few seconds)";
-    refresh();
+    running = true;
+    await refresh();
   } catch (err) { alert(err.message); }
+  finally { starting = false; }
 };
-// Preview: the start scene of the seed in the box, shown without pressing Run (scene.py renders it, no Dream call).
-let previewTimer = null, previewWanted = null, running = false;
-async function preview() {
-  const seed = $("seed").value.trim();
-  if (running || !/^\d+$/.test(seed)) return;
-  previewWanted = seed;
-  $("previewNote").textContent = `· loading the start scene of seed ${seed}…`;
-  try {
-    const res = await fetch("/api/preview?seed=" + seed);
-    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
-    const url = URL.createObjectURL(await res.blob());
-    if (previewWanted !== seed || running) return;  // the seed changed or a run started meanwhile
-    $("live").src = url; $("live").hidden = false; $("placeholder").hidden = true;
-    $("previewNote").textContent = `· Preview: start scene of seed ${seed} (not running)`;
-  } catch (err) { if (previewWanted === seed) $("previewNote").textContent = `· Preview failed: ${err.message}`; }
-}
-$("seed").oninput = () => { clearTimeout(previewTimer); previewTimer = setTimeout(preview, 500); };
-$("newSeed").onclick = () => { $("seed").value = Math.floor(Math.random() * 1000000); preview(); };  // a train seed (scene.py: 0..999999)
 $("stop").onclick = async () => {
   $("stop").disabled = true;
   await api("/api/stop", {}).catch(() => {});
@@ -162,7 +261,20 @@ $("stop").onclick = async () => {
   setTimeout(() => { $("stop").disabled = false; }, 2000);
 };
 
-refresh();
+$("ood").addEventListener("input", schedulePreview);
+$("seed").addEventListener("input", schedulePreview);
+$("newSeed").onclick = () => { newSeed(); schedulePreview(); };
+newSeed();
+$("ood").addEventListener("reset", schedulePreview);
+loadOOD(api).then(ready => {
+  settingsReady = ready;
+  refresh();
+  if (ready) {
+    schedulePreview();
+  } else {
+    $("placeholder").textContent = "Restart app.py to load the current scene settings.";
+  }
+});
 setInterval(refresh, 1000);
 </script>
 </body>

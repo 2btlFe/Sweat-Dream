@@ -6,6 +6,7 @@
 - 브랜치: `HSY` (커밋하지 않음, push하지 않음)
 - 범위: **초기 장면만** 정합니다. 실행 데이터(궤적, 결과 등)는 저장하지 않습니다.
 - 원칙: **랜덤이어도 시드로 재현 가능해야 합니다.** 이는 task나 세팅이 바뀌어도 마찬가지입니다. 초기 장면은 `(SCENE_VERSION, 세팅, 시드)`만으로 결정됩니다 (5절).
+- `YS` 브랜치(카메라·블러·조명·테이블 장면 설정, `ood.py`)와 합쳤습니다. 그 설정들도 항목별로 시드에서 뽑을 수 있습니다 (3절).
 - 현재 규칙 버전: `SCENE_VERSION = 2`
 
 ---
@@ -47,9 +48,9 @@
 
 ### 웹 화면 (`python app.py` → http://localhost:8000)
 
-- **Seed 입력칸**: 숫자를 넣으면 그 시드로 시작합니다. 비워 두고 Run을 누르면 먼저 새 랜덤 시드를 채운 뒤 실행하므로, 어떤 실행이든 쓴 시드가 화면에 남습니다.
-- **↻ 버튼**: 새 랜덤 학습 시드를 채웁니다.
-- **미리보기**: 시드를 입력하거나 ↻를 누르면 Run 없이 초기 장면이 바로 보입니다. Dream API를 쓰지 않습니다.
+- **Seed 입력칸** (Run setup): 페이지를 열면 랜덤 시드가 채워져 있습니다. 숫자를 바꾸거나 **↻**로 새 시드를 뽑을 수 있습니다. 칸이 비어 있으면 Run할 때 먼저 채우므로, 어떤 실행이든 쓴 시드가 화면에 남습니다.
+- **Camera & environment settings** (`YS`): 항목마다 **random** 체크가 있습니다. 체크한 항목은 시드에서 값을 뽑고, 슬라이더는 잠긴 채 뽑힌 값을 보여 줍니다. 체크하지 않은 항목은 슬라이더 값을 그대로 씁니다.
+- **미리보기**: 시드나 설정을 바꾸면 Run 없이 초기 장면이 바로 보입니다. 물체 배치와 장면 설정이 모두 반영되며, Dream API를 쓰지 않습니다.
 - 웹은 `default` 세팅을 씁니다.
 
 ### 명령줄
@@ -61,6 +62,9 @@ python sim.py "put apple into the bowl" --split eval                   # 고정 
 python sim.py "put apple into the bowl" --seed 1000007 --split eval    # 평가 시드 (학습 시드면 거부)
 python sim.py "put banana on the plate" --setting fruits_only --seed 42   # 다른 세팅
 python sim.py "put apple into the bowl" --default-scene                # 원래의 고정 장면
+python sim.py "put apple into the bowl" --seed 42 --ood-random light,table --ood '{"blur_px": 2}'
+                                       # 조명·테이블은 시드에서 뽑고, 블러는 2로 고정
+python sim.py --preview start.jpg --seed 42 --ood-random light           # 초기 장면 이미지만 저장 (API 불필요)
 
 python scene.py 42                          # 시드 42의 물체 위치·방향·난이도 출력 (API 불필요)
 python scene.py 42 --setting fruits_only    # 다른 세팅으로
@@ -69,7 +73,11 @@ python scene.py --check                     # 재현성 점검 (기록된 장면
 python scene.py --build-reach-map           # 팔 도달 영역 지도 다시 만들기 (로봇·테이블이 바뀔 때만)
 ```
 
-실행 로그 예: `Scene: seed 42 (train, setting default); run again with --seed 42 for the same start`
+실행 로그 예:
+```
+Scene: seed 42 (train, setting default); run again with --seed 42 --ood-random light,table for the same start
+Scene controls: {"blur_px": 2, "light": 0.3, "table": "gray"} (from the seed: light, table)
+```
 
 ---
 
@@ -94,6 +102,13 @@ python scene.py --build-reach-map           # 팔 도달 영역 지도 다시 �
 - `edge_falloff`, `edge_min_weight`: 가장자리 감쇠
 
 **세팅마다 장면이 독립적입니다.** 세팅의 설정값이 난수 흐름에 들어가므로, 새 세팅을 추가하거나 한 세팅을 고쳐도 다른 세팅의 시드 장면은 바뀌지 않습니다. 같은 시드라도 세팅이 다르면 다른 장면이 됩니다. 세팅을 추가하면 `REFERENCE`에도 기준 시드를 넣어 주세요 (`python scene.py --check --update`).
+
+### `YS` 장면 설정(카메라·블러·조명·테이블)과 시드
+- `ood.py`의 각 항목을 **random**으로 고르면 `scene.draw_controls()`가 그 항목의 범위·간격 안에서 값을 뽑습니다.
+- 같은 (세팅, 시드, 항목)이면 같은 값이 나옵니다. 항목마다 난수 흐름이 따로라서, random으로 고르는 항목을 늘리거나 줄여도 다른 항목의 값은 바뀌지 않습니다.
+- **카메라·조명을 바꿔도 물체 배치는 그대로입니다.** 배치는 항상 패키지의 원래 장면(기본 카메라) 기준으로 계산하므로, 같은 시드면 카메라 설정과 무관하게 같은 위치에 놓입니다.
+- 랜덤 항목은 시드가 필요하므로 `--default-scene`과 함께 쓸 수 없습니다.
+- `ood.py`의 항목 범위를 바꾸면 같은 시드라도 뽑히는 값이 달라집니다. 이 경우 `--check`가 경고합니다.
 
 ### 다른 모듈(1-2 OOD 등)에서 랜덤이 필요할 때
 `scene.rng_for(seed, "용도", ...)`로 난수를 받으세요. 같은 (세팅, 시드, 용도)면 어디서든 같은 숫자가 나오고, 용도가 다르면 서로 독립입니다.
@@ -125,8 +140,8 @@ brightness = rng.uniform(0.6, 1.4)          # 시드 42면 항상 같은 값
 | 값 고정 | 뽑은 위치·각도를 반올림한 뒤 적용합니다. 미리보기와 실행이 같은 값을 씁니다. |
 | reset 후에도 유지 | `qpos0`까지 바꿔서 `env.reset()` 뒤에도 시드 장면이 남습니다. |
 | 시드가 항상 보임 | 로그에 `Scene: seed N (…, setting …)`이 찍히고, 웹은 빈칸으로 Run해도 시드를 먼저 채웁니다. |
-| 환경 변화 감지 | 세팅별 기준 시드의 장면 지문(`REFERENCE`)과 평가 세트 지문을 코드에 넣어 두었습니다. 실행과 미리보기 때마다 확인하고, 다르면 **WARNING**을 출력합니다. `python scene.py --check`로 직접 확인할 수도 있습니다. |
-| 규칙을 일부러 바꿀 때 | `SCENE_VERSION`을 올리고 `python scene.py --check --update` 출력으로 `REFERENCE`, `EVAL_FINGERPRINT`, `EVAL_SEEDS`를 갱신합니다. |
+| 환경 변화 감지 | 세팅별 기준 시드의 장면 지문(`REFERENCE`), 평가 세트 지문, 랜덤 장면 설정 지문(`CONTROLS_FINGERPRINT`)을 코드에 넣어 두었습니다. 실행과 미리보기 때마다 확인하고, 다르면 **WARNING**을 출력합니다. `python scene.py --check`로 직접 확인할 수도 있습니다. |
+| 규칙을 일부러 바꿀 때 | `SCENE_VERSION`을 올리고 `python scene.py --check --update` 출력으로 `REFERENCE`, `EVAL_FINGERPRINT`, `EVAL_SEEDS`, `CONTROLS_FINGERPRINT`를 갱신합니다. |
 | 도달 영역 지도 | `scene_reach_map.npz`는 반드시 커밋합니다. 다시 만들면 모든 장면이 바뀌므로 `SCENE_VERSION`도 올려야 합니다. |
 
 재현되는 것과 안 되는 것:
@@ -145,9 +160,11 @@ brightness = rng.uniform(0.6, 1.4)          # 시드 42면 항상 같은 값
 | `scene.py` | 새 파일 | 시드 기능 전부: 세팅, 난수 흐름(`rng_for`), 장면 샘플링·적용·안착 확인, 난이도와 평가 세트, 재현성 점검, `sim.py`용 연결, 도달 영역 지도, 미리보기 이미지 |
 | `scene_reach_map.npz` | 새 파일 (2KB) | 팔별 도달 영역(1cm 격자) |
 | `SCENE_SEED.md` | 새 파일 | 이 문서 |
-| `sim.py` | +4줄 | `import scene`, `scene.add_arguments(parser)`, `env = scene.prepare_env(args)`, `shared_env=env` |
-| `app.py` | 시드 전달 + 미리보기 | `/api/run`이 seed를 `sim.py --seed`로 넘김. `/api/preview?seed=N`이 `scene.py --image`로 이미지 생성 (scene.py가 바뀌면 캐시도 새로) |
-| `static/index.html` | 입력칸·버튼·미리보기 | Seed 입력칸, ↻ 버튼, 미리보기, 빈칸으로 Run하면 시드를 먼저 채움 |
+| `sim.py` | 연결 | `scene.add_arguments`, `scene.pick_seed`, `scene.resolve_controls`(랜덤 장면 설정), `scene.prepare_env`(env 생성·배치·출력). `YS`의 `--ood`, `--preview`와 함께 동작 |
+| `app.py` | 시드 전달 | `YS` 버전에 `seeding_args()` 추가: `/api/run`, `/api/preview`가 seed와 random 항목을 `sim.py`로 넘김. 미리보기 응답 헤더 `X-Scene-Controls`로 뽑힌 값을 돌려줌 |
+| `static/index.html` | Seed 칸 | `YS` 화면에 Seed 입력칸·↻ 추가. 미리보기·실행에 seed와 random 항목을 함께 보냄 |
+| `static/ood.js` | random 체크 | `YS` 파일에 항목별 random 체크, `readRandom()`, `showDrawn()` 추가 |
+| `ood.py` | 변경 없음 | `YS` 원본 그대로 |
 
 `dreamlabs` 패키지(site-packages)는 수정하지 않았습니다.
 
@@ -191,6 +208,15 @@ brightness = rng.uniform(0.6, 1.4)          # 시드 42면 항상 같은 값
 - 바나나는 볼록한 외곽선으로 판정해서 실제보다 자리를 조금 넓게 차지합니다.
 
 ---
+
+### 머지 후 추가 검증 (`YS` 통합)
+| 항목 | 결과 |
+|---|---|
+| `--check` | 기준 장면, 평가 세트, 랜덤 장면 설정 모두 일치 |
+| 같은 시드 + 같은 random 항목 | 별도 프로세스 2번의 미리보기 이미지가 바이트 단위로 같음 |
+| 카메라·조명·테이블 변경 | 시드 42의 물체 위치가 변경 전과 완전히 같음 |
+| 잘못된 입력 | 없는 항목, 그리고 `--default-scene`에 random을 붙인 경우를 거부 |
+| 웹 | Seed 칸, random 체크, 뽑힌 값 표시(시드 42: light 0.3, table gray, tilt −13°), 미리보기 정상 |
 
 ## 9. 남은 일
 
