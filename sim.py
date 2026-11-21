@@ -35,8 +35,11 @@ if spec is None:
 sys.path.insert(0, str(Path(next(iter(spec.submodule_search_locations))) / "yam_mujoco"))
 
 import dream  # noqa: E402
+from dream import credentials as dream_credentials  # noqa: E402
 import dream_control  # noqa: E402
 import yam_env  # noqa: E402
+import mujoco  # noqa: E402
+import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
@@ -99,6 +102,7 @@ class Trajectory:
 
 
 TRAJECTORY = Trajectory()
+STATS = {"model_responses": 0, "model_actions": 0}
 
 # Record the scene after every control step.
 original_step = yam_env.YamEnv.step
@@ -107,6 +111,8 @@ original_step = yam_env.YamEnv.step
 def step(self, left, right):
     result = original_step(self, left, right)
     TRAJECTORY.record(self)
+    if STATS["model_responses"]:
+        STATS["model_actions"] += 1
     return result
 
 
@@ -130,7 +136,9 @@ original_get_action = dream.DreamClient.get_action
 def get_action(self, *args, **kwargs):
     for attempt in range(3):
         try:
-            return original_get_action(self, *args, **kwargs)
+            reply = original_get_action(self, *args, **kwargs)
+            STATS["model_responses"] += 1
+            return reply
         except dream.DreamProtocolError:
             if attempt == 2:
                 raise
@@ -147,12 +155,34 @@ def main():
     parser = argparse.ArgumentParser(description="Run one Dream-1 task in the simulator")
     parser.add_argument("task", nargs="?", default="put apple into the bowl")
     parser.add_argument("--seconds", type=float, default=60)
+    parser.add_argument("--seed", type=int, help="Reproducible small shifts to each object's start pose")
     args = parser.parse_args()
+
+    # Match the key detected by the web app. The bundled sim otherwise gives a
+    # separate, possibly stale /login key priority over ~/.dreamlabs/credentials.
+    key = dream_credentials.load().api_key
+    if key:
+        os.environ["DREAM_API_KEY"] = key
 
     run_dir = Path(os.environ.get("RUN_DIR") or HERE / "runs" / new_run_id())
     run_dir.mkdir(parents=True, exist_ok=True)
-    meta = {"id": run_dir.name, "task": args.task, "seconds": args.seconds,
-            "started_at": datetime.now().isoformat(timespec="seconds"), "stopped_by_user": False, "error": None}
+    meta = {"id": run_dir.name, "task": args.task, "seconds": args.seconds, "seed": args.seed,
+            "started_at": datetime.now().isoformat(timespec="seconds"), "stopped_by_user": False,
+            "error": None, "error_type": None}
+
+    env = yam_env.YamEnv()
+    if args.seed is not None:
+        rng = np.random.default_rng(args.seed)
+        for body, joint in (("apple", "apple_free"), ("orange", "orange_free"),
+                            ("banana", "banana_free"), ("water_bottle", "bottle_free")):
+            qpos = env.data.joint(joint).qpos
+            qpos[:2] += rng.uniform(-0.02, 0.02, 2)
+            if body != "water_bottle":
+                yaw = np.deg2rad(rng.uniform(-25, 25)) / 2
+                rotated = np.empty(4)
+                mujoco.mju_mulQuat(rotated, np.array([np.cos(yaw), 0, 0, np.sin(yaw)]), qpos[3:7].copy())
+                qpos[3:7] = rotated
+        mujoco.mj_forward(env.model, env.data)
 
     stop = threading.Event()
     if STOP_FILE:
@@ -169,18 +199,21 @@ def main():
     print(f"Starting the simulator: {args.task} ({args.seconds:g} s)", flush=True)
     try:
         dream_control.main(["--task", args.task, "--seconds", str(args.seconds), "--headless", "--quiet"],
-                           stop_event=stop)
-    except (RuntimeError, ValueError, KeyError, OSError) as error:
+                           shared_env=env, stop_event=stop)
+    except Exception as error:
         meta["error"] = str(error)
+        meta["error_type"] = type(error).__name__
         print(f"Stopped: {error}", flush=True)
     finally:
         stop.set()
         meta["ended_at"] = datetime.now().isoformat(timespec="seconds")
         meta["sim_seconds"] = TRAJECTORY.t[-1] if TRAJECTORY.t else 0
+        meta.update(STATS)
         (run_dir / "trajectory.json").write_text(json.dumps(TRAJECTORY.to_json(), separators=(",", ":")))
         if last_images:
             save_jpeg(camera_view(last_images), run_dir / "last.jpg")
         (run_dir / "meta.json").write_text(json.dumps(meta, indent=2))
+        env.close()
         print(f"Saved to runs/{run_dir.name}", flush=True)
     sys.exit(1 if meta["error"] else 0)
 
