@@ -181,7 +181,9 @@ const MAX_ABOVE_CM = 10;     // rule 1: no higher than this above the target's b
 const MIN_ABOVE_CM = -5;     // rule 1: lower than this means it fell off the table
 
 let rules = { distance_cm: 6.5, release: true, still_seconds: 1.0 };
-let runs = [], trajectories = {}, selected = null, liveTimer = null, lastRunId = null, wasRunning = false;
+let runs = [], trajectories = {}, selected = null, liveTimer = null, wasRunning = false;
+// Only runs started while this page is open are listed: reloading the page clears the list (files stay in runs/).
+const pageRuns = new Set();
 
 async function api(path, body) {
   const options = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
@@ -281,7 +283,7 @@ $("releaseNo").onclick = () => changeRules({ release: false });
 /* ---------- runs ---------- */
 
 async function loadRuns() {
-  runs = (await api("/api/runs")).runs;
+  runs = (await api("/api/runs")).runs.filter(r => pageRuns.has(r.id));
   await Promise.all(runs.filter(r => !trajectories[r.id]).map(async r => {
     try { trajectories[r.id] = await api(`/api/runs/${r.id}/trajectory.json`); } catch { trajectories[r.id] = null; }
   }));
@@ -294,7 +296,7 @@ function verdict(run) {
 }
 
 function renderRuns() {
-  if (!runs.length) return;
+  if (!runs.length) { $("runs").innerHTML = '<tr><td colspan="5" class="muted">No runs yet.</td></tr>'; $("detail").hidden = true; return; }
   $("runs").innerHTML = runs.map(run => {
     const v = verdict(run), saved = run.label;
     return `<tr data-id="${esc(run.id)}" class="${run.id === selected ? "sel" : ""}">
@@ -361,7 +363,7 @@ $("saveLabels").onclick = async () => {
     const { saved } = await api("/api/labels", { rules, labels });
     $("saveLabels").textContent = `Saved ${saved}`;
     setTimeout(() => { $("saveLabels").textContent = "Save labels"; }, 2500);
-    runs = (await api("/api/runs")).runs; renderRuns();
+    await loadRuns();
   } catch (err) { alert(err.message); }
 };
 
@@ -387,30 +389,31 @@ async function refresh() {
       $("examples").appendChild(b);
     }
   }
+  if (s.running && s.run_id) pageRuns.add(s.run_id);
   $("run").disabled = s.running;
   $("stop").hidden = !s.running;
   $("dot").classList.toggle("on", s.running);
   if (s.running) {
     $("statusText").textContent = "Running";
     $("statusMore").textContent = `${s.task} · ${s.elapsed_s} s`;
-  } else if (s.task) {
+  } else if (s.task && pageRuns.has(s.run_id)) {
     $("statusText").textContent = s.exit_code === 0 ? "Done" : "Error";
     $("statusMore").textContent = `${s.task} · ${s.elapsed_s} s`;
   }
-  $("logBox").hidden = !s.log.length;
+  $("logBox").hidden = !s.log.length || !pageRuns.has(s.run_id);
   $("log").textContent = s.log.join("\n");
   $("log").scrollTop = $("log").scrollHeight;
 
   if (s.running && !liveTimer) liveTimer = setInterval(showLive, 250);
   if (!s.running && liveTimer) { clearInterval(liveTimer); liveTimer = null; showLive(); }
-  if (!s.running && s.task && $("live").hidden) showLive();
   if (wasRunning && !s.running) { selected = s.run_id; await loadRuns(); }
   wasRunning = s.running;
 }
 
 $("run").onclick = async () => {
   try {
-    await api("/api/run", { task: $("task").value, seconds: $("seconds").value });
+    const started = await api("/api/run", { task: $("task").value, seconds: $("seconds").value });
+    pageRuns.add(started.run_id);
     $("live").hidden = true;
     $("placeholder").hidden = false;
     $("placeholder").textContent = "Starting…";
@@ -428,7 +431,6 @@ $("stop").onclick = async () => {
   try { rules = await api("/api/rules"); } catch {}
   showRules();
   await loadRuns().catch(() => {});
-  if (runs.length && !selected) { selected = runs[0].id; renderRuns(); }
   refresh();
   setInterval(refresh, 1000);
 })();

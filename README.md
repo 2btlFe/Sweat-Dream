@@ -36,4 +36,4 @@ Open http://localhost:8000.
 | Release | Must the gripper let go? |
 | Still time | How long the object must then stay still (s) |
 
-Runs are saved in `runs/<id>/`, labels in `runs/<id>/label.json`.
+Reloading the page clears the list. Runs stay saved in `runs/<id>/`, labels in `runs/<id>/label.json`.
