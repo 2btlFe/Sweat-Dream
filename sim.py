@@ -45,6 +45,7 @@ step's source, inputs, cameras and full physics state, for resuming); --no-recor
 """
 
 import argparse
+import math
 import importlib.util
 import json
 import os
@@ -74,6 +75,7 @@ from PIL import Image  # noqa: E402
 import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
 
+import judge  # noqa: E402  goal scenes (the monitor works towards them)
 import ood  # noqa: E402  scene controls: camera, arm angles, blur, light, table
 import scene  # noqa: E402  the seed's start scene; imported before build_xml is patched below (it keeps the original)
 import simulator_settings as sim_settings  # noqa: E402  robot and room choices
@@ -391,6 +393,64 @@ def keyboard_only(env, seconds, stop):
     return None
 
 
+GOAL_DROP_M = 0.06  # a dragged object is let go this far above where it will rest, then physics settles it
+GOAL_SETTLE_STEPS = 40  # 2 s of simulated time, arms holding still
+
+
+def projection(env, camera="top"):
+    """The camera's 3x4 projection from world points to the picture (u, v from 0 to 1 of env.images()'s crop),
+    fitted (DLT) to points the renderer's own picking finds on a grid of the picture, so it matches the picture
+    exactly, calibrated intrinsics included. @return (P as a list of lists, mean reprojection error in pixels)."""
+    pairs = []
+    for u in np.linspace(0.03, 0.97, 16):
+        for v in np.linspace(0.05, 0.95, 10):
+            _body, point = select(env, u, v, camera)
+            if point is not None:
+                pairs.append((u, v, *point))
+    rows = []
+    for u, v, x, y, z in pairs:
+        rows.append([x, y, z, 1, 0, 0, 0, 0, -u * x, -u * y, -u * z, -u])
+        rows.append([0, 0, 0, 0, x, y, z, 1, -v * x, -v * y, -v * z, -v])
+    p = np.linalg.svd(np.array(rows))[2][-1].reshape(3, 4)
+    p /= p[2, :3] @ np.array(pairs[0][2:]) + p[2, 3]  # positive depth in front of the camera
+    errors = []
+    for u, v, x, y, z in pairs:
+        h = p @ np.array([x, y, z, 1.0])
+        errors.append(math.hypot((h[0] / h[2] - u) * 640, (h[1] / h[2] - v) * 360))
+    return p.tolist(), float(np.mean(errors))
+
+
+def goal_preview(env, goal, out):
+    """The goal popup's picture: the start scene with each dragged object let go just above its goal spot, settled
+    by the physics (it lands in the bowl, on the plate, on the table), as the top camera sees it.
+    @param goal {object: [x, y]} (world metres), or {} for the start scene itself.
+    @param out Folder for goal.jpg and goal.json (positions after settling, the camera projection, the seed)."""
+    state = env.state()
+    for _ in range(3):
+        env.step(state["left"], state["right"])
+    m, d = env.model, env.data
+    for name, (x, y) in goal.items():
+        joint = m.body(name).jntadr[0]
+        q, dof = m.jnt_qposadr[joint], m.jnt_dofadr[joint]
+        d.qpos[q:q + 2] = [x, y]
+        d.qpos[q + 2] += GOAL_DROP_M
+        d.qvel[dof:dof + 6] = 0
+    mujoco.mj_forward(m, d)
+    if goal:
+        for _ in range(GOAL_SETTLE_STEPS):
+            env.step(state["left"], state["right"])
+    images = env.images()
+    save_jpeg(Image.fromarray(images["top"]), Path(out) / "goal.jpg")
+    matrix, error = projection(env)
+    positions = {name: [round(float(v), 4) for v in d.body(name).xpos] for name in OBJECTS + TARGETS}
+    # What each dragged object ended up as: in the bowl, on the plate, or on the table (its spot).
+    import judge
+    relations = {name: judge.relation_of(positions[name], {t: positions[t] for t in TARGETS}) for name in goal}
+    (Path(out) / "goal.json").write_text(json.dumps({"positions": positions, "relations": relations,
+                                                     "projection": matrix,
+                                                     "reprojection_px": round(error, 2), "size": [640, 360]}))
+
+
 def read_meta(folder):
     try:
         return json.loads((Path(folder) / "meta.json").read_text())
@@ -414,9 +474,24 @@ def start_ksy(env, args, meta, stop, source_dir):
         mujoco.mj_setState(env.model, env.data, recorded["physics"][0], PHYSICS)
         mujoco.mj_forward(env.model, env.data)
     TELEOP.set_home(env)
+    # The goal scene, when the run has one (JUDGE_SPEC from the page): the monitor and the recovery script work
+    # towards it, object by object; else the task's words.
+    goal, tolerance = None, None
+    try:
+        spec = judge.normalize_spec(json.loads(os.environ.get("JUDGE_SPEC") or "null"))
+        if spec and spec["type"] == "goal":
+            goal = spec
+            saved = json.loads((HERE / "runs" / "rules.json").read_text()) if (HERE / "runs" / "rules.json").exists() else {}
+            tolerance = judge.normalize_rules(saved)["goal"]["tolerance_cm"]
+    except (ValueError, OSError, TypeError, KeyError):
+        pass
     quick = COLLECT  # data collection may use the faster failure signals; other modes keep the monitor's defaults
-    MONITOR = Monitor(args.task, env, stall_s=args.stall_s if quick and args.stall_s else 12.0,
+    MONITOR = Monitor(args.task, env, goal=goal, tolerance_cm=tolerance,
+                      stall_s=args.stall_s if quick and args.stall_s else 12.0,
                       quick=quick and args.quick_fail, finish=quick and args.script_goal == "finish")
+    if goal:
+        print("  Goal scene: " + "; ".join(f"{o} {e.get('in') or e.get('near') or 'spot'}" for o, e in goal["objects"].items()),
+              flush=True)
     if resume:
         mujoco.mj_setState(env.model, env.data, recorded["physics"][resume["step"]], PHYSICS)
         mujoco.mj_forward(env.model, env.data)
@@ -552,6 +627,10 @@ def main():
     parser.add_argument("--seconds", type=float, default=60)
     parser.add_argument("--ood", type=json.loads, default={}, help="Scene settings (ood.py) as a JSON object")
     parser.add_argument("--preview", type=Path, help="Render the initial camera view to a JPEG and exit")
+    parser.add_argument("--goal-preview", type=Path, metavar="FOLDER",
+                        help="The goal popup: render the start scene with the objects of --goal settled at their goal "
+                             "spots (top camera, positions, camera projection) into FOLDER and exit")
+    parser.add_argument("--goal", type=json.loads, default={}, help='Goal spots {"apple": [x, y], ...} (world metres)')
     parser.add_argument("--robot", choices=("yam", "openyam"), default="yam", help="The robot (simulator_settings.py)")
     parser.add_argument("--room", choices=sim_settings.ROOMS, default="yam_tabletop", help="The room's styling")
     parser.add_argument("--teleop", action="store_true", help="human only: no Dream-1 until T")
@@ -609,6 +688,18 @@ def main():
     def build():
         """The run's simulator and the scene settings in effect."""
         return (build_openyam(args), {}) if openyam else scene.build_env(args)
+
+    if args.goal_preview:
+        if openyam:
+            parser.error("The goal scene is for YAM.")
+        goal = {name: [float(v) for v in spot][:2] for name, spot in (args.goal or {}).items() if name in OBJECTS}
+        env, _changes = build()
+        try:
+            goal_preview(env, goal, args.goal_preview)
+        finally:
+            env.close()
+        print(f"Goal preview: seed {args.seed}", flush=True)
+        return
 
     if args.preview:
         env, _changes = build()

@@ -10,6 +10,16 @@ A run's task has a type, and each type has its own rules (set on the page, kept 
                 rules: height above its start, time held up there
   push          push an object (or any object) along the table
                 rules: distance moved, lifting allowed or not
+  goal          end in a goal scene the user set by dragging objects on the robot's camera picture (the page's
+                goal popup). Each moved object has a relation, judged against where the other item is at the end
+                (so a pushed bowl still counts, and the goal holds for any seed):
+                  {"in": "bowl" | "plate"}                       in the bowl / on the plate
+                  {"near": item, "offset_cm": [left, front], "z"} beside an item (the bowl, the plate or another
+                                                                 object): this far to its left / in front of it
+                                                                 (the top camera's directions), resting at height z
+                  {"at": [x, y, z]}                              a fixed spot on the table (that seed only)
+                rules: distance to the spot beside an item / on the table (in the bowl / on the plate: anywhere
+                in it), release required, still time at the end
 
 The type and its objects come from the task's words (classify), or from the spec chosen for a typed prompt
 (meta["judge"]). Add a type: its rules to RULES, a judge_<type> function, and a branch in classify().
@@ -48,7 +58,58 @@ RULES = {
     "move_to_area": {"zone_cm": (10.0, 2, 30), "release": True, "still_seconds": (1.0, 0, 10)},
     "lift": {"height_cm": (5.0, 1, 30), "hold_seconds": (1.0, 0, 10)},
     "push": {"distance_cm": (5.0, 1, 40), "no_lift": True},
+    "goal": {"tolerance_cm": (4.0, 1, 20), "release": True, "still_seconds": (1.0, 0, 10)},
 }
+GOAL_HEIGHT_M = 0.03  # an object must also end within this height of its goal (in the bowl, not beside it)
+IN_RADIUS_CM = {"bowl": 7.0, "plate": 7.0}  # "in the bowl / on the plate": this close to its centre, at its height
+
+
+def relation_of(position, targets, bands=None):
+    """Which container an object rests in, by where it is: "bowl", "plate", or None (on the table).
+    @param position The object's [x, y, z]. @param targets {"bowl": [x, y, z], "plate": [...]}.
+    @param bands Height bands (absolute) by target; HEIGHT_BANDS by default."""
+    for target, centre in targets.items():
+        low, high = (bands or HEIGHT_BANDS)[target]
+        if (math.hypot(position[0] - centre[0], position[1] - centre[1]) * 100 < IN_RADIUS_CM[target]
+                and low < position[2] < high):
+            return target
+    return None
+
+
+def goal_entry(value, name=None):
+    """One object's goal, checked: {"in": "bowl" | "plate"}, {"near": item, "offset_cm": [left, front], "z": z},
+    or {"at": [x, y, z]} (a bare [x, y, z] is a spot). @param name The object (it cannot be beside itself).
+    @return The entry, or None when it is not valid."""
+    if isinstance(value, (list, tuple)):
+        value = {"at": value}
+    if not isinstance(value, dict):
+        return None
+    if value.get("in") in HEIGHT_BANDS:
+        return {"in": value["in"]}
+    if "near" in value:
+        try:
+            offset = [round(float(v), 2) for v in value.get("offset_cm") or []]
+            z = round(float(value.get("z")), 4)
+        except (TypeError, ValueError):
+            return None
+        ok = (value["near"] in (*OBJECT_BODIES, *HEIGHT_BANDS) and value["near"] != name and len(offset) == 2
+              and all(math.isfinite(v) for v in (*offset, z)))
+        return {"near": value["near"], "offset_cm": offset, "z": z} if ok else None
+    try:
+        spot = [round(float(v), 4) for v in value.get("at") or []]
+    except (TypeError, ValueError):
+        return None
+    return {"at": spot} if len(spot) == 3 and all(math.isfinite(v) for v in spot) else None
+
+
+def goal_is_relational(spec):
+    """A goal with no fixed table spot: it means the same for every seed (and batches can use it)."""
+    return spec.get("type") == "goal" and all("at" not in e for e in spec["objects"].values())
+
+
+def goal_reference(entry):
+    """The item an object's goal is judged against (the bowl, plate or other object), or None for a fixed spot."""
+    return entry.get("in") or entry.get("near")
 TYPES = tuple(RULES)
 DEFAULT_RULES = {kind: {name: (spec[0] if isinstance(spec, tuple) else spec) for name, spec in rules.items()}
                  for kind, rules in RULES.items()}
@@ -71,6 +132,11 @@ def classify(task):
              for m in re.finditer(r"water bottle|bottle|apple|orange|banana|bowl|plate", text)]
     objects = list(dict.fromkeys(name for _, name in named if name in OBJECT_BODIES))
     targets = [(at, name) for at, name in named if name in HEIGHT_BANDS]
+    # "left of the bowl", "next to the plate", "behind the bowl": beside it, not in it. The words alone do not say
+    # where exactly, so they are not judged (a goal scene from the page says it).
+    if targets and re.search(r"\b(?:(?:left|right)\s+(?:of|side\s+of)|next\s+to|beside|near|behind|in\s+front\s+of|"
+                             r"around|by)\s+(?:the\s+|a\s+)?(?:bowl|plate)\b", text):
+        return None
     if objects and targets:  # each object goes to the next bowl or plate named after it
         pairs = []
         for name in objects[:MAX_PAIRS]:
@@ -94,6 +160,14 @@ def normalize_spec(spec):
     if not isinstance(spec, dict):
         return None
     kind = spec.get("type") or "pick_place"
+    if kind == "goal":
+        given = spec.get("objects")
+        if not isinstance(given, dict) or not 0 < len(given) <= len(OBJECT_BODIES):
+            return None
+        goal = {name: goal_entry(value, name) for name, value in given.items()}
+        if all(name in OBJECT_BODIES and entry for name, entry in goal.items()):
+            return {"type": "goal", "objects": goal}
+        return None
     if kind == "pick_place":
         given = spec.get("pairs") if isinstance(spec.get("pairs"), list) else ([spec] if spec.get("object") else [])
         pairs = [(p.get("object"), p.get("target")) for p in given if isinstance(p, dict)]
@@ -173,6 +247,8 @@ def evaluate(meta, trajectory, rules):
     kind = spec["type"]
     if kind == "pick_place":
         jobs = [(p["object"], p["target"]) for p in spec["pairs"]]
+    elif kind == "goal":  # judged against where its bowl / plate / other item is, step by step
+        jobs = [(name, goal_reference(entry)) for name, entry in spec["objects"].items()]
     elif spec["object"] == "any":
         jobs = [(o, None) for o in OBJECT_BODIES if o in positions]
     else:
@@ -204,6 +280,24 @@ def evaluate(meta, trajectory, rules):
         results = [judge_pair(t, p, q, touch, obj, target, type_rules, frame)
                    for (obj, target), (p, q, touch) in zip(jobs, series)]
         chart = {"y": "distance to target (cm)", "limit": type_rules["distance_cm"]}
+    elif kind == "goal":
+        results = []
+        for (obj, target), (p, q, touch) in zip(jobs, series):
+            entry = spec["objects"][obj]
+            if "in" in entry:  # in the bowl / on the plate (anywhere in it), wherever it is at the end
+                inside = {"distance_cm": IN_RADIUS_CM[target], "release": type_rules["release"],
+                          "still_seconds": type_rules["still_seconds"]}
+                results.append(judge_pair(t, p, q, touch, obj, target, inside, frame))
+            elif "near" in entry:  # the spot beside its item moves with that item
+                left, front = (v / 100 for v in entry["offset_cm"])
+                dx = left * frame["left"][0] + front * frame["front"][0]
+                dy = left * frame["left"][1] + front * frame["front"][1]
+                spots = [[q[i][0] + dx, q[i][1] + dy, entry["z"]] for i in range(len(t))]
+                result = judge_goal(t, p, touch, obj, spots, type_rules, frame)
+                results.append({**result, "target": f"beside {target}"})
+            else:
+                results.append(judge_goal(t, p, touch, obj, entry["at"], type_rules, frame))
+        chart = {"y": "distance to its bowl / plate / spot (cm)", "limit": type_rules["tolerance_cm"]}
     else:
         judge_one = {"move_to_area": judge_area, "lift": judge_lift, "push": judge_push}[kind]
         results = [judge_one(t, p, touch, obj, spec, type_rules, frame) for (obj, _), (p, _, touch) in zip(jobs, series)]
@@ -215,7 +309,7 @@ def evaluate(meta, trajectory, rules):
     plot = [{"object": r["object"], "target": r["target"], "dist": r["dist"], "touch": r["touch"]} for r in results]
     common = {"type": kind, "spec": spec, "chart": chart, "t": t, "pairs": per_pair, "series": plot}
 
-    if kind != "pick_place" and len(results) > 1:
+    if kind not in ("pick_place", "goal") and len(results) > 1:
         # Any object will do: the run succeeds when one does; otherwise the reason is the one that came closest.
         best = next((r for r in results if r["success"]), None) or max(results, key=lambda r: r["progress"])
         checks = [{**c, "text": f"{best['object']} · {c['text']}"} for c in best["checks"]]
@@ -230,7 +324,7 @@ def evaluate(meta, trajectory, rules):
                 "success": {"start": r["start"], "end": r.get("end", t[-1])} if r["success"] else None,
                 "success_time_s": r.get("end", t[-1]) if r["success"] else None, "dist": r["dist"], "touch": r["touch"],
                 "metrics": {**r["metrics"], **model}}
-    # Several pick_place pairs: success only when every pair holds its rules at the end.
+    # Several pick_place pairs (or goal objects): success only when every one holds its rules at the end.
     placed = sum(r["success"] for r in results)
     success = placed == len(results)
     first_failed = next((r for r in results if not r["success"]), None)
@@ -404,6 +498,61 @@ def judge_push(t, p, touch, obj, spec, rules, frame=DEFAULT_FRAME):
     return {"success": success, "reason": reason, "checks": checks, "start": t[start], "end": t[-1], "dist": moved,
             "touch": touch, "object": obj, "target": "push", "progress": moved[-1],
             "metrics": {"moved_cm": round(moved[-1], 2), "max_lift_cm": round(lift, 2)}}
+
+
+def judge_goal(t, p, touch, obj, goal, rules, frame=DEFAULT_FRAME):
+    """Judge one object against its goal position (the goal scene set on the page).
+    @param goal [x, y, z], or one [x, y, z] per step (a spot beside an item that may move).
+    @return The same fields as judge_pair; "target" is "goal".
+    """
+    n = len(t)
+    spots = goal if isinstance(goal[0], (list, tuple)) else [goal] * n
+    dist = [math.hypot(p[i][0] - spots[i][0], p[i][1] - spots[i][1]) * 100 for i in range(n)]
+    at_goal = [dist[i] < rules["tolerance_cm"] and abs(p[i][2] - spots[i][2]) < GOAL_HEIGHT_M for i in range(n)]
+    goal = spots[-1]
+    released = [not bool(touch[i]) for i in range(n)]
+    placed = [at_goal[i] and (released[i] or not rules["release"]) for i in range(n)]
+    speed = [math.dist(p[i], p[i - 1]) / (t[i] - t[i - 1]) for i in range(1, n)]
+    required = rules["still_seconds"]
+    start = n - 1
+    while start > 0 and placed[start - 1]:
+        start -= 1
+    final_speed = [speed[i - 1] for i in range(1, n) if t[i] > t[-1] - required]
+    stable = required == 0 or (bool(final_speed) and max(final_speed) < REST_SPEED_M_S)
+    long_enough = placed[-1] and t[-1] - t[start] >= required - 1e-9
+    success = bool(long_enough and stable)
+    moved = max(math.dist(pos, p[0]) for pos in p)
+    height = abs(p[-1][2] - goal[2]) * 100
+    if success:
+        reason = "at_goal_and_stable"
+    elif min(pos[2] for pos in p) < frame["off_table_z"]:
+        reason = "object_fell_off_table"
+    elif at_goal[-1] and rules["release"] and not released[-1]:
+        reason = "still_holding"
+    elif at_goal[-1]:
+        reason = "not_stable"
+    elif dist[-1] < rules["tolerance_cm"]:
+        reason = "wrong_height"  # over the spot, but not at its height (beside the bowl, or still held up)
+    elif moved <= MOVED_M:
+        reason = "object_not_moved"
+    elif any(at_goal):
+        reason = "left_goal"
+    else:
+        reason = "away_from_goal"
+    checks = [
+        {"ok": at_goal[-1], "text": f"Goal: {obj} {dist[-1]:.1f} cm from its goal (limit {rules['tolerance_cm']:.1f} cm),"
+         f" height off by {height:.1f} cm (limit {GOAL_HEIGHT_M * 100:.0f} cm)"},
+        {"ok": released[-1] or not rules["release"],
+         "text": "Release: " + ("not required" if not rules["release"] else
+                               "released" if released[-1] else "still touching gripper")},
+        {"ok": bool(long_enough and stable), "text": f"Stable: final {required:g} s; max speed"
+         f" {max(final_speed) if final_speed else 0:.3f} m/s (limit {REST_SPEED_M_S:.3f})"},
+    ]
+    return {"success": success, "reason": reason, "checks": checks, "start": t[start], "dist": dist, "touch": touch,
+            "object": obj, "target": "goal", "progress": -dist[-1],
+            "metrics": {"object_moved_m": round(moved, 4), "distance_to_goal_cm": round(dist[-1], 2),
+                        "height_off_cm": round(height, 2),
+                        "max_final_speed_m_s": round(max(final_speed), 4) if final_speed else None}}
 
 
 def judge_pair(t, p, target_positions, touch, obj, target, rules, frame=DEFAULT_FRAME):
