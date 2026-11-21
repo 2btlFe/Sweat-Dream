@@ -64,6 +64,24 @@ class JudgeTests(unittest.TestCase):
         unparsed = {**META, "task": "grab the red fruit and drop it somewhere round"}
         self.assertEqual(judge.evaluate(unparsed, episode(), judge.DEFAULT_RULES)["reason"], "unsupported_task")
 
+    def test_two_objects_all_must_be_placed(self):
+        trace = episode()
+        trace["positions"]["banana"] = [[0.4, 0, 0.78] for _ in trace["t"]]  # far from the plate
+        trace["positions"]["plate"] = [[0, 0.3, 0.77] for _ in trace["t"]]
+        trace["touching"]["banana"] = [0 for _ in trace["t"]]
+        meta = {**META, "task": "put apple in the bowl and banana on the plate",
+                "judge": {"pairs": [{"object": "apple", "target": "bowl"}, {"object": "banana", "target": "plate"}]}}
+        verdict = judge.evaluate(meta, trace, judge.DEFAULT_RULES)
+        self.assertEqual(verdict["label"], "failure")
+        self.assertEqual(verdict["reason"], "1/2 placed; banana: object_not_moved")
+        self.assertEqual([p["label"] for p in verdict["pairs"]], ["success", "failure"])
+        trace["positions"]["banana"] = [[0.02, 0.3, 0.78] for _ in trace["t"]]  # now on the plate
+        self.assertEqual(judge.evaluate(meta, trace, judge.DEFAULT_RULES)["label"], "success")
+
+    def test_same_object_twice_is_rejected(self):
+        meta = {**META, "judge": {"pairs": [{"object": "apple", "target": "bowl"}, {"object": "apple", "target": "plate"}]}}
+        self.assertEqual(judge.evaluate(meta, episode(), judge.DEFAULT_RULES)["reason"], "unsupported_task")
+
     def test_execution_error_is_invalid(self):
         verdict = judge.evaluate({**META, "error": "UNAUTHORIZED"}, episode(), judge.DEFAULT_RULES)
         self.assertEqual(verdict["label"], "invalid")

@@ -83,6 +83,12 @@
   .item .remove:hover { background: var(--bad-bg); color: var(--bad); }
   .custom-task { margin-top: 10px; align-items: center; }
   .custom-task select { width: auto; }
+  .pairs-edit { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; font-size: 13px; }
+  .pair { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+  .pair select { padding: 4px 6px; font-size: 13px; }
+  .pair .remove { cursor: pointer; padding: 0 5px; border-radius: 4px; color: var(--muted); font-weight: 700; }
+  .pair .remove:hover { background: var(--bad-bg); color: var(--bad); }
+  button.small { padding: 4px 10px; font-size: 13px; }
   .batch-box { flex: 1 0 auto; display: flex; flex-direction: column; justify-content: flex-start; gap: 12px; padding: 20px; border: 1px dashed var(--line); border-radius: 8px; overflow-wrap: anywhere; }
   .batch-box .title { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 17px; }
   .bar { height: 12px; background: var(--line); border-radius: 999px; overflow: hidden; }
@@ -214,12 +220,13 @@
       <label style="margin-top: 12px">Tasks <span class="muted">(taken in turn)</span></label>
       <div class="items" id="batchTasks"></div>
       <div class="row custom-task">
-        <div class="grow"><input id="customPrompt" maxlength="300" placeholder="Your own prompt, e.g. pick up the red apple and drop it in the bowl" aria-label="Your own prompt"></div>
-        <span class="muted" style="font-size: 13px">judge as</span>
-        <select id="customObject" aria-label="Object to judge"></select>
-        <span class="muted">→</span>
-        <select id="customTarget" aria-label="Target to judge"></select>
+        <div class="grow"><input id="customPrompt" maxlength="300" placeholder="Your own prompt, e.g. put the apple in the bowl and the banana on the plate" aria-label="Your own prompt"></div>
         <button class="ghost" id="addTask">Add</button>
+      </div>
+      <div class="pairs-edit">
+        <span class="muted">judge as</span>
+        <span id="pairRows" class="pairs-edit" style="margin: 0"></span>
+        <button class="ghost small" id="addPair" title="Judge one more object">+ object</button>
       </div>
       <div class="row" style="margin-top: 14px; align-items: center; justify-content: space-between;">
         <span class="muted" id="batchEstimate" style="font-size: 13px"></span>
@@ -316,7 +323,7 @@
       </div>
       <div style="grid-column: 1 / -1">
         <svg class="chart" id="chart" viewBox="0 0 640 190" role="img" aria-label="Distance from the object to the target over time"></svg>
-        <div class="chart-legend">
+        <div class="chart-legend" id="chartLegend">
           <span><span class="sw" style="background:var(--accent)"></span>distance</span>
           <span><span class="sw" style="background:var(--muted)"></span>limit</span>
           <span><span class="sw" style="background:var(--touch)"></span>gripping</span>
@@ -433,7 +440,7 @@ async function renderDetail() {
   const v = verdict(run);
   $("detailImage").src = `/api/runs/${run.id}/last.jpg`;
   const extra = [run.batch_id ? batchName(run.batch_id) : "Single run", run.seed != null ? `seed ${run.seed}` : "",
-                 run.judge ? `judged: ${run.judge.object.replace("water_", "")} → ${run.judge.target}` : "",
+                 run.judge ? `judged: ${pairText(run.judge.pairs || [run.judge])}` : "",
                  run.layout === "random" ? "random layout" : ""].filter(Boolean).join(" · ");
   $("detailHead").innerHTML = `${chip(v.label)} <strong>${esc(run.task)}</strong><div class="muted" style="font-size:13px">${when(run.started_at)} · ${fmt(run.sim_seconds || 0)} s · ${esc(extra)}</div>`;
   $("detailChecks").innerHTML = (v.checks?.length ? v.checks : [{ ok: false, text: v.reason }])
@@ -447,9 +454,15 @@ async function renderDetail() {
 function drawChart(v) {
   const svg = $("chart");
   if (!v.t?.length || !v.dist?.length) { svg.innerHTML = ""; return; }
-  const W = 640, H = 190, L = 44, R = 8, TOP = 10, B = 40;
+  // One line (and one grip strip) per judged object; a single object keeps the accent colour.
+  const series = v.series?.length ? v.series : [{ object: null, dist: v.dist, touch: v.touch }];
+  const many = series.length > 1;
+  const colour = s => many && ITEMS[s.object] ? ITEMS[s.object].color : "var(--accent)";
+  const W = 640, L = 44, R = 8, TOP = 10, B = 40 + 11 * series.length, H = 150 + B;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   const tMax = Math.max(v.t[v.t.length - 1], 1);
-  const yMax = Math.min(80, Math.max(rules.distance_cm * 2, 10, Math.ceil(Math.max(...v.dist) / 10) * 10));
+  const top = Math.max(...series.map(s => Math.max(...s.dist)));
+  const yMax = Math.min(80, Math.max(rules.distance_cm * 2, 10, Math.ceil(top / 10) * 10));
   const x = s => L + (s / tMax) * (W - L - R);
   const y = d => TOP + (1 - Math.min(d, yMax) / yMax) * (H - TOP - B);
   let out = "";
@@ -457,21 +470,28 @@ function drawChart(v) {
   for (const d of [0, yMax / 2, yMax]) out += `<line x1="${L}" x2="${W - R}" y1="${y(d)}" y2="${y(d)}" stroke="var(--line)"/><text x="${L - 4}" y="${y(d) + 4}" text-anchor="end">${fmt(d, 0)} cm</text>`;
   out += `<line x1="${L}" x2="${W - R}" y1="${y(rules.distance_cm)}" y2="${y(rules.distance_cm)}" stroke="var(--muted)" stroke-dasharray="5 4"/>`;
   const step = Math.max(1, Math.floor(v.t.length / 600));
-  let path = "";
-  for (let i = 0; i < v.t.length; i += step) path += `${path ? "L" : "M"}${x(v.t[i]).toFixed(1)},${y(v.dist[i]).toFixed(1)}`;
-  out += `<path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2"/>`;
-  // Touching strip under the chart.
-  const stripY = H - B + 8;
-  let i = 0;
-  while (i < v.t.length) {
-    if (!v.touch[i]) { i++; continue; }
-    let j = i; while (j + 1 < v.t.length && v.touch[j + 1]) j++;
-    out += `<rect x="${x(v.t[i])}" y="${stripY}" width="${Math.max(1.5, x(v.t[j]) - x(v.t[i]))}" height="7" rx="2" fill="var(--touch)"/>`;
-    i = j + 1;
-  }
-  out += `<text x="${L - 4}" y="${stripY + 7}" text-anchor="end">grip</text>`;
+  series.forEach((s, k) => {
+    let path = "";
+    for (let i = 0; i < v.t.length; i += step) path += `${path ? "L" : "M"}${x(v.t[i]).toFixed(1)},${y(s.dist[i]).toFixed(1)}`;
+    out += `<path d="${path}" fill="none" stroke="${colour(s)}" stroke-width="2"/>`;
+    // When a fingertip touches this object, under the chart.
+    const stripY = H - B + 14 + 11 * k;
+    let i = 0;
+    while (i < v.t.length) {
+      if (!s.touch[i]) { i++; continue; }
+      let j = i; while (j + 1 < v.t.length && s.touch[j + 1]) j++;
+      out += `<rect x="${x(v.t[i])}" y="${stripY}" width="${Math.max(1.5, x(v.t[j]) - x(v.t[i]))}" height="6" rx="2" fill="${many ? colour(s) : "var(--touch)"}"/>`;
+      i = j + 1;
+    }
+    out += `<text x="${L - 4}" y="${stripY + 6}" text-anchor="end">${many ? esc(ITEMS[s.object]?.label || s.object) : "grip"}</text>`;
+  });
   for (let s = 0; s <= tMax; s += tMax > 40 ? 10 : 5) out += `<text x="${x(s)}" y="${H - 6}" text-anchor="middle">${s}s</text>`;
   svg.innerHTML = out;
+  const sw = (c, text, extra = "") => `<span><span class="sw" style="background:${c};${extra}"></span>${text}</span>`;
+  $("chartLegend").innerHTML = (many
+    ? series.map(s => sw(colour(s), `${esc(ITEMS[s.object]?.label || s.object)} → ${esc(s.target)}`)).join("") + `<span>strips: gripping</span>`
+    : sw("var(--accent)", "distance") + sw("var(--touch)", "gripping"))
+    + sw("var(--muted)", "limit") + sw("var(--ok)", "success", "opacity:.35");
 }
 
 $("saveLabels").onclick = async () => {
@@ -612,7 +632,15 @@ function drawExamples() {
   const words = { apple: "apple", orange: "orange", banana: "banana", water_bottle: "water bottle" };
   const list = [];
   for (const t of targets) for (const o of objects) list.push(t === "bowl" ? `put ${words[o]} into the bowl` : `put ${words[o]} on the plate`);
-  drawBatchTasks(list);
+  // Batch examples: the one-object prompts, and up to two that move two objects.
+  const into = t => t === "bowl" ? "into the bowl" : "on the plate";
+  const batchList = list.map(prompt => { const t = parseTask(prompt); return { prompt, pairs: [{ object: t.object, target: t.target }] }; });
+  for (let k = 0; k + 1 < objects.length && k < 4; k += 2) {
+    const [a, b] = [objects[k], objects[k + 1]], [ta, tb] = [targets[0], targets[targets.length - 1]];
+    batchList.unshift({ prompt: ta === tb ? `put ${words[a]} and ${words[b]} ${into(ta)}` : `put ${words[a]} ${into(ta)} and ${words[b]} ${into(tb)}`,
+                        pairs: [{ object: a, target: ta }, { object: b, target: tb }] });
+  }
+  drawBatchTasks(batchList);
   $("examples").innerHTML = "";
   for (const text of list.slice(0, 8)) {
     const b = document.createElement("button");
@@ -674,21 +702,19 @@ function setLayout(next) {
 $("layoutShift").onclick = () => setLayout("shift");
 $("layoutRandom").onclick = () => setLayout("random");
 
+const pairText = pairs => pairs.map(p => `${ITEMS[p.object]?.label || p.object} · ${ITEMS[p.target]?.label || p.target}`).join(", ");
+const onTable = pairs => pairs.every(p => sceneOn[p.object] && sceneOn[p.target]);
+
 function taskOptions() {
-  const examples = exampleList.map(prompt => ({ prompt, ...parseTask(prompt), custom: false, usable: true }));
-  const own = customTasks.map(t => ({ ...t, custom: true, usable: !!(sceneOn[t.object] && sceneOn[t.target]) }));
+  const examples = exampleList.map(e => ({ ...e, custom: false, usable: true }));
+  const own = customTasks.map(t => ({ ...t, custom: true, usable: onTable(t.pairs) }));
   return [...own, ...examples];
 }
 
 function drawBatchTasks(list) {
   exampleList = list;
-  // The judge pickers offer what is on the table.
-  for (const [id, wantTarget] of [["customObject", false], ["customTarget", true]]) {
-    const keep = $(id).value;
-    const names = Object.keys(ITEMS).filter(n => sceneOn[n] && !!ITEMS[n].target === wantTarget);
-    $(id).innerHTML = names.map(n => `<option value="${n}">${ITEMS[n].label}</option>`).join("");
-    if (names.includes(keep)) $(id).value = keep;
-  }
+  draftPairs = draftPairs.filter(p => sceneOn[p.object] && sceneOn[p.target]);
+  drawPairRows();
   renderBatchTasks();
 }
 
@@ -698,7 +724,7 @@ function renderBatchTasks() {
   if (!batchTasks.size && options.some(o => o.usable)) batchTasks.add(options.find(o => o.usable).prompt);
   $("batchTasks").innerHTML = options.map(o => {
     const on = batchTasks.has(o.prompt);
-    const judge = o.custom ? ` <span class="judge">→ ${ITEMS[o.object].label} · ${ITEMS[o.target].label}${o.usable ? "" : " (not on the table)"}</span>` : "";
+    const judge = o.custom || o.pairs.length > 1 ? ` <span class="judge">→ ${esc(pairText(o.pairs))}${o.usable ? "" : " (not on the table)"}</span>` : "";
     const remove = o.custom ? `<span class="remove" data-remove="${esc(o.prompt)}" title="Remove" role="button" aria-label="Remove">×</span>` : "";
     return `<button class="item ${on ? "on" : ""} ${o.usable ? "" : "off"}" data-task="${esc(o.prompt)}" data-usable="${o.usable}" aria-pressed="${on}">${esc(o.prompt)}${judge}${remove}</button>`;
   }).join("");
@@ -715,19 +741,49 @@ function renderBatchTasks() {
   estimate();
 }
 
-// Pre-fill the judge pickers from the words in the prompt.
+/* The "judge as" pairs for the prompt being typed: object -> target, each object at most once. */
+let draftPairs = [];
+const tableObjects = () => Object.keys(ITEMS).filter(n => sceneOn[n] && !ITEMS[n].target);
+const tableTargets = () => Object.keys(ITEMS).filter(n => sceneOn[n] && ITEMS[n].target);
+
+function drawPairRows() {
+  const objects = tableObjects(), targets = tableTargets();
+  if (!draftPairs.length && objects.length && targets.length) draftPairs = [{ object: objects[0], target: targets[0] }];
+  const option = (n, chosen) => `<option value="${n}" ${n === chosen ? "selected" : ""}>${ITEMS[n].label}</option>`;
+  $("pairRows").innerHTML = draftPairs.map((p, i) => `<span class="pair">
+      <select data-pair="${i}" data-field="object" aria-label="Object ${i + 1}">${objects.map(n => option(n, p.object)).join("")}</select>
+      → <select data-pair="${i}" data-field="target" aria-label="Target ${i + 1}">${targets.map(n => option(n, p.target)).join("")}</select>
+      ${draftPairs.length > 1 ? `<span class="remove" data-pair-remove="${i}" title="Remove" role="button" aria-label="Remove">×</span>` : ""}</span>`).join("");
+  document.querySelectorAll("[data-pair]").forEach(sel => sel.onchange = () => { draftPairs[sel.dataset.pair][sel.dataset.field] = sel.value; });
+  document.querySelectorAll("[data-pair-remove]").forEach(x => x.onclick = () => { draftPairs.splice(Number(x.dataset.pairRemove), 1); drawPairRows(); });
+  $("addPair").disabled = draftPairs.length >= Math.min(4, objects.length);
+}
+$("addPair").onclick = () => {
+  const free = tableObjects().find(n => !draftPairs.some(p => p.object === n));
+  if (free) { draftPairs.push({ object: free, target: draftPairs[draftPairs.length - 1]?.target || tableTargets()[0] }); drawPairRows(); }
+};
+
+// Fill the pairs from the prompt's words: each object named goes to the next bowl or plate named after it.
 $("customPrompt").addEventListener("input", () => {
   const text = $("customPrompt").value.toLowerCase();
-  const object = /(water bottle|bottle|apple|orange|banana)/.exec(text), target = /(bowl|plate)/.exec(text);
-  if (object) { const n = object[1].includes("bottle") ? "water_bottle" : object[1]; if (sceneOn[n]) $("customObject").value = n; }
-  if (target && sceneOn[target[1]]) $("customTarget").value = target[1];
+  const words = [...text.matchAll(/water bottle|bottle|apple|orange|banana|bowl|plate/g)]
+    .map(m => ({ name: m[0].includes("bottle") ? "water_bottle" : m[0], at: m.index }));
+  const targets = words.filter(w => ITEMS[w.name].target && sceneOn[w.name]);
+  const pairs = [];
+  for (const w of words.filter(w => !ITEMS[w.name].target && sceneOn[w.name])) {
+    if (pairs.some(p => p.object === w.name) || pairs.length >= 4) continue;
+    const target = targets.find(t => t.at > w.at) || targets[targets.length - 1];
+    pairs.push({ object: w.name, target: target ? target.name : (draftPairs[0]?.target || tableTargets()[0]) });
+  }
+  if (pairs.length) { draftPairs = pairs; drawPairRows(); }
 });
 function addCustomTask() {
   const prompt = $("customPrompt").value.replace(/\s+/g, " ").trim();
   if (!prompt) return;
-  const object = $("customObject").value, target = $("customTarget").value;
-  if (!object || !target) { alert("Put an object and a bowl or plate on the table first."); return; }
-  customTasks = [{ prompt, object, target }, ...customTasks.filter(c => c.prompt !== prompt)];
+  const pairs = draftPairs.filter(p => p.object && p.target);
+  if (!pairs.length) { alert("Put an object and a bowl or plate on the table first."); return; }
+  if (new Set(pairs.map(p => p.object)).size !== pairs.length) { alert("Each object can be judged only once."); return; }
+  customTasks = [{ prompt, pairs: pairs.map(p => ({ ...p })) }, ...customTasks.filter(c => c.prompt !== prompt)];
   batchTasks.add(prompt);
   $("customPrompt").value = "";
   renderBatchTasks();
@@ -751,7 +807,7 @@ $("startBatch").onclick = async () => {
   if (!confirm(`Run ${count} episodes in the background (about ${estimate()} min of Dream-1 use)?`)) return;
   try {
     const tasks = taskOptions().filter(o => o.usable && batchTasks.has(o.prompt))
-      .map(({ prompt, object, target }) => ({ prompt, object, target }));
+      .map(({ prompt, pairs }) => ({ prompt, pairs }));
     await api("/api/batch", { tasks, count, seconds: $("batchSeconds").value, seed: $("batchSeed").value,
                               layout, scene: sceneForRun() });
     followBatch = true;

@@ -24,15 +24,24 @@ def parse_task(task):
     return (OBJECTS[match.group(1).lower()], match.group(2).lower()) if match else None
 
 
-def judged_items(meta):
-    """Which object and target a run is judged on: the ones chosen for a custom prompt (meta["judge"]), otherwise
-    the ones the task names.
-    @return (object body, target body), or None when neither gives them.
+MAX_PAIRS = 4
+
+
+def judged_pairs(meta):
+    """Which objects go to which targets in a run: the pairs chosen for a typed prompt (meta["judge"]: {"pairs":
+    [{"object", "target"}, ...]}, or one {"object", "target"}), otherwise the one pair the task names.
+    @return [(object body, target body), ...], or None when neither gives a valid list.
     """
     chosen = meta.get("judge") or {}
-    if chosen.get("object") in OBJECTS.values() and chosen.get("target") in HEIGHT_BANDS:
-        return chosen["object"], chosen["target"]
-    return parse_task(meta.get("task"))
+    given = chosen.get("pairs") if isinstance(chosen.get("pairs"), list) else ([chosen] if chosen.get("object") else None)
+    if given is not None:
+        pairs = [(p.get("object"), p.get("target")) for p in given if isinstance(p, dict)]
+        objects = [o for o, _ in pairs]
+        valid = (0 < len(pairs) <= MAX_PAIRS and len(set(objects)) == len(objects)
+                 and all(o in OBJECTS.values() and t in HEIGHT_BANDS for o, t in pairs))
+        return pairs if valid else None
+    parsed = parse_task(meta.get("task"))
+    return [parsed] if parsed else None
 
 
 def normalize_rules(value):
@@ -63,32 +72,61 @@ def evaluate(meta, trajectory, rules):
         return invalid("execution_error", meta.get("error"))
     if meta.get("stopped_by_user"):
         return invalid("user_stopped")
-    parsed = judged_items(meta)
-    if parsed is None:
+    pairs = judged_pairs(meta)
+    if pairs is None:
         return invalid("unsupported_task")
     if meta.get("model_responses", 0) < 1 or meta.get("model_actions", 0) < 1:
         return invalid("no_model_actions")
-    obj, target = parsed
-    if obj not in trajectory.get("positions", {}) or target not in trajectory.get("positions", {}):
+    positions = trajectory.get("positions", {}) if isinstance(trajectory, dict) else {}
+    if any(o not in positions or g not in positions for o, g in pairs):
         return invalid("not_on_table")
     try:
         t = trajectory["t"]
-        positions = trajectory["positions"]
-        p = positions[obj]
-        target_positions = positions[target]
-        touch = trajectory["touching"][obj]
         n = len(t)
-        if n < 2 or any(len(v) != n for v in (p, target_positions, touch)):
+        series = [(positions[o], positions[g], trajectory["touching"][o]) for o, g in pairs]
+        if n < 2 or any(len(v) != n for s3 in series for v in s3):
             return invalid("incomplete_trajectory")
-        if any(len(v) != 3 for v in (*p, *target_positions)):
+        if any(len(v) != 3 for p, q, _ in series for v in (*p, *q)):
             return invalid("incomplete_trajectory")
-        if not all(math.isfinite(float(v)) for series in (t, *p, *target_positions) for v in series):
+        if not all(math.isfinite(float(v)) for p, q, _ in series for xs in (t, *p, *q) for v in xs):
             return invalid("nonfinite_trajectory")
         if any(t[i] <= t[i - 1] for i in range(1, n)):
             return invalid("nonmonotonic_time")
     except (KeyError, TypeError, ValueError, IndexError):
         return invalid("incomplete_trajectory")
 
+    results = [judge_pair(t, p, q, touch, obj, target, rules)
+               for (obj, target), (p, q, touch) in zip(pairs, series)]
+    model = {"model_responses": meta["model_responses"], "model_actions": meta["model_actions"]}
+    per_pair = [{"object": r["object"], "target": r["target"], "label": "success" if r["success"] else "failure",
+                 "reason": r["reason"]} for r in results]
+    plot = [{"object": r["object"], "target": r["target"], "dist": r["dist"], "touch": r["touch"]} for r in results]
+    if len(results) == 1:
+        r = results[0]
+        return {"label": "success" if r["success"] else "failure", "reason": r["reason"], "checks": r["checks"],
+                "success": {"start": r["start"], "end": t[-1]} if r["success"] else None,
+                "success_time_s": t[-1] if r["success"] else None, "dist": r["dist"], "touch": r["touch"], "t": t,
+                "pairs": per_pair, "series": plot, "metrics": {**r["metrics"], **model}}
+    # Several objects: success only when every pair holds its rules at the end.
+    placed = sum(r["success"] for r in results)
+    success = placed == len(results)
+    first_failed = next((r for r in results if not r["success"]), None)
+    reason = "placed_and_stable" if success else \
+        f"{placed}/{len(results)} placed; {first_failed['object']}: {first_failed['reason']}"
+    checks = [{**c, "text": f"{r['object']} → {r['target']} · {c['text']}"} for r in results for c in r["checks"]]
+    return {"label": "success" if success else "failure", "reason": reason, "checks": checks,
+            "success": {"start": max(r["start"] for r in results), "end": t[-1]} if success else None,
+            "success_time_s": t[-1] if success else None,
+            "dist": results[0]["dist"], "touch": results[0]["touch"], "t": t, "pairs": per_pair, "series": plot,
+            "metrics": {"placed": placed, "pairs": len(results), **model,
+                        "per_pair": [{"object": r["object"], **r["metrics"]} for r in results]}}
+
+
+def judge_pair(t, p, target_positions, touch, obj, target, rules):
+    """Judge one object against one target with the rules.
+    @return {success, reason, checks, start (when the final placement began), dist, touch, metrics, object, target}.
+    """
+    n = len(t)
     z_min, z_max = HEIGHT_BANDS[target]
     dist = [math.hypot(p[i][0] - target_positions[i][0], p[i][1] - target_positions[i][1]) * 100
             for i in range(n)]
@@ -130,9 +168,7 @@ def evaluate(meta, trajectory, rules):
         {"ok": bool(long_enough and stable), "text": f"Stable: final {required:g} s; max speed"
          f" {max(final_speed) if final_speed else 0:.3f} m/s (limit {REST_SPEED_M_S:.3f})"},
     ]
-    return {"label": "success" if success else "failure", "reason": reason, "checks": checks,
-            "success": {"start": t[start], "end": t[-1]} if success else None,
-            "success_time_s": t[-1] if success else None, "dist": dist, "touch": touch, "t": t,
+    return {"success": success, "reason": reason, "checks": checks, "start": t[start], "dist": dist, "touch": touch,
+            "object": obj, "target": target,
             "metrics": {"object_moved_m": round(moved, 4), "distance_to_target_cm": round(dist[-1], 2),
-                        "max_final_speed_m_s": round(max(final_speed), 4) if final_speed else None,
-                        "model_responses": meta["model_responses"], "model_actions": meta["model_actions"]}}
+                        "max_final_speed_m_s": round(max(final_speed), 4) if final_speed else None}}

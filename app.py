@@ -258,7 +258,7 @@ class Batch:
                 started = time.time()
                 RUNNER.start(prompt, info["seconds"], episode_scene, seed=seed, live=False,
                              extra_env={"BATCH_ID": info["id"], "LAYOUT": info["layout"],
-                                        "JUDGE_OBJECT": task["object"], "JUDGE_TARGET": task["target"]})
+                                        "JUDGE_PAIRS": json.dumps(task["pairs"])})
                 run_id, process = RUNNER.run_id, RUNNER.process
                 while process.poll() is None:  # a run that hangs is stopped, then killed
                     waited = time.time() - started
@@ -319,13 +319,14 @@ def run_verdict(d, rules):
 
 def brief(verdict):
     """A verdict without its per-step series (the run list does not draw charts)."""
-    return {k: v for k, v in verdict.items() if k not in ("dist", "touch", "t")}
+    return {k: v for k, v in verdict.items() if k not in ("dist", "touch", "t", "series")}
 
 
 def parse_task_list(tasks, scene):
     """Check a batch's tasks. Each is a prompt the judge understands ("put apple into the bowl"), or any prompt with
-    the object and target it is judged on: {"prompt": ..., "object": "apple", "target": "bowl"}.
-    @return [{"prompt", "object", "target"}], every object and target on the table.
+    the object -> target pairs it is judged on: {"prompt": ..., "pairs": [{"object": "apple", "target": "bowl"}, ...]}
+    (or one {"object", "target"}). Every object at most once, up to judge.MAX_PAIRS pairs, all on the table.
+    @return [{"prompt", "pairs": [{"object", "target"}]}].
     @throws ValueError
     """
     if not isinstance(tasks, list) or not tasks:
@@ -336,18 +337,22 @@ def parse_task_list(tasks, scene):
         prompt = re.sub(r"\s+", " ", str(given.get("prompt") or "")).strip()
         if not prompt or len(prompt) > 300:
             raise ValueError("A prompt must be 1 to 300 characters.")
-        if given.get("object") or given.get("target"):
-            if given.get("object") not in OBJECTS or given.get("target") not in TARGETS:
-                raise ValueError(f"Pick the object and target to judge '{prompt}' on.")
-            parsed = (given["object"], given["target"])
+        if isinstance(given.get("pairs"), list):
+            pairs = [(p.get("object"), p.get("target")) for p in given["pairs"] if isinstance(p, dict)]
+        elif given.get("object") or given.get("target"):
+            pairs = [(given.get("object"), given.get("target"))]
         else:
             parsed = judge.parse_task(prompt)
-            if parsed is None:
-                raise ValueError(f"Pick the object and target to judge '{prompt}' on.")
-        missing = [name for name in parsed if name not in scene["items"]]
+            pairs = [parsed] if parsed else []
+        objects = [o for o, _ in pairs]
+        if not pairs or any(o not in OBJECTS or g not in TARGETS for o, g in pairs):
+            raise ValueError(f"Pick the objects and targets to judge '{prompt}' on.")
+        if len(pairs) > judge.MAX_PAIRS or len(set(objects)) != len(objects):
+            raise ValueError(f"'{prompt}': each object once, at most {judge.MAX_PAIRS}.")
+        missing = sorted({name for pair in pairs for name in pair if name not in scene["items"]})
         if missing:
             raise ValueError(f"Not on the table for '{prompt}': {', '.join(missing)}")
-        clean.append({"prompt": prompt, "object": parsed[0], "target": parsed[1]})
+        clean.append({"prompt": prompt, "pairs": [{"object": o, "target": g} for o, g in pairs]})
     return clean
 
 

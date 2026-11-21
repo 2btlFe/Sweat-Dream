@@ -35,9 +35,15 @@ invalid counts and the time left instead.
 - **Scene ± 2 cm**: the scene set on the right, every object shifted a little (seeded).
 - **Random layout**: the items on the right placed anywhere on the reachable table, at least 2 cm apart (seeded).
 
-Tasks: pick the example prompts, or type your own prompt and **Add** it. Dream-1 gets your prompt as written; the
-judge cannot read free text, so each own prompt is judged on the object and target picked next to it (filled in from
-the prompt when it names them, e.g. "grab the red apple and drop it on the blue plate" → apple · plate).
+Tasks: pick the example prompts, or type your own prompt and **Add** it. Dream-1 gets your prompt as written. The
+judge only parses fixed sentences, so each own prompt is judged on the **judge as** pairs below it: object → target,
+filled in from the prompt's words (each object goes to the next bowl or plate named after it) and editable.
+
+**Several objects**: add pairs with **+ object** (up to 4, each object once; several objects may go to the same
+target), e.g. "put the apple in the bowl and the banana on the plate" → apple · bowl, banana · plate. A run succeeds
+only when every pair holds the rules at the end; otherwise the reason says how many were placed and which object
+failed first (e.g. `1/2 placed; banana: outside_target`). The run's chart has one line per object. Give these
+episodes more time (90–120 s for two objects).
 
 Episode *i* uses seed *seed + i* (the seed is random unless you set one), so a layout can be made again. Each episode
 is labeled with the rules as they were when the batch started (`runs/<id>/label.json`, `source: batch`). A batch
