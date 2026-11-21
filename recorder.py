@@ -66,7 +66,7 @@ class EpisodeRecorder:
         self._tip_ids = {m.body(f"{side}_{part}").id for side in ("left", "right")
                          for part in ("tip_left", "tip_right", "gripper")}
         self.targets = {name: env.data.body(name).xpos.copy() for name in judge.TARGETS}
-        # While this file exists, pca.py waits: its GPU work would slow the cameras and let the session expire.
+        # While this file exists, rerender.py waits: GPU work would slow the cameras and let the session expire.
         Path(out_dir).mkdir(parents=True, exist_ok=True)
         self.marker = Path(out_dir) / f".recording-{os.getpid()}"
         self.marker.touch()

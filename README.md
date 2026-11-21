@@ -7,11 +7,7 @@ Stage 1: an episode recorder and a simulator ground-truth judge for Dream-1 runs
 ```powershell
 $env:PYTHONUTF8 = "1"; python -m venv C:\dream\.venv
 C:\dream\.venv\Scripts\python.exe -m pip install dreamlabs
-C:\dream\.venv\Scripts\python.exe -m pip install torch timm "huggingface_hub<1.0" "click<8.2.0"   # only for pca.py
 ```
-
-Without CUDA, `pca.py` runs on the CPU (on an M3's CPU cores ~0.9 s per frame when all three cameras changed;
-expect slower on a laptop CPU). With CUDA but no Triton, NAF runs without `torch.compile` by itself.
 
 Put the API key in `~/.dreamlabs/credentials` as `DREAM_API_KEY=...`.
 
@@ -19,10 +15,9 @@ Put the API key in `~/.dreamlabs/credentials` as `DREAM_API_KEY=...`.
 
 ```bash
 uv venv --seed --python 3.12 ~/dream-env && source ~/dream-env/bin/activate
-pip install dreamlabs torch timm "huggingface_hub<1.0" "click<8.2.0"   # torch + timm for pca.py
+pip install dreamlabs
 ```
 
-`huggingface_hub<1.0` and `click<8.2.0` keep `pip check` clean: newer huggingface_hub wants a click that dreamlabs refuses.
 Run the same scripts with `~/dream-env/bin/python`.
 
 ## Usage
@@ -37,8 +32,6 @@ C:\dream\.venv\Scripts\python.exe batch.py --repeats 3 --budget-minutes 10      
 C:\dream\.venv\Scripts\python.exe batch.py --scripted --no-dream --repeats 2                    # scripted only, no cost
 C:\dream\.venv\Scripts\python.exe batch.py --resume <batch_id>                                  # finish an interrupted batch
 C:\dream\.venv\Scripts\python.exe summary.py [--batch <batch_id>]                               # rates, reasons, index.csv
-C:\dream\.venv\Scripts\python.exe pca.py --all                                                  # feature PCA videos (after episodes)
-C:\dream\.venv\Scripts\python.exe pca.py --all --watch                                          # ...and keep doing new ones
 C:\dream\.venv\Scripts\python.exe rerender.py --all --variants 4                                 # appearance augmentation
 C:\dream\.venv\Scripts\python.exe rerender.py <episode_id> --check                              # replay vs recorded video
 C:\dream\.venv\Scripts\python.exe autolabel.py                                                  # auto labels + review queue
@@ -90,7 +83,7 @@ after the disturbance instead of calling Dream-1: a no-recovery baseline at no c
 
 `auto_mode.py` runs it end to end: optional collection (`--dream-repeats`, `--scripted`), auto labels, disturbances on
 every high-confidence clean success (`--perturb ...`, `--perturb-repeats`, jitters, `--no-dream-recovery`), auto labels
-again, `--looks` re-rendered variants of every high-confidence episode, optional `--pca`, and a report in
+again, `--looks` re-rendered variants of every high-confidence episode, and a report in
 `batches/auto-<time>.json` with label counts, the review queue and the recovery rate per disturbance. Low-confidence
 episodes are neither disturbed nor multiplied; they wait for review. The labeling UI shows the auto label, the
 disturbance (with a mark on the timeline), and filters for the review queue, recovery runs and recovered runs.
@@ -106,29 +99,8 @@ label of every variant: more labelled data without API calls. Output: `episodes/
 (same frames and fps) and `params.json` (seed and every drawn value); `aug/index.json` lists them. The labeling UI
 switches between the recorded look and each variant. `--strength` scales every range; `--check` compares the plain
 replay with the recorded video. Episodes recorded before `objects_quat` replay objects in their starting orientation.
-It waits while an episode is being recorded, like `pca.py`.
-
-## Feature PCA (DINOv2 + NAF)
-
-`pca.py` adds `episodes/<id>/pca/`: `top.mp4` / `left.mp4` / `right.mp4` with a 224x224 feature PCA map for every
-camera frame (same frame count and fps, so the labeling UI plays them in sync with the cameras: Camera / Feature PCA /
-Camera + PCA), `info.json`, `embeddings.npy` (per frame and camera, the DINOv2 mean patch feature) and `status.json`.
-
-1. Each frame is resized to 224x224 and passed through DINOv2 ViT-S/14: 16x16 patches of 384-d features. Dream-1's
-   own features are not available through its API, so these show how a general vision model groups the scene.
-2. One PCA basis per episode, fitted on 48 frames spread over it and all three cameras: a colour means the same at
-   every moment and in every view. The first three components are shown as RGB.
-3. NAF ([Zero-Shot Feature Upsampling via Neighborhood Attention Filtering](https://github.com/valeoai/NAF),
-   CVPR 2026, Apache-2.0, vendored in `third_party/naf`) upsamples the map to 224x224, guided by the image. PCA is
-   linear and NAF averages each attention head's values, so the 3 projected values per head are upsampled instead of
-   384 features (same result). Without NATTEN (CUDA) a plain PyTorch neighbourhood attention runs it on any GPU or
-   CPU; cached RoPE tables, split padding, float16 and `torch.compile` make it ~1.9x faster than released
-   (M3: ~270 ms for three cameras; ~200-390 ms per frame with DINOv2, depending on how many cameras changed).
-4. Each map is averaged with its neighbours in time, and a camera whose image did not change keeps its last map.
-
-It pauses while an episode is being recorded (`episodes/.recording-<pid>`, written by `recorder.py`): its GPU work
-slows the simulator's cameras, and a slower simulator lets the Dream-1 session expire (see Findings). `--no-naf`
-upsamples bilinearly; the NAF weights download on first use (torch hub cache), the DINOv2 weights from Hugging Face.
+It waits while an episode is being recorded (`episodes/.recording-<pid>`, written by `recorder.py`): its GPU work
+slows the simulator's cameras, and a slower simulator lets the Dream-1 session expire (see Findings).
 
 ## Files
 
@@ -144,13 +116,11 @@ upsamples bilinearly; the NAF weights download on first use (torch hub cache), t
 | `batch.py` | Many episodes unattended: tasks x seeds, scripted variants, cost budget, resume |
 | `summary.py` | `episodes/index.csv` and success rates / failure reasons per source and task |
 | `live_view.py` | Plain viewer run without recording |
-| `pca.py` | Feature PCA videos for recorded episodes (DINOv2 + NAF, 224x224), paused while an episode records |
 | `rerender.py` | Appearance augmentation: re-render recorded episodes under new lighting, colours and camera poses |
+| `episode_io.py` | Shared helpers: JSON files, reading videos, waiting while an episode is recording |
 | `autolabel.py` | Auto labels from the simulator judge, confidence, review queue, tags (`auto_label.json`) |
 | `perturb.py` | Failure-recovery runs: replay a clean episode, disturb it, let Dream-1 recover (`perturbation.json`) |
 | `auto_mode.py` | Collect, auto-label, disturb, re-render and report in one command |
-| `feature_pca.py` | DINOv2 patch features and the per-episode PCA basis |
-| `naf_upsampler.py` | NAF upsampling of the PCA projection, with the speed-ups; `third_party/naf` is the vendored NAF |
 
 ## Judge outcomes
 
@@ -167,4 +137,4 @@ Failure reasons: `object_fell_off_table`, `still_holding`, `still_holding_over_t
   gateway dropped the idle connection (SSL EOF) and the client did not reconnect: every run died on request 2.
 - Idle gaps of 5 s worked 12/12; 10 s expired the session every time (`DreamSessionExpired`), not the documented 20 s.
 - macOS (M3): running GPU post-processing alongside a headless batch slowed the sim ~10x and the session restarted on
-  nearly every request (no grasps in 7 episodes); hence `pca.py` waits while an episode is recording.
+  nearly every request (no grasps in 7 episodes); hence `rerender.py` waits while an episode is recording.

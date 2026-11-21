@@ -58,7 +58,6 @@ def episode_summary(d):
         "human_label": label.get("label") if label else None,
         "verifier_label": verifier.get("label") if verifier else None,
         "verifier_confidence": verifier.get("confidence") if verifier else None,
-        "pca_state": (read_json(d / "pca" / "status.json") or {}).get("state"),
         **_auto_fields(d),
     }
 
@@ -88,11 +87,6 @@ def episode_detail(d):
         "label": read_json(d / "label.json"), "verifier": read_json(d / "verifier.json"),
         "videos": sorted(f.name for f in d.iterdir() if f.name in VIDEO_FILES),
         "frame_t0": frame_t[0] if frame_t else 0.0, "frame_count": len(frame_t), "fps": meta.get("fps", 5),
-        "pca": {  # feature PCA videos made by pca.py, same frames as the camera videos
-            "status": read_json(d / "pca" / "status.json"),
-            "info": read_json(d / "pca" / "info.json"),
-            "videos": sorted(f.name for f in (d / "pca").iterdir() if f.name in VIDEO_FILES) if (d / "pca").is_dir() else [],
-        },
         "aug": read_json(d / "aug" / "index.json"),  # appearance variants made by rerender.py (same motion and label)
         "auto": read_json(d / "auto_label.json"),  # autolabel.py
         "perturbation": read_json(d / "perturbation.json"),  # perturb.py
@@ -192,7 +186,7 @@ class Handler(BaseHTTPRequestHandler):
         if m:
             d = episode_dir(m.group(1))
             return self.send_json(episode_detail(d)) if d else self.send_json({"error": "not found"}, 404)
-        m = re.match(r"^/media/([^/]+)/(pca/|aug/[0-9]{1,3}/)?([a-z]+\.mp4)$", path)
+        m = re.match(r"^/media/([^/]+)/(aug/[0-9]{1,3}/)?([a-z]+\.mp4)$", path)
         if m:
             d = episode_dir(m.group(1))
             folder = (d / m.group(2)) if d and m.group(2) else d

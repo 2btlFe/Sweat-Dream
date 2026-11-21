@@ -15,7 +15,7 @@ Output: episodes/<id>/aug/<k>/top.mp4 left.mp4 right.mp4 (same frames and fps as
 episodes/<id>/aug/index.json lists the variants. Episodes recorded before orientations were kept replay each object
 with its starting orientation (from the seed's yaw); `--check` measures how close the plain replay is.
 
-It waits while an episode is being recorded, like pca.py (the GPU is shared with the simulator's cameras).
+It waits while an episode is being recorded (the GPU is shared with the simulator's cameras).
 
 Usage:
     python rerender.py <episode_id> [...] [--variants 4] [--seed 0] [--strength 1]
@@ -39,7 +39,7 @@ warnings.filterwarnings("ignore")
 import dreamfix  # noqa: E402,F401  (puts the sim on sys.path)
 import mujoco  # noqa: E402
 
-import pca  # noqa: E402  (wait_until_idle, read_video)
+import episode_io as eio  # noqa: E402  (read/write JSON, read_video, wait_until_idle)
 from recorder import CAMERAS, EPISODES_DIR, FREE_JOINTS, RecordingEnv  # noqa: E402
 
 FINGER_OPEN = 0.0475  # each finger's travel when the gripper opening is 1 (the sim's own constant)
@@ -175,7 +175,7 @@ class Replayer:
         self.bodies = [str(b) for b in z["bodies"]]
         self.frame_t = z["frame_t"]
         self.quats = z["objects_quat"] if "objects_quat" in z.files else None
-        meta = pca.read_json(d / "meta.json", {})
+        meta = eio.read_json(d / "meta.json", {})
         self.fps = int(meta.get("fps") or 5)
         self.start_quats = {}
         jitter = meta.get("jitter") or {}
@@ -257,7 +257,7 @@ def episode_seed(episode_id: str, base: int, k: int) -> int:
 def augment(replayer: Replayer, d: Path, variants: int, base_seed: int, strength: float) -> dict:
     started = time.time()
     total = replayer.load(d)
-    outcome = pca.read_json(d / "outcome.json", {})
+    outcome = eio.read_json(d / "outcome.json", {})
     index = {"episode_id": d.name, "label": outcome.get("label"), "reason": outcome.get("reason"),
              "orientations": "recorded" if replayer.quats is not None else "start orientation only",
              "frames": total, "fps": replayer.fps, "variants": []}
@@ -265,15 +265,15 @@ def augment(replayer: Replayer, d: Path, variants: int, base_seed: int, strength
         seed = episode_seed(d.name, base_seed, k)
         drawn = replayer.appearance.apply(seed, strength)
         tick = time.time()
-        count = write_videos(d / "aug" / str(k), replayer.frames(lambda n: n % 20 == 0 and pca.wait_until_idle()), replayer.fps)
+        count = write_videos(d / "aug" / str(k), replayer.frames(lambda n: n % 20 == 0 and eio.wait_until_idle()), replayer.fps)
         params = {"variant": k, "label_from": "outcome.json (same motion)", "label": outcome.get("label"),
                   "frames": count, "seconds": round(time.time() - tick, 1), **drawn}
-        pca.write_json(d / "aug" / str(k) / "params.json", params)
+        eio.write_json(d / "aug" / str(k) / "params.json", params)
         index["variants"].append({"variant": k, "seed": seed, "frames": count})
         print(f"  {d.name} variant {k}: {count} frames in {params['seconds']}s", flush=True)
     replayer.appearance.reset()
     index["seconds"] = round(time.time() - started, 1)
-    pca.write_json(d / "aug" / "index.json", index)
+    eio.write_json(d / "aug" / "index.json", index)
     return index
 
 
@@ -287,7 +287,7 @@ def check(replayer: Replayer, d: Path) -> dict:
             replayed[cam].append(images[cam])
     result = {}
     for cam in CAMERAS:
-        original = pca.read_video(d / f"{cam}.mp4")
+        original = eio.read_video(d / f"{cam}.mp4")
         diffs, psnrs = [], []
         for a, frame in zip(original, replayed[cam]):
             b = frame[: a.shape[0], : a.shape[1]].astype(np.float32)
@@ -315,7 +315,7 @@ def main() -> int:
         d for d in sorted(EPISODES_DIR.iterdir())
         if d.is_dir() and (d / "steps.npz").exists() and not (d / "aug" / "index.json").exists()
     ]
-    pca.wait_until_idle()
+    eio.wait_until_idle()
     replayer = Replayer()
     try:
         for d in folders:

@@ -7,15 +7,14 @@
     4. auto-label   the failure-recovery runs: recovered or not, and how fast
     5. looks        --looks appearance variants of every high-confidence episode (rerender.py); each variant
                     carries its episode's label
-    6. PCA          feature PCA videos (pca.py), with --pca
-    7. report       batches/auto-<time>.json and a table: labels, review queue, recovery rate per disturbance
+    6. report       batches/auto-<time>.json and a table: labels, review queue, recovery rate per disturbance
 
 Low-confidence episodes are neither disturbed nor multiplied: they wait in the review queue of the labeling UI.
 Every step runs in its own process and is skipped when it has nothing to do.
 
 Usage:
     python auto_mode.py --perturb drop@grasp+0.5 --perturb push:vy=0.4@lift --perturb-repeats 2 --looks 2
-    python auto_mode.py --dream-repeats 3 --scripted --perturb freeze:seconds=2@lift --looks 4 --pca
+    python auto_mode.py --dream-repeats 3 --scripted --perturb freeze:seconds=2@lift --looks 4
     python auto_mode.py --perturb drop@grasp+0.5 --no-dream-recovery            # disturbances only, no API cost
 """
 
@@ -76,7 +75,6 @@ def main() -> int:
     parser.add_argument("--no-dream-recovery", action="store_true", help="after a disturbance hold still (no API calls)")
     parser.add_argument("--looks", type=int, default=0, help="appearance variants per high-confidence episode")
     parser.add_argument("--strength", type=float, default=1.0)
-    parser.add_argument("--pca", action="store_true", help="also make the feature PCA videos")
     args = parser.parse_args()
     run_id = "auto-" + datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     log: list = []
@@ -111,8 +109,6 @@ def main() -> int:
         if todo:
             run("looks", ["rerender.py", *todo, "--variants", str(args.looks), "--strength", str(args.strength)], log)
             run("auto-label", ["autolabel.py"], log)
-    if args.pca:
-        run("pca", ["pca.py", "--all"], log)
 
     summary = json.loads((EPISODES_DIR / "auto_label_summary.json").read_text())
     after = {d.name for d in EPISODES_DIR.iterdir()}
