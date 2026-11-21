@@ -115,7 +115,7 @@ REFERENCE = {
     "fruits_only": {0: "e1af86a63042200c", 42: "b8db6b7a9a9572b1"},
 }
 EVAL_FINGERPRINT = "f885497727d1d571"
-CONTROLS_FINGERPRINT = "86b9558a52e56a0f"  # the ood.py scene controls drawn from seeds (draw_controls)
+CONTROLS_FINGERPRINT = "9f96d4d4d278f080"  # the ood.py scene controls drawn from seeds (draw_controls)
 # The fixed eval set of the default setting: 17 easy, 17 medium, 16 hard (select_eval_seeds() remakes it).
 EVAL_SEEDS = (1000000, 1000001, 1000002, 1000003, 1000004, 1000005, 1000006, 1000007, 1000008, 1000009, 1000010,
               1000011, 1000012, 1000013, 1000014, 1000015, 1000016, 1000017, 1000018, 1000019, 1000020, 1000021,
@@ -420,6 +420,12 @@ def settle(env, seconds=1.0):
 
 NOT_RANDOM = {"camera_target"}  # ood.py controls that pick what to edit in the page, not a scene value
 ARM_ATTEMPTS = 30  # random arm angles that collide are drawn again (deterministically) up to this many times
+# Random arm angles stay this close (degrees) to the home pose (all joints 0), joints 1..6, within the joint limits.
+# The page's sliders still reach the full limits; only random draws are kept near home.
+RANDOM_ARM_SPAN_DEG = (20, 20, 20, 30, 30, 30)
+# A random arm pose must leave its wrist camera looking at the table: tilted down at least this much (sine of the
+# angle below horizontal; home is about 0.43), with the centre of the view landing where an arm reaches.
+WRIST_MIN_DOWN = 0.2
 
 
 def random_controls():
@@ -448,9 +454,32 @@ def draw_controls(seed, names, setting="default", attempt=0):
             options = sorted(field["choices"])
             values[name] = options[int(rng.integers(len(options)))]
         else:
-            steps = int(round((field["max"] - field["min"]) / field["step"]))
-            values[name] = round(field["min"] + field["step"] * int(rng.integers(steps + 1)), 6)
+            low, high = field["min"], field["max"]
+            if name in ood.ARM_FIELDS:  # near home, not anywhere in the joint's whole range
+                span = RANDOM_ARM_SPAN_DEG[int(name[-1]) - 1]
+                low, high = max(low, field["default"] - span), min(high, field["default"] + span)
+            steps = int(round((high - low) / field["step"]))
+            values[name] = round(low + field["step"] * int(rng.integers(steps + 1)), 6)
     return values
+
+
+def wrist_view_problem(env, sides):
+    """@return Why a wrist camera of the given arms does not look at the table (None when both do)."""
+    layout = layout_for()
+    table = env.model.geom("table")
+    for side in sides:
+        cam = env.data.cam(side)
+        forward = -cam.xmat.reshape(3, 3)[:, 2]
+        if forward[2] > -WRIST_MIN_DOWN:
+            return f"the {side} wrist camera does not look down at the table"
+        hit = cam.xpos + (layout.table_top - cam.xpos[2]) / forward[2] * forward
+        if np.any(np.abs(hit[:2] - table.pos[:2]) > table.size[:2]):
+            return f"the {side} wrist camera looks past the table"
+        i, j = ((hit[1::-1] - layout.origin[::-1]) / layout.cell).astype(int)
+        if not (0 <= i < layout.visible.shape[0] and 0 <= j < layout.visible.shape[1]
+                and (layout.reach["left"][i, j] or layout.reach["right"][i, j])):
+            return f"the {side} wrist camera looks outside the arms' workspace"
+    return None
 
 
 def resolve_controls(seed, manual, random_names, setting="default", attempt=0):
@@ -588,6 +617,10 @@ def build_env(args):
                 if any(env.data.warning[w].number for w in (mujoco.mjtWarning.mjWARN_CONTACTFULL,
                                                             mujoco.mjtWarning.mjWARN_CNSTRFULL)):
                     raise ValueError("Initial arm pose overlaps another part of the scene. Adjust the joint angles.")
+                # Only a drawn pose has to keep its wrist camera on the table; a pose set by hand is the user's call.
+                problem = wrist_view_problem(env, sorted({name.split("_")[0] for name in random_arm}))
+                if problem:
+                    raise ValueError(f"Random arm pose rejected: {problem}.")
             break
         except ValueError as error:
             env.close()
