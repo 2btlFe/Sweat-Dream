@@ -21,12 +21,16 @@ Usage:
     python pca.py --all                every episode without finished PCA
     python pca.py --all --watch        keep going: new episodes are processed whenever none is recording
     options: --no-naf (bilinear), --smooth 1, --device mps|cuda|cpu, --force
+    NAF_COMPILE=0 runs NAF without torch.compile (it is skipped by itself where it cannot build).
+
+Two pca.py processes never work on the same episode: each holds episodes/<id>/pca/.lock while it does.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import queue
 import sys
 import threading
@@ -96,6 +100,35 @@ def wait_until_idle(d: Path | None = None, done: int = 0, total: int = 0) -> Non
             status(d, state="paused", done=done, total=total, reason="an episode is being recorded")
             noted = True
         time.sleep(2)
+
+
+def claim(d: Path) -> bool:
+    """Take the episode's PCA lock (pca/.lock holds the pid). False if another live pca.py holds it; a lock left by
+    a finished or crashed run is taken over."""
+    import psutil
+
+    lock = d / "pca" / ".lock"
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    for _ in range(3):
+        try:
+            fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            try:
+                pid = int(lock.read_text().strip() or 0)
+            except (OSError, ValueError):
+                pid = 0
+            if pid and pid != os.getpid() and psutil.pid_exists(pid):
+                return False
+            lock.unlink(missing_ok=True)
+            continue
+        with os.fdopen(fd, "w") as f:
+            f.write(str(os.getpid()))
+        return True
+    return False
+
+
+def release(d: Path) -> None:
+    (d / "pca" / ".lock").unlink(missing_ok=True)
 
 
 def pending(force: bool = False) -> list[Path]:
@@ -288,6 +321,9 @@ def main() -> int:
             if not (d / "top.mp4").exists():
                 print(f"{d.name}: no camera video, skipped", flush=True)
                 continue
+            if not claim(d):
+                print(f"{d.name}: another pca.py is working on it, skipped", flush=True)
+                continue
             try:
                 info = process(d, args.device, naf=not args.no_naf, smooth=args.smooth)
                 print(f"{d.name}: {info['method']} PCA, {info['frames']} frames in {info['seconds']}s "
@@ -296,6 +332,8 @@ def main() -> int:
                 failed += 1
                 status(d, state="error", error=f"{type(error).__name__}: {error}")
                 traceback.print_exc()
+            finally:
+                release(d)
         if not (args.all and args.watch):
             return 1 if failed else 0
         args.force = False

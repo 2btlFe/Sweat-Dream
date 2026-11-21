@@ -7,7 +7,11 @@ Stage 1: an episode recorder and a simulator ground-truth judge for Dream-1 runs
 ```powershell
 $env:PYTHONUTF8 = "1"; python -m venv C:\dream\.venv
 C:\dream\.venv\Scripts\python.exe -m pip install dreamlabs
+C:\dream\.venv\Scripts\python.exe -m pip install torch timm "huggingface_hub<1.0" "click<8.2.0"   # only for pca.py
 ```
+
+Without CUDA, `pca.py` runs on the CPU (on an M3's CPU cores ~0.9 s per frame when all three cameras changed;
+expect slower on a laptop CPU). With CUDA but no Triton, NAF runs without `torch.compile` by itself.
 
 Put the API key in `~/.dreamlabs/credentials` as `DREAM_API_KEY=...`.
 

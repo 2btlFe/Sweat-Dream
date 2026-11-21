@@ -90,34 +90,49 @@ def _split_reflect_padding(module: torch.nn.Module) -> None:
 
 
 def fast_naf(device, half: bool | None = None, compile: bool | None = None):
-    """The released NAF with the speed-ups above. half/compile default to on for MPS and CUDA, off on CPU."""
+    """The released NAF with the speed-ups above. half/compile default to on for MPS and CUDA, off on CPU.
+
+    NAF_COMPILE=0 turns torch.compile off. torch.compile fails only at its first call where it cannot build
+    (CUDA without Triton, e.g. on Windows); the encoder then runs without it, and `speedups` says so.
+    """
     import os
     import types
 
     model = load_naf(device)
     accelerated = torch.device(device).type in ("mps", "cuda")
     half = accelerated if half is None else half
-    compile = (accelerated and os.environ.get("DREAM_SENSORS_NAF_COMPILE", "1") != "0") if compile is None else compile
+    compile = (accelerated and os.environ.get("NAF_COMPILE", "1") != "0") if compile is None else compile
     encoder = model.image_encoder
     encoder.rope.forward = types.MethodType(_fast_rope, encoder.rope)
     _split_reflect_padding(encoder)
     if half:
         encoder.half()
-    run_encoder = encoder
+    compiled = None
     if compile:
         try:
-            run_encoder = torch.compile(encoder, dynamic=False)
+            compiled = torch.compile(encoder, dynamic=False)
         except Exception:
-            run_encoder = encoder
+            compiled = None
     dtype = torch.float16 if half else torch.float32
+    model.speedups = {"half": half, "compile": compiled is not None}
 
     def forward(self, image, features, output_size, *args, **kwargs):
-        x = run_encoder(image.to(dtype), output_size=output_size).float()
+        nonlocal compiled
+        image_in = image.to(dtype)
+        if compiled is not None:
+            try:
+                x = compiled(image_in, output_size=output_size)
+            except Exception as error:  # the compiler cannot build here: run eagerly from now on
+                compiled = None
+                self.speedups.update(compile=False, compile_error=f"{type(error).__name__}: {str(error)[:200]}")
+                x = encoder(image_in, output_size=output_size)
+        else:
+            x = encoder(image_in, output_size=output_size)
+        x = x.float()
         keys = self.key_encoder(x, features)
         return self.upsampler(self.query_encoder(x), keys, features, image)
 
     model.forward = types.MethodType(forward, model)
-    model.speedups = {"half": half, "compile": compile is not False and run_encoder is not encoder}
     return model
 
 
