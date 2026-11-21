@@ -74,6 +74,7 @@
   .row .grow { flex: 1 1 260px; }
   label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
   input[type=text], input[type=number], input:not([type]), select { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
+  #task::placeholder { color: var(--muted); opacity: .7; }
   #seconds { width: 110px; }
   .settings-fields { display: grid; gap: 12px; }
   .settings-fields .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -153,7 +154,7 @@
 
   <section class="panel controls">
     <div class="row">
-      <div class="grow"><label for="task">Task</label><input id="task" value="put apple into the bowl"></div>
+      <div class="grow"><label for="task">Task</label><input id="task" placeholder="Type your own instruction"></div>
       <div><label for="seconds">Seconds</label><input id="seconds" type="number" min="10" max="300" value="60"></div>
       <button id="run">Run</button>
       <button id="stop" class="stop" hidden>Stop</button>
