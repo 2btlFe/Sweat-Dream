@@ -39,6 +39,8 @@
   button.stop { background: var(--danger); color: #441b19; }
   button.ghost { background: transparent; color: var(--muted); border-color: var(--line); font-weight: 500; }
   button.small { padding: 4px 9px; font-size: 12px; }
+  button.danger { color: var(--bad); border-color: var(--bad-bg); }
+  button.danger:hover:not(:disabled) { background: var(--bad-bg); filter: none; }
   .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; align-items: center; }
   .actions button { min-width: 90px; }
   .examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
@@ -408,7 +410,7 @@
       <summary>Runs</summary>
       <div class="hrow" style="justify-content: space-between">
         <select id="runFilter" aria-label="Which runs" style="width: auto; max-width: 100%"></select>
-        <button id="saveLabels" class="ghost small">Save labels</button>
+        <span class="hrow"><button id="saveLabels" class="ghost small">Save labels</button><button id="deleteShown" class="ghost small danger" title="Delete every run shown in the list, with its recording">Delete shown</button></span>
       </div>
       <div class="muted small" id="runSummary" style="margin-top: 8px"></div>
       <table style="margin-top: 8px">
@@ -439,6 +441,9 @@
           <svg class="chart" id="chart" viewBox="0 0 640 190" role="img" aria-label="Distance from each judged object to its target over time"></svg>
           <div class="chart-legend" id="chartLegend"></div>
         </div>
+        <div class="hrow" style="justify-content: flex-end">
+          <button id="deleteRun" class="ghost small danger" title="Delete this run's trajectory, labels and recording">Delete this run</button>
+        </div>
       </div>
     </details>
   </section>
@@ -467,7 +472,8 @@
             <button class="ghost small" id="back1s">− 1 s</button>
             <button class="ghost small" id="fwd1s">+ 1 s</button>
           </div>
-          <button id="resumeBtn">Resume here (you control)</button>
+          <span class="hrow"><button id="resumeBtn">Resume here (you control)</button>
+            <button id="deleteRec" class="ghost small danger" title="Delete this recording and its run">Delete</button></span>
         </div>
       </div>
     </details>
@@ -482,7 +488,7 @@ import { initSeed, seeding, afterPreview } from "/seed.js";
 
 const $ = id => document.getElementById(id);
 let rules = { distance_cm: 6.5, release: true, still_seconds: 1.0 };
-let runs = [], selected = null, liveTimer = null, wasRunning = false;
+let runs = [], selected = null, liveTimer = null, wasRunning = false, lastRunId = null;
 // Open-ended tasks (HSY): Dream-1 runs them; they are not judged (no object -> target).
 const OPEN_EXAMPLES = ["Move an object to the center of the workspace", "Move an object to the left side of the workspace"];
 
@@ -612,6 +618,7 @@ function renderRuns() {
     ? `${list.length} runs · success ${n("success")}${valid ? ` (${Math.round(100 * n("success") / valid)}% of valid)` : ""} · failure ${n("failure")} · invalid ${n("invalid")}`
       + (byHand ? ` · ${byHand} by hand (${list.filter(disagrees).length} differ from the rules)` : "")
     : "";
+  $("deleteShown").disabled = !list.length;
   if (!list.length) { $("runs").innerHTML = '<tr><td colspan="5" class="muted">No runs yet.</td></tr>'; $("detail").hidden = true; return; }
   $("runs").innerHTML = list.map(run => {
     const v = verdict(run), hand = handLabel(run);
@@ -735,6 +742,27 @@ document.addEventListener("keydown", e => {
   else if (key === "j") { e.preventDefault(); step(1); }
   else if (key === "k") { e.preventDefault(); step(-1); }
 });
+
+/** Delete finished runs for good: trajectory, labels and recording (the run going now is never deleted). */
+async function deleteRuns(ids, what) {
+  ids = ids.filter(id => !(running && id === lastRunId));
+  if (!ids.length) return;
+  if (!confirm(`Delete ${what}? Its trajectory, labels and recording are removed for good.`)) return;
+  try {
+    const { deleted, skipped } = await api("/api/runs/delete", { run_ids: ids });
+    if (skipped.length) alert(`${skipped.length} not deleted (still going, or already gone).`);
+    if (deleted.includes(selected)) selected = null;
+    if (chosen && deleted.includes(chosen.id)) { chosen = null; $("resumeBox").hidden = true; }
+    await loadRuns();
+    loadEpisodes();
+  } catch (err) { alert(err.message); }
+}
+$("deleteRun").onclick = () => selected && deleteRuns([selected], "this run");
+$("deleteShown").onclick = () => {
+  const ids = shownRuns().map(r => r.id);
+  deleteRuns(ids, `the ${ids.length} run${ids.length > 1 ? "s" : ""} shown ("${$("runFilter").selectedOptions[0]?.text || "All runs"}")`);
+};
+$("deleteRec").onclick = () => chosen && deleteRuns([chosen.id], "this recording and its run");
 
 $("saveLabels").onclick = async () => {
   try {
@@ -1274,6 +1302,7 @@ async function refresh() {
   catch { $("statusText").textContent = "Cannot reach app.py. Is it running?"; return; }
 
   showKey(s.key);
+  lastRunId = s.run_id;
   const b = s.batch, batchRunning = !!b?.running;
   batchState = b;
   running = s.running || batchRunning;

@@ -27,6 +27,7 @@ import os
 import urllib.parse
 import re
 import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -356,6 +357,26 @@ def episode_frame(episode, step):
     buffer = io.BytesIO()
     Image.fromarray(frames[index]).save(buffer, format="JPEG", quality=80)
     return buffer.getvalue()
+
+
+def delete_runs(run_ids):
+    """Delete finished runs: runs/<id> (trajectory, labels) and its recording episodes/<id>. The run going now is
+    never deleted. @return (deleted ids, skipped ids)."""
+    deleted, skipped = [], []
+    for run_id in run_ids:
+        busy = RUNNER.running() and RUNNER.run_id == run_id
+        folders = [folder / run_id for folder in (RUNS, EPISODES)]
+        if not ID_RE.match(run_id) or busy or not any(f.exists() for f in folders):
+            skipped.append(run_id)
+            continue
+        for folder in folders:
+            if folder.is_dir():
+                shutil.rmtree(folder)
+        FRAMES.pop(run_id, None)
+        for key in [k for k in VERDICTS if k[0] == run_id]:
+            VERDICTS.pop(key, None)
+        deleted.append(run_id)
+    return deleted, skipped
 
 
 def write_label(d, verdict, rules, **extra):
@@ -724,6 +745,12 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 return self.send_json({"error": "The label must be success, failure or invalid."}, 400)
             return self.send_json({"label": read_json(d / "label.json")})
+        if self.path == "/api/runs/delete":  # {"run_ids": [...]}: finished runs and their recordings, for good
+            run_ids = body.get("run_ids")
+            if not isinstance(run_ids, list) or not run_ids or any(not isinstance(r, str) for r in run_ids):
+                return self.send_json({"error": "run_ids must be a list of run IDs."}, 400)
+            deleted, skipped = delete_runs(run_ids)
+            return self.send_json({"deleted": deleted, "skipped": skipped})
         if self.path == "/api/labels":
             saved = kept = 0
             rules = current_rules()

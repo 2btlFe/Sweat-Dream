@@ -40,6 +40,9 @@ Open http://localhost:8000.
    rules: changing the rules or **Save labels** never replaces it, and `label.json` keeps the rules' verdict beside
    it (`source: "human"`, `rules_verdict`). The run list marks these runs with ✋, and its filter can show only them
    or only the ones where you and the rules disagree.
+9. **Delete**: **Delete this run** (in a run's detail), **Delete shown** (every run the list shows, e.g. one batch) or
+   **Delete** in Recordings removes a finished run for good: `runs/<id>` and its recording `episodes/<id>`. The page
+   asks first; the run going now is never deleted.
 
 **Custom layout** (optional, single runs): tick *Use my own layout*, pick the objects and targets on the table and
 drag them on the map (the robot is YAM, the only one in this simulator). It replaces the seed's layout; settings
