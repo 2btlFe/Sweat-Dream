@@ -21,6 +21,9 @@ ROOMS = {
 }
 LIGHTING = {"standard": "Standard", "warm": "Warm", "cool": "Cool"}
 LAYOUTS = {"fixed": "Fixed starting layout", "varied": "Seeded object variation"}
+# The robots the page offers: the team's target robot only. The others stay known (older runs, saved settings), and
+# adding a key here shows it again ("openyam" runs here too).
+TARGET_ROBOTS = ("yam",)
 DEFAULT = {"robot": "yam", "room": "yam_tabletop", "lighting": "standard",
            "layout": "varied", "seed": None}
 
@@ -49,5 +52,6 @@ def local_supported(settings):
 
 def catalog():
     return {"robots": ROBOTS, "rooms": ROOMS, "lighting": LIGHTING,
-            "layouts": LAYOUTS, "local_robots": ["yam", "openyam"], "local_rooms": list(ROOMS),
+            "layouts": LAYOUTS, "local_robots": ["yam", "openyam"], "target_robots": list(TARGET_ROBOTS),
+            "local_rooms": list(ROOMS),
             "sandbox_url": "https://platform.dreamlabs.ai/sandbox"}

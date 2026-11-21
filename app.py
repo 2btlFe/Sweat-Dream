@@ -938,7 +938,9 @@ class Handler(BaseHTTPRequestHandler):
                     [sys.executable, str(HERE / "sim.py"), "--preview", str(frame), "--ood", json.dumps(changes),
                      *seeding, *robot], cwd=HERE, env=env, capture_output=True, text=True, timeout=120)
                 if result.returncode:
-                    error = (result.stderr or result.stdout).strip().splitlines()
+                    # sim.py says why on stdout ("Stopped: ..."); stderr may end with an unrelated MuJoCo warning.
+                    said = [line[len("Stopped:"):].strip() for line in result.stdout.splitlines() if line.startswith("Stopped:")]
+                    error = said or (result.stderr or result.stdout).strip().splitlines()
                     return self.send_json({"error": error[-1] if error else "Camera rendering failed."}, 422)
                 return self.send(frame.read_bytes(), "image/jpeg", headers=seed_web.drawn_header(result.stdout))
         except (OSError, subprocess.TimeoutExpired):

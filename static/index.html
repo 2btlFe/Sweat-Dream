@@ -77,6 +77,19 @@
   .keyrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: end; }
   .keystate { font-size: 12px; margin: 6px 0 14px; color: var(--ok); }
   .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  /* error banner: every error the page shows, in one place */
+  .errbar { border: 1px solid var(--danger); background: color-mix(in srgb, var(--danger) 10%, var(--panel)); border-radius: 10px;
+            padding: 10px 14px; margin: 0 0 16px; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; }
+  .errbar[hidden] { display: none; }
+  .errbar strong { color: var(--danger); font-size: 14px; }
+  .errbar .hint { font-size: 13px; grid-column: 1; }
+  .errbar .acts { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; }
+  .errbar .acts:empty { display: none; }
+  .errbar details { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+  .errbar pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 0; }
+  .errbar .close { grid-column: 2; grid-row: 1; align-self: start; }
+  fieldset.bad { border-color: var(--danger) !important; }
+  .setup-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .robot-note { font-size: 12px; color: var(--muted); margin: -6px 0 14px; min-height: 0; }
   .robot-note:empty { display: none; }
   .robot-note.bad { color: var(--warn); }
@@ -268,11 +281,19 @@
     <h1>Dream-1 Simulator</h1>
     <p class="sub">Set up a start scene, run Dream-1 once or in a batch, and label the runs with your own success rules.</p>
   </header>
+  <div class="errbar" id="errBar" role="alert" hidden>
+    <strong id="errTitle"></strong>
+    <button class="ghost small close" id="errClose" aria-label="Dismiss the error">✕</button>
+    <div class="hint" id="errHint"></div>
+    <div class="acts" id="errActs"></div>
+    <details id="errMore"><summary>Details</summary><pre id="errRaw"></pre></details>
+  </div>
 
   <div class="workspace">
   <div class="col">
   <section class="panel setup" aria-labelledby="setupTitle">
-    <h2 id="setupTitle">Run setup</h2>
+    <div class="setup-head"><h2 id="setupTitle">Run setup</h2>
+      <button class="ghost small" id="defaults" title="Back to the default start: YAM tabletop, every scene setting at its default, nothing random, no custom layout (the seed is kept)">Default</button></div>
     <form class="keyrow" id="keyForm" autocomplete="off">
       <div><label for="apiKey">API key</label><input id="apiKey" type="password" placeholder="Paste your Dream API key" spellcheck="false"></div>
       <button type="submit" id="useKey">Use key</button>
@@ -583,7 +604,7 @@
 </dialog>
 <script type="module">
 import { loadOOD, readOOD } from "/ood.js";
-import { initSeed, seeding, afterPreview } from "/seed.js";
+import { initSeed, seeding, afterPreview, newSeed, advanceSeed, useSeed } from "/seed.js";
 
 const $ = id => document.getElementById(id);
 let rules = { distance_cm: 6.5, release: true, still_seconds: 1.0 };
@@ -755,7 +776,15 @@ async function renderDetail() {
                  run.ood_random?.length ? `random: ${run.ood_random.join(", ")}` : "",
                  (run.judge || v.spec) ? `${TYPE_UI[(run.judge || v.spec).type || "pick_place"]?.label || ""}: ${specText(run.judge || v.spec)}` : "not judged"].filter(Boolean).join(" · ");
   const hand = handLabel(run);
-  $("detailHead").innerHTML = `${chip(finalLabel(run))}${hand ? '<span class="by-hand">✋ by hand</span>' : ""} <strong>${esc(run.task)}</strong><div class="muted" style="font-size:13px">${when(run.started_at)} · ${fmt(run.sim_seconds || 0)} s · ${esc(extra)}</div>`;
+  $("detailHead").innerHTML = `${chip(finalLabel(run))}${hand ? '<span class="by-hand">✋ by hand</span>' : ""} <strong>${esc(run.task)}</strong><div class="muted" style="font-size:13px">${when(run.started_at)} · ${fmt(run.sim_seconds || 0)} s · ${esc(extra)}</div>`
+    + (run.seed != null && run.layout !== "custom" ? `<button class="ghost small" id="sameStart" title="Put seed ${run.seed} and its random settings back on the page (the settings not marked random are the page's)">Same start (seed ${run.seed})</button>` : "");
+  if ($("sameStart")) $("sameStart").onclick = () => {
+    if (customOn()) { $("customOn").checked = false; $("layoutBody").classList.add("off"); drawScene(); }
+    if (mode !== "single") setMode("single");
+    useSeed(run.seed, run.ood_random || []);
+    $("task").value = run.task; checkTask();
+    schedulePreview();
+  };
   for (const b of document.querySelectorAll("[data-hand]")) b.classList.toggle("on", !!hand && b.dataset.hand === hand.label);
   $("detailSettings").innerHTML = settingsRows(run, v).map(([k, val]) => `<dt>${esc(k)}</dt><dd>${esc(val)}</dd>`).join("");
   if ($("handNote").dataset.run !== run.id) { $("handNote").value = hand && hand.reason !== "set by hand" ? hand.reason : ""; $("handNote").dataset.run = run.id; }
@@ -978,7 +1007,7 @@ async function setHand(label) {
     run.label = saved;
     drawFilter();
     renderRuns();
-  } catch (err) { alert(err.message); }
+  } catch (err) { showError(err); }
 }
 for (const b of document.querySelectorAll("[data-hand]")) b.onclick = () => setHand(b.dataset.hand);
 $("handNote").addEventListener("keydown", e => {  // Enter keeps the label, with the note
@@ -1014,7 +1043,7 @@ async function deleteRuns(ids, what) {
     if (chosen && deleted.includes(chosen.id)) { chosen = null; $("resumeBox").hidden = true; }
     await loadRuns();
     loadEpisodes();
-  } catch (err) { alert(err.message); }
+  } catch (err) { showError(err); }
 }
 $("deleteRun").onclick = () => selected && deleteRuns([selected], "this run");
 $("deleteShown").onclick = () => {
@@ -1031,7 +1060,7 @@ $("saveLabels").onclick = async () => {
     $("saveLabels").textContent = `Saved ${saved}` + (kept ? ` · kept ${kept} by hand` : "");
     setTimeout(() => { $("saveLabels").textContent = "Save labels"; }, 2500);
     await loadRuns();
-  } catch (err) { alert(err.message); }
+  } catch (err) { showError(err); }
 };
 
 /* ---------- scene ---------- */
@@ -1060,8 +1089,11 @@ const fromMap = (px, py) => [VIEW.x0 - px / VIEW.scale, py / VIEW.scale + VIEW.y
 const clampArea = ([x, y]) => [Math.min(Math.max(x, AREA.x[0]), AREA.x[1]), Math.min(Math.max(y, AREA.y[0]), AREA.y[1])];
 
 let sceneOn = {}, scenePos = {}, dragging = null;
+let seedLayout = {};  // where the seed's scene puts each item (the last preview's X-Scene-Layout)
+/** Every item on the table where the seed's scene has it (its usual spot before the first preview), kept inside
+ *  the layout area as app.py keeps it: a seed may place an item a little beyond it. */
 function resetScene() {
-  for (const [name, item] of Object.entries(ITEMS)) { sceneOn[name] = true; scenePos[name] = [...item.home]; }
+  for (const [name, item] of Object.entries(ITEMS)) { sceneOn[name] = true; scenePos[name] = clampArea(seedLayout[name] || item.home); }
   drawScene();
 }
 
@@ -1226,7 +1258,7 @@ $("keyForm").onsubmit = async e => {
   e.preventDefault();
   if (!$("apiKey").value.trim()) return;
   try { showKey(await api("/api/key", { key: $("apiKey").value })); $("apiKey").value = ""; refresh(); }
-  catch (err) { alert(err.message); }
+  catch (err) { showError(err); }
 };
 $("clearKey").onclick = async () => { $("apiKey").value = ""; showKey(await api("/api/key", { key: "" })); refresh(); };
 
@@ -1404,9 +1436,10 @@ $("startBatch").onclick = async () => {
     await api("/api/batch", { tasks, count, seconds: $("batchSeconds").value, split, seed, ood, mode: batchMode,
                               workers: Number($("batchWorkers").value) || 1, collection: collectionSettings(),
                               ood_random: isOpenYAM() ? [] : ood_random });
+    if (split !== "eval") advanceSeed(count);  // episode i used seed + i: the next batch starts after them
     followBatch = true;
     refresh();
-  } catch (err) { alert(err.message); }
+  } catch (err) { showError(err); }
 };
 $("stopBatch").onclick = async () => {
   $("stopBatch").disabled = true;
@@ -1443,6 +1476,66 @@ function showBatch(b) {
 }
 
 
+/* ---------- errors ---------- */
+
+// Known errors in plain words: [pattern, title, hint, setup problem?]. Anything else shows its own message.
+const ERRORS = [
+  [/UNAUTHORIZED|api key|401|403/i, "The Dream API rejected the key", "Paste a valid key and press Use key.", false],
+  [/busy/i, "The simulator is busy", "A run, batch or preview is going. Wait for it to finish, then try again.", false],
+  [/Initial arm pose overlaps/i, "The arms' start pose collides with the scene", "The joint angles put an arm into the table, an object or the other arm. Change them, or draw again / go back to the defaults.", true],
+  [/Random arm pose rejected/i, "The random arm pose does not work", "Its wrist camera would not see the table. Draw again with a new seed, or untick random on the arm angles.", true],
+  [/Random camera\/arm settings rejected/i, "The random camera or arm values hide an object", "The workspace camera would not see every object. Draw again with a new seed.", true],
+  [/no layout found/i, "This seed has no possible object layout", "Draw a new seed.", true],
+  [/outside the simulator joint limits|Invalid value for/i, "A scene setting is out of range", "Bring it back inside its range, or go back to the defaults.", true],
+  [/Cannot reach app\.py|Failed to fetch|NetworkError/i, "The page cannot reach app.py", "Start python app.py again and reload the page.", false],
+];
+let setupProblem = null;  // why the start scene cannot be built (blocks Run until a preview works)
+let setupShown = false;   // the banner shows that problem (a working preview then clears it)
+
+function clearError() { $("errBar").hidden = true; setupShown = false; }
+$("errClose").onclick = clearError;
+
+/** Show an error in the banner: where it happened, in plain words, with fixes, and the raw text under Details. */
+function showError(err, where = "", raw = "") {
+  const message = String(err?.message ?? err ?? "Something went wrong.");
+  const [, title, hint, setup] = ERRORS.find(([pattern]) => pattern.test(message)) || [null, message, "", false];
+  $("errTitle").textContent = (where ? where + ": " : "") + title;
+  $("errHint").textContent = hint;
+  $("errRaw").textContent = raw || message;
+  $("errMore").hidden = !raw && title === message;
+  $("errActs").innerHTML = "";
+  setupShown = setup;
+  if (setup) {
+    setSetupProblem(message);
+    const action = (text, fn) => { const b = Object.assign(document.createElement("button"), { className: "small", textContent: text }); b.onclick = fn; $("errActs").append(b); };
+    action("Draw again (new seed)", () => { newSeed(); clearError(); schedulePreview(); });
+    action("Default settings", () => { defaults(); clearError(); });
+  }
+  $("errBar").hidden = false;
+}
+
+/** Mark (or clear) a start scene that cannot be built: Run waits, and the arm groups are outlined when it is the arms. */
+function setSetupProblem(message) {
+  setupProblem = message;
+  const arms = !!message && /arm/i.test(message);
+  document.querySelectorAll("#ood fieldset").forEach(f => f.classList.toggle("bad", arms && /arm/i.test(f.querySelector("legend")?.textContent || "")));
+  if (!message && setupShown) clearError();
+  if (message) $("run").disabled = true;
+}
+
+/** Back to the default start: YAM tabletop, every scene setting at its default, nothing random, no custom layout.
+ *  The seed stays (it is the object layout). */
+async function defaults() {
+  $("ood").reset();  // also unticks the random boxes; seed.js unlocks their fields
+  if (customOn()) { $("customOn").checked = false; $("layoutBody").classList.add("off"); drawScene(); }
+  const robot = simCatalog?.target_robots?.[0] || "yam";
+  if ($("robot").value !== robot || $("room").value !== "yam_tabletop") {
+    $("robot").value = robot; $("room").value = "yam_tabletop";
+    await saveSimulator();
+  } else schedulePreview();
+}
+$("defaults").onclick = () => { clearError(); defaults(); };
+
 /* ---------- robot and room ---------- */
 
 let simSettings = null, simCatalog = null;
@@ -1453,8 +1546,9 @@ async function loadSimulator() {
   const { settings, catalog } = await api("/api/simulator-settings");
   simSettings = settings;
   simCatalog = catalog;
-  $("robot").innerHTML = Object.entries(catalog.robots).map(([key, label]) =>
-    `<option value="${key}">${esc(label)}${catalog.local_robots.includes(key) ? "" : " · Sandbox only"}</option>`).join("");
+  const offered = catalog.target_robots || catalog.local_robots;  // the team's target robot (simulator_settings.py)
+  $("robot").innerHTML = offered.map(key => `<option value="${key}">${esc(catalog.robots[key])}</option>`).join("");
+  if (!offered.includes(settings.robot)) settings.robot = offered[0];  // a robot saved before it was hidden
   $("room").innerHTML = Object.entries(catalog.rooms).map(([key, label]) => `<option value="${key}">${esc(label)}</option>`).join("");
   $("robot").value = settings.robot;
   $("room").value = settings.room;
@@ -1479,7 +1573,7 @@ function showRobot() {
 async function saveSimulator() {
   try {
     ({ settings: simSettings } = await api("/api/simulator-settings", { ...simSettings, robot: $("robot").value, room: $("room").value }));
-  } catch (err) { alert(err.message); }
+  } catch (err) { showError(err); }
   showRobot();
   checkTask();
   schedulePreview();
@@ -1497,6 +1591,7 @@ function startScene(ood) {
 
 const customOn = () => !!$("customOn")?.checked;
 $("customOn").addEventListener("change", () => {
+  if (customOn()) resetScene();  // start from the scene the preview shows, not from fixed spots
   $("layoutBody").classList.toggle("off", !customOn());
   drawScene();
   schedulePreview();
@@ -1534,6 +1629,7 @@ async function renderPreview() {
       throw new Error(response.status === 404 ? "Restart app.py and reload the page." : error.error || "Rendering failed.");
     }
     if (!customOn() && !isOpenYAM()) afterPreview(response);
+    if (!customOn()) seedLayout = JSON.parse(response.headers.get("X-Scene-Layout") || "{}");
     const frame = await response.blob();
     if (revision !== previewRevision || running || starting) return;
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -1541,9 +1637,11 @@ async function renderPreview() {
     $("live").src = previewUrl;
     if (!(mode === "batch" && batchState)) { $("live").hidden = false; $("placeholder").hidden = true; }
     note.textContent = customOn() ? "Initial scene · custom layout · settings apply on Run" : "Initial scene · settings apply on Run";
+    setSetupProblem(null);
   } catch (error) {
     if (revision === previewRevision && !running && !starting) {
       note.textContent = "Preview unavailable: " + error.message;
+      showError(error, "Start scene");
       if (!$("placeholder").hidden) $("placeholder").textContent = "No initial camera image available.";
     }
   } finally {
@@ -1573,7 +1671,7 @@ async function refresh() {
   if (running) $("previewStatus").hidden = true;
   if (batchRunning && mode !== "batch") setMode("batch");
   $("modeSingle").disabled = $("modeBatch").disabled = running;
-  $("run").disabled = running || (!s.key.source && runMode() !== "human") || !robotRunsHere();  // human only: no key needed
+  $("run").disabled = running || (!s.key.source && runMode() !== "human") || !robotRunsHere() || !!setupProblem;  // human only: no key needed
   $("startBatch").disabled = running || !s.key.source || !robotRunsHere();
   $("robot").disabled = $("room").disabled = running;
   $("stop").hidden = !s.running || batchRunning;
@@ -1600,7 +1698,11 @@ async function refresh() {
   } else if (s.task) {
     const rejected = s.log.some(line => line.includes("UNAUTHORIZED"));
     $("statusText").textContent = s.exit_code === 0 ? "Finished" : rejected ? "Error: API key rejected" : "Stopped with an error";
-    if (s.exit_code !== 0 && wasRunning) $("logBox").open = true;
+    if (s.exit_code !== 0 && wasRunning) {
+      $("logBox").open = true;
+      const why = [...s.log].reverse().find(line => /^Stopped|Error|rejected|UNAUTHORIZED/i.test(line)) || "The run stopped with an error.";
+      showError(new Error(why.replace(/^Stopped:\s*/, "")), "Run", s.log.join("\n"));
+    }
     $("statusMore").textContent = `${s.task} · ${s.elapsed_s} s`;
   }
   $("logBox").hidden = !s.log.length;
@@ -1624,7 +1726,9 @@ $("run").onclick = async () => {
   try {
     const ood = isOpenYAM() ? {} : readOOD();
     if (ood === null) return;
-    if (customOn()) { const problem = sceneProblem(); if (problem) { alert(problem); return; } }
+    if (customOn()) { const problem = sceneProblem(); if (problem) { showError(new Error(problem), "Custom layout"); return; } }
+    if (setupProblem) { showError(new Error(setupProblem), "Start scene"); return; }
+    clearError();
     starting = true;
     previewRevision++;
     clearTimeout(previewTimer);
@@ -1632,12 +1736,13 @@ $("run").onclick = async () => {
     document.activeElement.blur();  // so the keys go to the robot, not to the box last clicked
     await api("/api/run", { task: $("task").value, seconds: $("seconds").value, ...startScene(ood),
                             mode: runMode(), record: $("record").checked, collection: collectionSettings() });
+    if (!customOn() && !isOpenYAM()) advanceSeed(1);  // the next run starts from the next seed's scene
     $("live").hidden = true;
     $("placeholder").hidden = false;
     $("placeholder").textContent = "Starting the simulator… (the first picture takes a few seconds)";
     running = true;
     await refresh();
-  } catch (err) { alert(err.message); }
+  } catch (err) { showError(err); }
   finally { starting = false; }
 };
 $("stop").onclick = async () => {
@@ -1654,7 +1759,7 @@ $("reset").onclick = async () => {
     await api("/api/reset", {});
     $("live").hidden = true; $("placeholder").hidden = false;
     $("placeholder").textContent = "Starting again from the beginning…";
-  } catch (err) { alert(err.message); }
+  } catch (err) { showError(err); }
   $("reset").disabled = false;
   refresh();
 };
@@ -1846,7 +1951,7 @@ $("resumeBtn").onclick = async () => {
     $("placeholder").textContent = "Restoring the recorded moment…";
     $("placeholder").scrollIntoView({ behavior: "smooth", block: "center" });
     refresh();
-  } catch (err) { alert(err.message); }
+  } catch (err) { showError(err); }
   $("resumeBtn").disabled = false;
   $("resumeBtn").textContent = "Resume here (you control)";
 };

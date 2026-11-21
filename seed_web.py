@@ -25,10 +25,12 @@ def seeding_args(body, fields):
 
 
 def drawn_header(stdout):
-    """@return The X-Scene-Controls header: the scene-control values sim.py printed ("{}" when none)."""
+    """@return The X-Scene-Controls header (the scene-control values sim.py printed) and X-Scene-Layout (where each
+    item starts, so the page's custom layout can start from the seed's); "{}" when sim.py printed none."""
+    headers = {"X-Scene-Controls": "{}", "X-Scene-Layout": "{}"}
     for line in stdout.splitlines():
-        match = re.match(r"Scene controls: (\{.*\})", line)
+        match = re.match(r"Scene (controls|layout): (\{.*\})", line)
         if match:
-            json.loads(match.group(1))  # only ever pass on valid JSON
-            return {"X-Scene-Controls": match.group(1)}
-    return {"X-Scene-Controls": "{}"}
+            json.loads(match.group(2))  # only ever pass on valid JSON
+            headers["X-Scene-" + match.group(1).title()] = match.group(2)
+    return headers

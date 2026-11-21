@@ -616,6 +616,14 @@ def main():
             state = env.state()
             env.step(state["left"], state["right"])
             save_jpeg(camera_view(env.images()), args.preview)
+            # Where each item starts (x, y in metres): the page's custom layout starts from the seed's.
+            layout = {}
+            for name in OBJECTS + TARGETS:
+                try:
+                    layout[name] = [round(float(v), 4) for v in env.data.body(name).xpos[:2]]
+                except KeyError:  # left out of a custom layout, or not in this robot's scene
+                    pass
+            print(f"Scene layout: {json.dumps(layout, sort_keys=True)}", flush=True)
         finally:
             env.close()
         return
