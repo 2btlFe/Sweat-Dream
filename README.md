@@ -31,6 +31,11 @@ Open http://localhost:8000.
 5. Set the distance, release, and still-time rules. Existing runs are re-evaluated immediately.
 6. Select a run to inspect its final frame, checks, and distance chart. **Save labels** writes the current
    server-side verdicts to `label.json`.
+7. **Your label**: decide a run yourself with **Success / Failure / Invalid** (keys **1 / 2 / 3**; **0** goes back to
+   the rules), with an optional note. **J / K** move to the next / previous run. A label set by hand wins over the
+   rules: changing the rules or **Save labels** never replaces it, and `label.json` keeps the rules' verdict beside
+   it (`source: "human"`, `rules_verdict`). The run list marks these runs with ✋, and its filter can show only them
+   or only the ones where you and the rules disagree.
 
 **Custom layout** (optional, single runs): tick *Use my own layout*, pick the objects and targets on the table and
 drag them on the map (the robot is YAM, the only one in this simulator). It replaces the seed's layout; settings

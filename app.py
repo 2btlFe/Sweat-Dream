@@ -214,10 +214,30 @@ def parse_scene(scene):
     return {"items": items}
 
 
+LABELS = ("success", "failure", "invalid")
+
+
 def write_label(d, verdict, rules, **extra):
+    """Save the rules' verdict as the run's label (source "rules", or "batch" when a batch saves it)."""
     write_json(d / "label.json", {"label": verdict["label"], "reason": verdict["reason"],
                                   "success_time_s": verdict.get("success_time_s"), "rules": rules,
-                                  "saved_at": datetime.now().isoformat(timespec="seconds"), **extra})
+                                  "source": "rules", "saved_at": datetime.now().isoformat(timespec="seconds"), **extra})
+
+
+def is_hand_label(d):
+    """Whether the run's label was set by a person (rules and bulk saves then leave it alone)."""
+    return (read_json(d / "label.json") or {}).get("source") == "human"
+
+
+def write_hand_label(d, label, note, rules):
+    """A person's label for a run: it wins over the rules. The rules' verdict at that moment is kept beside it, so
+    disagreements can be found later."""
+    verdict = run_verdict(d, rules)
+    meta = read_json(d / "meta.json", {})
+    write_json(d / "label.json", {"label": label, "reason": note or "set by hand", "source": "human",
+                                  "rules_verdict": {"label": verdict["label"], "reason": verdict["reason"]},
+                                  "rules": rules, "batch_id": meta.get("batch_id"),
+                                  "saved_at": datetime.now().isoformat(timespec="seconds")})
 
 
 class Batch:
@@ -281,7 +301,7 @@ class Batch:
                 verdict = (judge.evaluate(meta, read_json(d / "trajectory.json", {}), info["rules"]) if d
                            else judge.invalid("no_result"))
                 if d:
-                    write_label(d, verdict, info["rules"], batch_id=info["id"], source="batch")
+                    write_label(d, verdict, info["rules"], batch_id=info["id"], source="batch")  # a new run: no hand label yet
                 info["counts"][verdict["label"]] += 1
                 info["done"] += 1
                 info["durations"].append(time.time() - started)
@@ -497,19 +517,36 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": str(error)}, 400)
             write_json(RULES, rules)
             return self.send_json(rules)
+        m = re.match(r"^/api/runs/([^/]+)/label$", self.path)
+        if m:  # {"label": "success" | "failure" | "invalid", "note": ...} by hand, or {"label": null}: back to the rules
+            d = run_dir(m.group(1))
+            if not d:
+                return self.send_json({"error": "No such run."}, 404)
+            label, note = body.get("label"), re.sub(r"\s+", " ", str(body.get("note") or "")).strip()[:300]
+            rules = current_rules()
+            if label is None:
+                meta = read_json(d / "meta.json", {})
+                write_label(d, run_verdict(d, rules), rules, batch_id=meta.get("batch_id"))
+            elif label in LABELS:
+                write_hand_label(d, label, note, rules)
+            else:
+                return self.send_json({"error": "The label must be success, failure or invalid."}, 400)
+            return self.send_json({"label": read_json(d / "label.json")})
         if self.path == "/api/labels":
-            saved = 0
+            saved = kept = 0
             rules = current_rules()
             run_ids = body.get("run_ids")
             if not isinstance(run_ids, list) or any(not isinstance(run_id, str) for run_id in run_ids):
                 return self.send_json({"error": "run_ids must be a list of run IDs."}, 400)
             for run_id in run_ids:
                 d = run_dir(run_id)
-                if d:
+                if d and is_hand_label(d):
+                    kept += 1  # a person's label is never replaced by the rules
+                elif d:
                     meta = read_json(d / "meta.json", {})
                     write_label(d, run_verdict(d, rules), rules, batch_id=meta.get("batch_id"))
                     saved += 1
-            return self.send_json({"saved": saved})
+            return self.send_json({"saved": saved, "kept": kept})
         if self.path == "/api/key":
             key = str(body.get("key") or "").strip()
             if key and (len(key) > 512 or any(c.isspace() for c in key)):
