@@ -50,7 +50,7 @@ class Runner:
     def running(self):
         return self.process is not None and self.process.poll() is None
 
-    def start(self, task, seconds):
+    def start(self, task, seconds, seed=None):
         with self.lock:
             if self.running():
                 raise RuntimeError("A run is already going.")
@@ -59,7 +59,8 @@ class Runner:
             env = {**os.environ, "PYTHONUTF8": "1", "PYTHONUNBUFFERED": "1", "PYTHONWARNINGS": "ignore",
                    "LIVE_FRAME": str(LIVE), "STOP_FILE": str(STOP)}
             self.process = subprocess.Popen(
-                [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds)], cwd=str(HERE), env=env,
+                [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds)]
+                + (["--seed", str(seed)] if seed is not None else []), cwd=str(HERE), env=env,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
             self.task, self.started, self.ended = task, time.time(), None
             self.log.clear()
@@ -114,6 +115,20 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(PAGE.read_bytes(), "text/html; charset=utf-8")
         if path == "/api/status":
             return self.send_json(RUNNER.status())
+        if path == "/api/preview":  # the start scene of a seed, rendered by scene.py without calling Dream
+            seed = self.path.partition("seed=")[2].split("&")[0]
+            if not seed.isdigit():
+                return self.send_json({"error": "The seed must be a whole number 0 or above."}, 400)
+            version = int((HERE / "scene.py").stat().st_mtime_ns)  # a changed scene.py never shows an old preview
+            image = WORK / f"preview_{int(seed)}_{version}.jpg"
+            if not image.exists():
+                done = subprocess.run([sys.executable, str(HERE / "scene.py"), str(int(seed)), "--image", str(image)],
+                                      cwd=str(HERE), capture_output=True, text=True, timeout=120,
+                                      env={**os.environ, "PYTHONWARNINGS": "ignore"})
+                if done.returncode != 0 or not image.exists():
+                    lines = (done.stdout + done.stderr).strip().splitlines()
+                    return self.send_json({"error": lines[-1] if lines else "Preview failed."}, 500)
+            return self.send(image.read_bytes(), "image/jpeg")
         if path == "/api/live.jpg":
             try:
                 return self.send(LIVE.read_bytes(), "image/jpeg")
@@ -130,9 +145,12 @@ class Handler(BaseHTTPRequestHandler):
             task = re.sub(r"\s+", " ", str(body.get("task") or "")).strip()
             if not task:
                 return self.send_json({"error": "Type a task, such as: put apple into the bowl"}, 400)
+            seed = str(body.get("seed") if body.get("seed") is not None else "").strip()  # empty: a random seed
+            if seed and not seed.isdigit():
+                return self.send_json({"error": "The seed must be a whole number 0 or above, or empty."}, 400)
             try:
                 seconds = min(300, max(10, int(float(body.get("seconds") or 60))))
-                RUNNER.start(task, seconds)
+                RUNNER.start(task, seconds, int(seed) if seed else None)
             except (ValueError, TypeError):
                 return self.send_json({"error": "The time limit must be a number."}, 400)
             except RuntimeError as error:

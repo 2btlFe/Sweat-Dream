@@ -28,6 +28,8 @@ import dream  # noqa: E402
 import dream_control  # noqa: E402
 from PIL import Image  # noqa: E402
 
+import scene  # noqa: E402  random start scene from a seed (--seed, --split): see scene.py
+
 LIVE_FRAME = os.environ.get("LIVE_FRAME")
 STOP_FILE = os.environ.get("STOP_FILE")
 
@@ -78,7 +80,9 @@ def main():
     parser = argparse.ArgumentParser(description="Run one Dream-1 task in the simulator")
     parser.add_argument("task", nargs="?", default="put apple into the bowl")
     parser.add_argument("--seconds", type=float, default=60)
+    scene.add_arguments(parser)
     args = parser.parse_args()
+    env = scene.prepare_env(args)
 
     stop = threading.Event()
     if STOP_FILE:
@@ -94,7 +98,7 @@ def main():
     print(f"Starting the simulator: {args.task} ({args.seconds:g} s)", flush=True)
     try:
         dream_control.main(["--task", args.task, "--seconds", str(args.seconds), "--headless", "--quiet"],
-                           stop_event=stop)
+                           shared_env=env, stop_event=stop)
     except (RuntimeError, ValueError, KeyError, OSError) as error:
         print(f"Stopped: {error}", flush=True)
         sys.exit(1)

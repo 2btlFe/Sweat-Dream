@@ -56,6 +56,7 @@
     <div class="row">
       <div class="grow"><label for="task">Task</label><input id="task" value="put apple into the bowl"></div>
       <div><label for="seconds">Time limit (s)</label><input id="seconds" type="number" min="10" max="300" value="60"></div>
+      <div><label for="seed">Seed (empty: new on Run)</label><div style="display:flex;gap:6px"><input id="seed" type="number" min="0" step="1" placeholder="random" style="width:140px"><button id="newSeed" type="button" title="New random seed" aria-label="New random seed" style="padding:9px 12px">↻</button></div></div>
       <button id="run">Run</button>
       <button id="stop" class="stop" hidden>Stop</button>
     </div>
@@ -66,7 +67,7 @@
     <div class="status"><span class="dot" id="dot"></span><strong id="statusText">Ready</strong><span class="muted" id="statusMore"></span></div>
     <img id="live" class="view" alt="Live camera view" hidden>
     <div id="placeholder" class="view placeholder">The cameras appear here when you press Run.</div>
-    <div class="legend">Left: top camera · Right: left and right wrist cameras</div>
+    <div class="legend">Left: top camera · Right: left and right wrist cameras <strong id="previewNote"></strong></div>
     <pre id="log" hidden></pre>
   </section>
 </main>
@@ -103,6 +104,8 @@ async function refresh() {
       $("examples").appendChild(b);
     }
   }
+  running = s.running;
+  if (running) $("previewNote").textContent = "";
   $("run").disabled = s.running;
   $("stop").hidden = !s.running;
   $("dot").classList.toggle("on", s.running);
@@ -124,13 +127,34 @@ async function refresh() {
 
 $("run").onclick = async () => {
   try {
-    await api("/api/run", { task: $("task").value, seconds: $("seconds").value });
+    // Every run has a seed you can see: an empty box gets a new random one first, so the run can be repeated.
+    if (!$("seed").value.trim()) $("seed").value = Math.floor(Math.random() * 1000000);
+    await api("/api/run", { task: $("task").value, seconds: $("seconds").value, seed: $("seed").value.trim() });
+    running = true; previewWanted = null; $("previewNote").textContent = "";
     $("live").hidden = true;
     $("placeholder").hidden = false;
     $("placeholder").textContent = "Starting the simulator… (the first picture takes a few seconds)";
     refresh();
   } catch (err) { alert(err.message); }
 };
+// Preview: the start scene of the seed in the box, shown without pressing Run (scene.py renders it, no Dream call).
+let previewTimer = null, previewWanted = null, running = false;
+async function preview() {
+  const seed = $("seed").value.trim();
+  if (running || !/^\d+$/.test(seed)) return;
+  previewWanted = seed;
+  $("previewNote").textContent = `· loading the start scene of seed ${seed}…`;
+  try {
+    const res = await fetch("/api/preview?seed=" + seed);
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
+    const url = URL.createObjectURL(await res.blob());
+    if (previewWanted !== seed || running) return;  // the seed changed or a run started meanwhile
+    $("live").src = url; $("live").hidden = false; $("placeholder").hidden = true;
+    $("previewNote").textContent = `· Preview: start scene of seed ${seed} (not running)`;
+  } catch (err) { if (previewWanted === seed) $("previewNote").textContent = `· Preview failed: ${err.message}`; }
+}
+$("seed").oninput = () => { clearTimeout(previewTimer); previewTimer = setTimeout(preview, 500); };
+$("newSeed").onclick = () => { $("seed").value = Math.floor(Math.random() * 1000000); preview(); };  // a train seed (scene.py: 0..999999)
 $("stop").onclick = async () => {
   $("stop").disabled = true;
   await api("/api/stop", {}).catch(() => {});
