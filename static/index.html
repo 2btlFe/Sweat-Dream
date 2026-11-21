@@ -301,7 +301,7 @@ function showSettings() {
   if (!local) $("useLocal").onclick = () => changeSettings({ robot: "yam" });
   $("settingsNote").classList.toggle("remote", !local);
   $("settingsNote").innerHTML = local
-    ? `Local YAM scene: ${settings.room === "yam_tabletop" ? "bundled tabletop" : "original approximation of the Sandbox room theme"}. The robot, task objects, and policy cameras use the bundled YAM model; layout and lighting affect the next run.`
+    ? `Local YAM scene: ${settings.room === "yam_tabletop" ? "bundled tabletop" : "Sandbox desk texture and room colors, with simplified local walls"}. The robot, task objects, and policy cameras use the bundled YAM model; layout and lighting affect the next run.`
     : `This robot requires a separate MuJoCo model and Dream-1 action adapter. <a href="${esc(catalog.sandbox_url)}" target="_blank" rel="noopener noreferrer">Open Sandbox ↗</a>`;
 }
 function changeSettings(patch) {
@@ -489,8 +489,8 @@ $("stop").onclick = async () => {
   try {
     const data = await api("/api/simulator-settings");
     settings = data.settings; catalog = data.catalog;
-    fillOptions("robotSelect", catalog.robots, value => value === "yam" ? " (local)" : " (Sandbox)");
-    fillOptions("roomSelect", catalog.rooms, value => value === "yam_tabletop" ? "" : " (local approximation)");
+    fillOptions("robotSelect", catalog.robots, value => value === "yam" ? "" : " (unavailable)");
+    fillOptions("roomSelect", catalog.rooms);
     fillOptions("layoutSelect", catalog.layouts);
     fillOptions("lightingSelect", catalog.lighting);
     showSettings();

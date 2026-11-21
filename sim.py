@@ -43,7 +43,7 @@ import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
 
 import simulator_settings as sim_settings
-from local_rooms import themed_xml
+from local_rooms import desk_texture, themed_xml
 
 HERE = Path(__file__).resolve().parent
 LIVE_FRAME = os.environ.get("LIVE_FRAME")
@@ -203,7 +203,12 @@ def main():
 
     if args.room != "yam_tabletop":
         build_base_xml = yam_env.build_xml
-        yam_env.build_xml = lambda: themed_xml(build_base_xml(), args.room)
+        try:
+            texture = desk_texture(args.room)
+        except (OSError, ValueError) as error:
+            texture = None
+            print(f"Room desk texture unavailable; using catalog color: {error}", flush=True)
+        yam_env.build_xml = lambda: themed_xml(build_base_xml(), args.room, texture)
     env = yam_env.YamEnv()
     apply_lighting(env, args.lighting)
     if args.layout == "varied":

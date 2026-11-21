@@ -25,7 +25,7 @@ python app.py
 Open http://localhost:8000.
 
 1. Type a task such as `put apple into the bowl` → **Run**.
-2. Open **Simulation setup** in the right panel. Local runs use YAM tabletop. Choose a fixed starting layout or seeded object variation, and Standard, Warm, or Cool lighting.
+2. Open **Simulation setup** in the right panel. Choose YAM and a room, then choose a fixed or seeded object layout and Standard, Warm, or Cool lighting.
 3. Set the distance, release, and still-time rules. Existing runs are re-evaluated immediately.
 4. Select a run to inspect its final frame, checks, and distance chart. **Save labels** writes the current server-side verdicts to `label.json`.
 
@@ -33,7 +33,7 @@ Open http://localhost:8000.
 
 Dream Labs Sandbox currently lists YAM, Trossen WidowX AI, MakerMods Metal, SO-101, OpenYAM, AgileX PiPER, Universal Robots UR5e, Seeed reBot B601, and MakerMods Maker Arm. Its rooms are Kitchen, Sunny apartment, Cottage, Walnut study, and Evening den. Objects can be selected from Food, Toys, Kitchen, Home and tools, Containers, and Pictures, up to eight on the table. The public Playground's **SIM 1–4** buttons switch between shared live rooms; they are not local scene presets.
 
-The bundled `dream_examples/yam_mujoco` package provides the YAM robot and tabletop. **Run** supports YAM in the tabletop and five original MuJoCo room backdrops inspired by the Sandbox themes. These backdrops are approximations, not Dream Labs Sandbox assets or equivalent tasks; the table, robot, objects, and calibrated policy cameras stay the same. Other robots are listed for reference but require their own MuJoCo model and Dream-1 observation/action adapter before a local run can be enabled. Lighting changes rendering. Each run records its robot, room, layout, lighting, and seed in `meta.json`.
+The bundled `dream_examples/yam_mujoco` package provides the YAM robot and tabletop. **Run** supports YAM in the tabletop and five simplified local rooms. The room styles use publicly served Sandbox desk textures and published color/light descriptors at runtime; the room walls are local geometry. The Sandbox's baked Three.js room meshes and its separate MuJoCo `fruit_table` scene are not interchangeable with this bundled YAM control loop, so these are not exact Sandbox scenes or equivalent tasks. No Dream Labs asset is committed to this repository. Other robots are marked **unavailable** and require their own MuJoCo model and Dream-1 observation/action adapter. Lighting changes rendering. Each run records its robot, room, layout, lighting, and seed in `meta.json`.
 
 The run list also shows episodes collected from the command line, including after a page reload.
 

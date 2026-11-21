@@ -12,7 +12,7 @@ ROBOTS = {
     "maker_arm": "MakerMods Maker Arm",
 }
 ROOMS = {
-    "yam_tabletop": "YAM tabletop (local)",
+    "yam_tabletop": "YAM tabletop",
     "kitchen": "Kitchen",
     "sunny_apartment": "Sunny apartment",
     "cottage": "Cottage",
