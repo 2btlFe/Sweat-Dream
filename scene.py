@@ -30,8 +30,8 @@ What a seed randomizes (default setting):
   - the order the objects are placed in (so no object is always placed last, into the leftover gaps).
 Every object lies where BOTH arms can reach (scene_reach_map.npz) and the top camera sees, fully on the table,
 at least min_gap from every other object, and not under an arm at home or hidden behind one in the top camera
-view. Spots near the edge of that area are drawn less often (edge_falloff), so most scenes are comfortably
-reachable and a few are near the limit.
+view. Each spot is drawn from a Gaussian centred on the object's canonical spot (where the package puts it,
+position_sigma wide), so most scenes are close to the canonical one and a few are far from it.
 
 Seeds are split so evaluation scenes are never trained on:
   train  0 .. 999_999
@@ -64,13 +64,13 @@ from yam_env import build_xml as _package_xml  # noqa: E402  taken now, before o
 REACH_MAP = Path(__file__).resolve().parent / "scene_reach_map.npz"
 
 # Bump when the sampling rules change (the same seed then gives a different scene), and refresh REFERENCE.
-SCENE_VERSION = 2
+SCENE_VERSION = 3
 
 TRAIN_SEEDS = range(0, 1_000_000)
 EVAL_SEED_START = 1_000_000
 EVAL_POOL = range(EVAL_SEED_START, EVAL_SEED_START + 1000)  # the stratified eval set is drawn from these
 EVAL_SET_SIZE = 50
-TRIES_PER_OBJECT = 300
+TRIES_PER_OBJECT = 500
 SCENE_ATTEMPTS = 100
 CAMERA_MARGIN = 10  # px kept between an object and the top camera's image edge
 LIFT = 0.002  # m dropped onto the table, so a turned object never starts inside it
@@ -83,9 +83,11 @@ class Setting:
     objects: tuple  # bodies placed at random; the others stay at the package's default pose
     reach: str = "both"  # "both": every object within reach of both arms; "either": of at least one arm
     min_gap: float = 0.03  # m between the edges of any two objects
-    yaw_deg: tuple = (0.0, 360.0)  # range of each object's turn about the vertical axis
-    edge_falloff: float = 0.08  # m: spots closer than this to the edge of the free area are drawn less often
-    edge_min_weight: float = 0.25  # how often a spot right at the edge is drawn, relative to the middle
+    yaw_deg: tuple = (0.0, 360.0)  # range of each object's turn about the vertical axis (uniform)
+    # Each object's spot is drawn from a Gaussian centred on its canonical spot (where the package puts it), this
+    # many metres wide (standard deviation) in x and in y; draws outside the allowed area or too close to another
+    # object are drawn again from the same stream, so the result stays one scene per seed.
+    position_sigma: float = 0.06
     description: str = ""
 
     def key(self):
@@ -110,18 +112,17 @@ SETTINGS = {
 # longer gives the same scene (dreamlabs, the camera, the reach map or this code changed): check_reproducible()
 # says so. After a deliberate change, bump SCENE_VERSION and refresh with  python scene.py --check --update
 REFERENCE = {
-    "default": {0: "8eb50efed92d694a", 42: "2426e2750bd7bf00", 999999: "c30a489f7bb042b8",
-                1000000: "1a58b9c2f68bdab4", 1000049: "2f5e272c5251f480"},
-    "fruits_only": {0: "e1af86a63042200c", 42: "b8db6b7a9a9572b1"},
+    "default": {0: "708f417c96724ec9", 42: "e7a52824163b67c6", 999999: "089181774465bd66", 1000000: "0543c0df01006fcc", 1000049: "03ee1b9b4d840981"},
+    "fruits_only": {0: "21c8d00ddf44d5b4", 42: "4e4cb352f8beae12"},
 }
-EVAL_FINGERPRINT = "f885497727d1d571"
-CONTROLS_FINGERPRINT = "9f96d4d4d278f080"  # the ood.py scene controls drawn from seeds (draw_controls)
+EVAL_FINGERPRINT = "ad48f46aca7a1a7a"
+CONTROLS_FINGERPRINT = "62b2af832a833d14"  # the ood.py scene controls drawn from seeds (draw_controls)
 # The fixed eval set of the default setting: 17 easy, 17 medium, 16 hard (select_eval_seeds() remakes it).
 EVAL_SEEDS = (1000000, 1000001, 1000002, 1000003, 1000004, 1000005, 1000006, 1000007, 1000008, 1000009, 1000010,
               1000011, 1000012, 1000013, 1000014, 1000015, 1000016, 1000017, 1000018, 1000019, 1000020, 1000021,
               1000022, 1000023, 1000024, 1000025, 1000026, 1000027, 1000028, 1000029, 1000030, 1000031, 1000032,
-              1000033, 1000034, 1000035, 1000036, 1000037, 1000038, 1000039, 1000040, 1000041, 1000042, 1000043,
-              1000044, 1000045, 1000049, 1000051, 1000054, 1000056)
+              1000033, 1000034, 1000035, 1000036, 1000037, 1000038, 1000039, 1000041, 1000042, 1000043, 1000044,
+              1000045, 1000047, 1000050, 1000051, 1000057, 1000060)
 
 
 # ---------------------------------------------------------------------------------------------- seeds and streams
@@ -259,11 +260,9 @@ class Layout:
         return (depth > 0) & (u > m) & (u < 640 - m) & (v > 60 + m) & (v < 420 - m)
 
     def area(self, setting):
-        """Where a setting may place objects: the polygon, its cells, and how often each cell is drawn."""
-        key = (setting.reach, setting.edge_falloff, setting.edge_min_weight)
+        """Where a setting may place objects (a prepared polygon)."""
+        key = setting.reach
         if key not in self.areas:
-            from scipy import ndimage
-
             if setting.reach == "both":
                 reach = self.reach["left"] & self.reach["right"]
             elif setting.reach == "either":
@@ -274,12 +273,7 @@ class Layout:
             o, c = self.origin, self.cell
             polygon = unary_union([box(o[0] + x * c, o[1] + y * c, o[0] + (x + 1) * c, o[1] + (y + 1) * c)
                                    for y, x in zip(*np.nonzero(allowed))])
-            cells = np.argwhere(allowed)
-            # Spots near the edge of the area are drawn less often: weight rises from edge_min_weight at the
-            # edge to 1 at edge_falloff inside.
-            inside = ndimage.distance_transform_edt(allowed) * c
-            weight = np.clip(inside[allowed] / max(setting.edge_falloff, 1e-9), setting.edge_min_weight, 1.0)
-            self.areas[key] = (prep(polygon.buffer(1e-6)), cells, weight / weight.sum())
+            self.areas[key] = prep(polygon.buffer(1e-6))
         return self.areas[key]
 
     def placed(self, name, x, y, yaw):
@@ -302,7 +296,7 @@ def layout_for(model=None):
 
 # ---------------------------------------------------------------------------------------------- sample and apply
 
-def sample_scene(seed, model, setting="default"):
+def sample_scene(seed, model=None, setting="default"):
     """Draw the start scene of a seed under a setting.
     @return {"version", "setting", "seed", "split", "objects": {name: {"x", "y", "z", "yaw_deg"}}}, in metres.
     """
@@ -311,7 +305,7 @@ def sample_scene(seed, model, setting="default"):
     missing = [n for n in rules.objects if n not in layout.outlines]
     if missing:
         raise ValueError(f"Setting {setting!r} names objects the scene does not have: {missing}")
-    allowed, cells, weights = layout.area(rules)
+    allowed = layout.area(rules)
     # Objects the setting does not move stay at their default pose and are kept clear of, like the arms.
     fixed = [affinity.translate(layout.outlines[n], *layout.defaults[n]["pos"][:2])
              for n in layout.outlines if n not in rules.objects and n in SETTINGS["default"].objects]
@@ -321,9 +315,7 @@ def sample_scene(seed, model, setting="default"):
         shapes, objects = list(layout.arm_shadows) + fixed, {}
         for name in rng.permutation(rules.objects):
             for _try in range(TRIES_PER_OBJECT):
-                i, j = cells[rng.choice(len(cells), p=weights)]
-                x = layout.origin[0] + (j + rng.random()) * layout.cell
-                y = layout.origin[1] + (i + rng.random()) * layout.cell
+                x, y = layout.defaults[name]["pos"][:2] + rules.position_sigma * rng.standard_normal(2)
                 yaw = rng.uniform(lo, hi)
                 shape = layout.placed(name, x, y, yaw)
                 if allowed.contains(shape) and all(shape.distance(s) >= rules.min_gap for s in shapes):
@@ -419,13 +411,20 @@ def settle(env, seconds=1.0):
 # ---------------------------------------------------------------------------------------------- scene controls
 
 NOT_RANDOM = {"camera_target"}  # ood.py controls that pick what to edit in the page, not a scene value
-ARM_ATTEMPTS = 30  # random arm angles that collide are drawn again (deterministically) up to this many times
+ARM_ATTEMPTS = 30  # random arm/camera values that fail a check are drawn again (deterministically) this many times
 # Random arm angles stay this close (degrees) to the home pose (all joints 0), joints 1..6, within the joint limits.
 # The page's sliders still reach the full limits; only random draws are kept near home.
 RANDOM_ARM_SPAN_DEG = (20, 20, 20, 30, 30, 30)
 # A random arm pose must leave its wrist camera looking at the table: tilted down at least this much (sine of the
 # angle below horizontal; home is about 0.43), with the centre of the view landing where an arm reaches.
 WRIST_MIN_DOWN = 0.2
+# Random workspace-camera tweaks stay this small (the sliders still reach the full ood.py ranges). They apply on top
+# of the viewpoint preset, which is itself aimed at the workspace.
+RANDOM_CAMERA_SPAN = {"camera_x_cm": 3, "camera_y_cm": 3, "camera_z_cm": 3, "camera_pitch_deg": 8,
+                      "camera_yaw_deg": 8, "camera_roll_deg": 5, "camera_fov_offset_deg": 8}
+# A random camera or arm setting must leave every object showing in the workspace camera, at least this many pixels
+# of each in the 640x360 image the model gets (not out of frame, not hidden behind an arm).
+TOP_MIN_PIXELS = 100
 
 
 def random_controls():
@@ -437,9 +436,10 @@ def random_controls():
 
 def draw_controls(seed, names, setting="default", attempt=0):
     """Values for the ood.py scene controls named (camera, arm angles, blur, light, table, ...), drawn from the seed
-    within each control's range and step. Same (setting, seed, control), same value; each control has its own
+    from a Gaussian around the control's default, kept within its range and on its step (choices: uniform).
+    Same (setting, seed, control), same value; each control has its own
     stream, so choosing more or fewer random controls never changes the others' values. `attempt` > 0 redraws only
-    the arm angles (after a drawn pose collided).
+    the arm angles and the workspace camera (after a drawn start failed a check).
     """
     import ood
 
@@ -448,19 +448,52 @@ def draw_controls(seed, names, setting="default", attempt=0):
         field = ood.FIELDS.get(name)
         if field is None or name in NOT_RANDOM:
             raise ValueError(f"Not a random scene control: {name}")
-        redraw = (attempt,) if attempt and name in ood.ARM_FIELDS else ()
+        redraw = (attempt,) if attempt and name in redrawn_controls() else ()
         rng = rng_for(seed, "ood", name, *redraw, setting=setting)
         if "choices" in field:
             options = sorted(field["choices"])
             values[name] = options[int(rng.integers(len(options)))]
         else:
             low, high = field["min"], field["max"]
-            if name in ood.ARM_FIELDS:  # near home, not anywhere in the joint's whole range
-                span = RANDOM_ARM_SPAN_DEG[int(name[-1]) - 1]
+            span = RANDOM_ARM_SPAN_DEG[int(name[-1]) - 1] if name in ood.ARM_FIELDS else RANDOM_CAMERA_SPAN.get(name)
+            if span is not None:  # near the default, not anywhere in the control's whole range
                 low, high = max(low, field["default"] - span), min(high, field["default"] + span)
-            steps = int(round((high - low) / field["step"]))
-            values[name] = round(low + field["step"] * int(rng.integers(steps + 1)), 6)
+            # Gaussian around the default (sigma: a quarter of the allowed range), drawn again until it falls inside
+            # the range, then put on the control's step.
+            sigma = (high - low) / 4
+            for _ in range(1000):
+                value = field["default"] + sigma * rng.standard_normal()
+                if low <= value <= high:
+                    break
+            value = min(high, max(low, field["min"] + field["step"] * round((value - field["min"]) / field["step"])))
+            values[name] = round(value, 6)
     return values
+
+
+def redrawn_controls():
+    """@return The controls drawn again when a drawn start fails a check: arm angles and the workspace camera."""
+    import ood
+
+    return set(ood.ARM_FIELDS) | set(ood.CAMERA_FIELDS) | {"camera_preset"}
+
+
+def top_view_problem(env):
+    """@return Why the workspace camera does not show every object (None when it does), by rendering which object
+    each pixel belongs to: catches objects out of frame and objects hidden behind an arm."""
+    model = env.model
+    renderer = mujoco.Renderer(model, height=480, width=640)
+    try:
+        renderer.enable_segmentation_rendering()
+        renderer.update_scene(env.data, camera="top")
+        seen = renderer.render()[60:420]  # the crop the model gets
+    finally:
+        renderer.close()
+    geoms = seen[..., 0][seen[..., 1] == mujoco.mjtObj.mjOBJ_GEOM]
+    bodies = np.bincount(model.geom_bodyid[geoms], minlength=model.nbody)
+    for name in SETTINGS["default"].objects:
+        if bodies[model.body(name).id] < TOP_MIN_PIXELS:
+            return f"the workspace camera does not show the {name}"
+    return None
 
 
 def wrist_view_problem(env, sides):
@@ -591,7 +624,8 @@ def build_env(args):
         sys.exit(1)
 
     random_arm = set(args.ood_random) & ood.ARM_FIELDS
-    for attempt in range(ARM_ATTEMPTS if random_arm else 1):
+    redrawn = set(args.ood_random) & redrawn_controls()  # random arm or camera values: checked, redrawn on failure
+    for attempt in range(ARM_ATTEMPTS if redrawn else 1):
         try:
             changes = ood.validate(resolve_controls(seed, args.ood, args.ood_random, args.setting, attempt))
         except ValueError as error:
@@ -621,10 +655,14 @@ def build_env(args):
                 problem = wrist_view_problem(env, sorted({name.split("_")[0] for name in random_arm}))
                 if problem:
                     raise ValueError(f"Random arm pose rejected: {problem}.")
+            # Only drawn values have to keep every object in the workspace camera; hand-set ones are the user's call.
+            problem = top_view_problem(env) if redrawn else None
+            if problem:
+                raise ValueError(f"Random camera/arm settings rejected: {problem}.")
             break
         except ValueError as error:
             env.close()
-            if not random_arm or attempt == ARM_ATTEMPTS - 1:
+            if not redrawn or attempt == ARM_ATTEMPTS - 1:
                 stop(error)
     if seed is None:
         return env, changes
