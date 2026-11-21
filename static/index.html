@@ -20,7 +20,43 @@
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width: 1000px; margin: 0 auto; padding: 24px 16px 48px; }
+  main { width: 100%; margin: 0; }
+  .workspace { display: grid; grid-template-columns: minmax(0, 7fr) minmax(340px, 3fr); height: 100dvh; min-height: 620px; }
+  .operator { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 20px; overflow-y: auto; }
+  .operator-header { flex: none; }
+  .operator-header .sub { margin-bottom: 12px; }
+  .controls { flex: none; }
+  .camera-panel { display: flex; flex-direction: column; flex: 1; min-height: 260px; margin-bottom: 0; }
+  .camera-panel > .view { flex: 1; height: 0; min-height: 200px; aspect-ratio: auto; background: #0d1117; object-fit: contain; }
+  .sidebar { min-width: 0; min-height: 0; padding: 20px; overflow-y: auto; border-left: 1px solid var(--line); background: var(--panel); }
+  .sidebar .panel { padding: 16px; }
+  .sidebar .banners, .sidebar .detail { grid-template-columns: minmax(0, 1fr); }
+  .sidebar .banner { padding: 12px; }
+  .sidebar .banner .value { font-size: 22px; }
+  .sidebar .hint { line-height: 1.4; }
+  .sidebar table { table-layout: fixed; }
+  .sidebar th, .sidebar td { overflow-wrap: anywhere; }
+  .sidebar th:nth-child(1), .sidebar td:nth-child(1) { width: 26%; }
+  .sidebar th:nth-child(2), .sidebar td:nth-child(2) { width: 47%; }
+  .sidebar th:nth-child(3), .sidebar td:nth-child(3) { width: 27%; }
+  .sidebar .hide-sm { display: none; }
+  .sidebar .detail { gap: 12px; }
+  .sidebar .detail > div:last-child { grid-column: auto !important; }
+  .sidebar .detail .view { height: auto; aspect-ratio: 720 / 270; }
+  .sidebar .row { align-items: center; }
+  .sidebar .row h2 { margin: 0; }
+  @media (max-width: 960px) {
+    .workspace { display: block; height: auto; min-height: 0; }
+    .operator { min-height: min(680px, 100dvh); overflow: visible; }
+    .camera-panel { min-height: 360px; }
+    .sidebar { height: auto; overflow: visible; border-left: 0; border-top: 1px solid var(--line); }
+  }
+  @media (max-width: 600px) {
+    .operator, .sidebar { padding: 14px; }
+    .operator { min-height: 0; }
+    .camera-panel { min-height: 280px; }
+    .camera-panel > .view { min-height: 220px; }
+  }
   h1 { font-size: 22px; margin: 0 0 4px; }
   h2 { font-size: 17px; margin: 0 0 4px; }
   .sub { color: var(--muted); margin: 0 0 20px; }
@@ -91,12 +127,16 @@
 </head>
 <body>
 <main>
-  <h1>Dream-1 Simulator</h1>
-  <p class="sub">Run a task → set the rules → save labels.</p>
+  <div class="workspace">
+  <div class="operator">
+  <header class="operator-header">
+    <h1>Dream-1 Simulator</h1>
+    <p class="sub">Run a task and watch the robot. Review rules and results on the right.</p>
+  </header>
 
   <div id="keyNotice" class="notice" hidden>No API key. See README.</div>
 
-  <section class="panel">
+  <section class="panel controls">
     <div class="row">
       <div class="grow"><label for="task">Task</label><input id="task" value="put apple into the bowl"></div>
       <div><label for="seconds">Seconds</label><input id="seconds" type="number" min="10" max="300" value="60"></div>
@@ -106,13 +146,15 @@
     <div class="examples" id="examples"></div>
   </section>
 
-  <section class="panel">
+  <section class="panel camera-panel">
     <div class="status"><span class="dot" id="dot"></span><strong id="statusText">Ready</strong><span class="muted" id="statusMore"></span></div>
     <img id="live" class="view" alt="Live camera view" hidden>
     <div id="placeholder" class="view placeholder">Press Run to start.</div>
     <details id="logBox" hidden><summary class="legend">Log</summary><pre id="log"></pre></details>
   </section>
+  </div>
 
+  <aside class="sidebar" aria-label="Success rules and runs">
   <section class="panel">
     <h2>Success rules</h2>
     <p class="hint">At the end, the object must be in the target, released if required, and stable for the selected time. Stable means under 0.05 m/s.</p>
@@ -172,6 +214,8 @@
       </div>
     </div>
   </section>
+  </aside>
+  </div>
 </main>
 
 <script>
