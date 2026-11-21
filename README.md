@@ -26,6 +26,20 @@ Open http://localhost:8000.
 4. Set the distance, release, and still-time rules. Existing runs are re-evaluated immediately.
 5. Select a run to inspect its final frame, checks, and distance chart. **Save labels** writes the current server-side verdicts to `label.json`.
 
+### Batch (many episodes in the background)
+
+Switch to **Batch** above the task. Set the number of episodes, the seconds per episode, the tasks (taken in turn) and
+the start positions, then **Start batch**. The cameras are not shown; the page shows progress, success / failure /
+invalid counts and the time left instead.
+
+- **Scene ± 2 cm**: the scene set on the right, every object shifted a little (seeded).
+- **Random layout**: the items on the right placed anywhere on the reachable table, at least 2 cm apart (seeded).
+
+Episode *i* uses seed *seed + i* (the seed is random unless you set one), so a layout can be made again. Each episode
+is labeled with the rules as they were when the batch started (`runs/<id>/label.json`, `source: batch`). A batch
+stops on a run error such as a rejected API key, after three invalid episodes in a row, or on **Stop batch**. Pick a
+batch in the run list to see only its runs and its success rate; select a run for its chart.
+
 The run list also shows episodes collected from the command line, including after a page reload.
 
 To collect 30 episodes across the three sample tasks with ten seeded starting layouts:

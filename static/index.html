@@ -26,7 +26,7 @@
   .operator-header { flex: none; }
   .operator-header .sub { margin-bottom: 12px; }
   .controls { flex: none; }
-  .camera-panel { display: flex; flex-direction: column; flex: 1; min-height: 260px; margin-bottom: 0; }
+  .camera-panel { display: flex; flex-direction: column; flex: 1 0 auto; min-height: 260px; margin-bottom: 0; }
   .camera-panel > .view { flex: 1; height: 0; min-height: 200px; aspect-ratio: auto; background: #0d1117; object-fit: contain; }
   .sidebar { min-width: 0; min-height: 0; padding: 20px; overflow-y: auto; border-left: 1px solid var(--line); background: var(--panel); }
   .sidebar .panel { padding: 16px; }
@@ -74,7 +74,16 @@
   .row .grow { flex: 1 1 260px; }
   label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
   input[type=text], input[type=number], input[type=password], input:not([type]) { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
-  #seconds { width: 110px; }
+  #seconds, #batchCount, #batchSeconds, #batchSeed { width: 110px; }
+  select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; max-width: 100%; }
+  .mode { margin-bottom: 14px; max-width: 360px; }
+  .item.on { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+  .batch-box { flex: 1 0 auto; display: flex; flex-direction: column; justify-content: flex-start; gap: 12px; padding: 20px; border: 1px dashed var(--line); border-radius: 8px; overflow-wrap: anywhere; }
+  .batch-box .title { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 17px; }
+  .bar { height: 12px; background: var(--line); border-radius: 999px; overflow: hidden; }
+  .bar div { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  .counts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 14px; }
+  .batch-end.bad { color: var(--bad); }
   button { padding: 9px 20px; border: 0; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; background: var(--accent); color: var(--accent-text); }
   button.stop { background: var(--stop); color: #fff; }
   button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); font-weight: 500; }
@@ -171,20 +180,53 @@
   </section>
 
   <section class="panel controls">
-    <div class="row">
-      <div class="grow"><label for="task">Task</label><input id="task" value="put apple into the bowl"></div>
-      <div><label for="seconds">Seconds</label><input id="seconds" type="number" min="10" max="300" value="60"></div>
-      <button id="run">Run</button>
-      <button id="stop" class="stop" hidden>Stop</button>
+    <div class="toggle mode" role="group" aria-label="Mode">
+      <button id="modeSingle" class="on" aria-pressed="true">Single run</button>
+      <button id="modeBatch" aria-pressed="false">Batch</button>
     </div>
-    <div class="task-note" id="taskNote"></div>
-    <div class="examples" id="examples"></div>
+    <div id="singleForm">
+      <div class="row">
+        <div class="grow"><label for="task">Task</label><input id="task" value="put apple into the bowl"></div>
+        <div><label for="seconds">Seconds</label><input id="seconds" type="number" min="10" max="300" value="60"></div>
+        <button id="run">Run</button>
+        <button id="stop" class="stop" hidden>Stop</button>
+      </div>
+      <div class="task-note" id="taskNote"></div>
+      <div class="examples" id="examples"></div>
+    </div>
+    <div id="batchForm" hidden>
+      <div class="row">
+        <div><label for="batchCount">Episodes</label><input id="batchCount" type="number" min="1" max="500" value="20"></div>
+        <div><label for="batchSeconds">Seconds each</label><input id="batchSeconds" type="number" min="10" max="300" value="60"></div>
+        <div><label for="batchSeed">Seed</label><input id="batchSeed" type="number" placeholder="random"></div>
+        <div class="grow"><label>Start positions</label>
+          <div class="toggle" role="group" aria-label="Start positions">
+            <button id="layoutShift" class="on" aria-pressed="true">Scene ± 2 cm</button>
+            <button id="layoutRandom" aria-pressed="false">Random layout</button>
+          </div>
+        </div>
+      </div>
+      <label style="margin-top: 12px">Tasks <span class="muted">(taken in turn)</span></label>
+      <div class="items" id="batchTasks"></div>
+      <div class="row" style="margin-top: 14px; align-items: center; justify-content: space-between;">
+        <span class="muted" id="batchEstimate" style="font-size: 13px"></span>
+        <div class="row"><button id="startBatch">Start batch</button><button id="stopBatch" class="stop" hidden>Stop batch</button></div>
+      </div>
+    </div>
   </section>
 
   <section class="panel camera-panel">
     <div class="status"><span class="dot" id="dot"></span><strong id="statusText">Ready</strong><span class="muted" id="statusMore"></span></div>
     <img id="live" class="view" alt="Live camera view" hidden>
     <div id="placeholder" class="view placeholder">Press Run to start.</div>
+    <div id="batchBox" class="batch-box" hidden>
+      <div class="title"><strong id="batchTitle"></strong><span class="muted" id="batchTime"></span></div>
+      <div class="bar"><div id="batchBar"></div></div>
+      <div class="counts" id="batchCounts"></div>
+      <div class="muted" id="batchNow"></div>
+      <div class="batch-end" id="batchEnd"></div>
+      <div><button class="ghost" id="batchShow">Show these runs</button></div>
+    </div>
     <details id="logBox" hidden><summary class="legend">Log</summary><pre id="log"></pre></details>
   </section>
   </div>
@@ -241,9 +283,11 @@
   <details class="panel" id="runsPanel" open>
     <summary>Runs</summary>
     <div class="panel-content">
-    <div class="row" style="justify-content: flex-end; align-items: center;">
+    <div class="row" style="justify-content: space-between; align-items: center;">
+      <select id="runFilter" aria-label="Which runs"></select>
       <button id="saveLabels" class="ghost">Save labels</button>
     </div>
+    <div class="muted" id="runSummary" style="font-size: 13px; margin-top: 8px;"></div>
     <table style="margin-top:10px">
       <thead><tr><th>When</th><th>Task</th><th>Result</th><th class="hide-sm">Why</th><th class="hide-sm">Saved</th></tr></thead>
       <tbody id="runs"><tr><td colspan="5" class="muted">No runs yet.</td></tr></tbody>
@@ -318,16 +362,44 @@ $("releaseNo").onclick = () => changeRules({ release: false });
 
 /* ---------- runs ---------- */
 
+let runFilter = "all";
+const detailCache = {};
+
 async function loadRuns() {
   runs = (await api("/api/runs")).runs;
+  drawFilter();
   renderRuns();
 }
+
+const batchName = id => {
+  const m = /^b(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/.exec(id || "");
+  return m ? `Batch ${when(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`)}` : `Batch ${id}`;
+};
+const shownRuns = () => runFilter === "all" ? runs
+  : runFilter === "single" ? runs.filter(r => !r.batch_id) : runs.filter(r => r.batch_id === runFilter);
+
+function drawFilter() {
+  const batches = [...new Set([...(batchState ? [batchState.id] : []), ...runs.map(r => r.batch_id).filter(Boolean)])];
+  if (runFilter !== "all" && runFilter !== "single" && !batches.includes(runFilter)) runFilter = "all";
+  const count = id => runs.filter(r => r.batch_id === id).length;
+  $("runFilter").innerHTML = [`<option value="all">All runs (${runs.length})</option>`,
+    `<option value="single">Single runs (${runs.filter(r => !r.batch_id).length})</option>`,
+    ...batches.map(id => `<option value="${esc(id)}">${esc(batchName(id))} (${count(id)})</option>`)].join("");
+  $("runFilter").value = runFilter;
+}
+$("runFilter").onchange = e => { runFilter = e.target.value; renderRuns(); };
 
 function verdict(run) { return run.verdict || { label: "invalid", reason: "No evaluation" }; }
 
 function renderRuns() {
-  if (!runs.length) { $("runs").innerHTML = '<tr><td colspan="5" class="muted">No runs yet.</td></tr>'; $("detail").hidden = true; return; }
-  $("runs").innerHTML = runs.map(run => {
+  const list = shownRuns();
+  const n = label => list.filter(r => verdict(r).label === label).length;
+  const valid = n("success") + n("failure");
+  $("runSummary").textContent = list.length
+    ? `${list.length} runs · success ${n("success")}${valid ? ` (${Math.round(100 * n("success") / valid)}% of valid)` : ""} · failure ${n("failure")} · invalid ${n("invalid")}`
+    : "";
+  if (!list.length) { $("runs").innerHTML = '<tr><td colspan="5" class="muted">No runs yet.</td></tr>'; $("detail").hidden = true; return; }
+  $("runs").innerHTML = list.map(run => {
     const v = verdict(run), saved = run.label;
     return `<tr data-id="${esc(run.id)}" class="${run.id === selected ? "sel" : ""}">
       <td>${when(run.started_at)}</td>
@@ -341,16 +413,21 @@ function renderRuns() {
   renderDetail();
 }
 
-function renderDetail() {
-  const run = runs.find(r => r.id === selected);
+async function renderDetail() {
+  const run = shownRuns().find(r => r.id === selected);
   $("detail").hidden = !run;
   if (!run) return;
   const v = verdict(run);
   $("detailImage").src = `/api/runs/${run.id}/last.jpg`;
-  $("detailHead").innerHTML = `${chip(v.label)} <strong>${esc(run.task)}</strong><div class="muted" style="font-size:13px">${when(run.started_at)} · ${fmt(run.sim_seconds || 0)} s</div>`;
-  $("detailChecks").innerHTML = (v.checks || [{ ok: false, text: v.reason }])
+  const extra = [run.batch_id ? batchName(run.batch_id) : "Single run", run.seed != null ? `seed ${run.seed}` : "",
+                 run.layout === "random" ? "random layout" : ""].filter(Boolean).join(" · ");
+  $("detailHead").innerHTML = `${chip(v.label)} <strong>${esc(run.task)}</strong><div class="muted" style="font-size:13px">${when(run.started_at)} · ${fmt(run.sim_seconds || 0)} s · ${esc(extra)}</div>`;
+  $("detailChecks").innerHTML = (v.checks?.length ? v.checks : [{ ok: false, text: v.reason }])
     .map(c => `<li><span class="${c.ok ? "y" : c.ok === false ? "n" : "muted"}">${c.ok ? "✓" : c.ok === false ? "✗" : "–"}</span> ${esc(c.text)}</li>`).join("");
-  drawChart(v);
+  // The per-step series (for the chart) is fetched for the selected run only.
+  const key = run.id + JSON.stringify(rules);
+  if (!detailCache[key]) detailCache[key] = await api(`/api/runs/${run.id}/verdict`).catch(() => v);
+  if (selected === run.id) drawChart(detailCache[key]);
 }
 
 function drawChart(v) {
@@ -387,7 +464,7 @@ $("saveLabels").onclick = async () => {
   try {
     clearTimeout(saveTimer);
     await api("/api/rules", rules);
-    const { saved } = await api("/api/labels", { run_ids: runs.map(r => r.id) });
+    const { saved } = await api("/api/labels", { run_ids: shownRuns().map(r => r.id) });
     $("saveLabels").textContent = `Saved ${saved}`;
     setTimeout(() => { $("saveLabels").textContent = "Save labels"; }, 2500);
     await loadRuns();
@@ -521,6 +598,7 @@ function drawExamples() {
   const words = { apple: "apple", orange: "orange", banana: "banana", water_bottle: "water bottle" };
   const list = [];
   for (const t of targets) for (const o of objects) list.push(t === "bowl" ? `put ${words[o]} into the bowl` : `put ${words[o]} on the plate`);
+  drawBatchTasks(list);
   $("examples").innerHTML = "";
   for (const text of list.slice(0, 8)) {
     const b = document.createElement("button");
@@ -555,6 +633,101 @@ $("keyForm").onsubmit = async e => {
 };
 $("clearKey").onclick = async () => { $("apiKey").value = ""; showKey(await api("/api/key", { key: "" })); refresh(); };
 
+/* ---------- batch ---------- */
+
+let mode = "single", layout = "shift", batchTasks = new Set(), lastBatchDone = null, followBatch = false, batchState = null;
+
+function setMode(next) {
+  mode = next;
+  for (const [id, m] of [["modeSingle", "single"], ["modeBatch", "batch"]]) {
+    $(id).classList.toggle("on", mode === m); $(id).setAttribute("aria-pressed", mode === m);
+  }
+  $("singleForm").hidden = mode !== "single";
+  $("batchForm").hidden = mode !== "batch";
+  showBatch(batchState);
+}
+$("modeSingle").onclick = () => setMode("single");
+$("modeBatch").onclick = () => setMode("batch");
+
+function setLayout(next) {
+  layout = next;
+  for (const [id, l] of [["layoutShift", "shift"], ["layoutRandom", "random"]]) {
+    $(id).classList.toggle("on", layout === l); $(id).setAttribute("aria-pressed", layout === l);
+  }
+}
+$("layoutShift").onclick = () => setLayout("shift");
+$("layoutRandom").onclick = () => setLayout("random");
+
+function drawBatchTasks(list) {
+  for (const t of [...batchTasks]) if (!list.includes(t)) batchTasks.delete(t);
+  if (!batchTasks.size && list.length) batchTasks.add(list[0]);
+  $("batchTasks").innerHTML = list.map(t => `<button class="item ${batchTasks.has(t) ? "on" : ""}" data-task="${esc(t)}" aria-pressed="${batchTasks.has(t)}">${esc(t)}</button>`).join("");
+  document.querySelectorAll("[data-task]").forEach(b => b.onclick = () => {
+    const t = b.dataset.task;
+    if (batchTasks.has(t)) { if (batchTasks.size > 1) batchTasks.delete(t); } else batchTasks.add(t);
+    drawBatchTasks(list);
+  });
+  estimate();
+}
+
+function estimate() {
+  const count = Number($("batchCount").value) || 0, secs = Number($("batchSeconds").value) || 0;
+  const minutes = Math.round(count * (secs + 15) / 60);
+  $("batchEstimate").textContent = count && secs ? `${count} episodes · about ${minutes} min · ${batchTasks.size} task${batchTasks.size > 1 ? "s" : ""}` : "";
+  return minutes;
+}
+$("batchCount").oninput = estimate;
+$("batchSeconds").oninput = estimate;
+
+$("startBatch").onclick = async () => {
+  const problem = sceneProblem();
+  if (problem) { alert(problem); return; }
+  const count = Number($("batchCount").value);
+  if (!confirm(`Run ${count} episodes in the background (about ${estimate()} min of Dream-1 use)?`)) return;
+  try {
+    await api("/api/batch", { tasks: [...batchTasks], count, seconds: $("batchSeconds").value, seed: $("batchSeed").value,
+                              layout, scene: sceneForRun() });
+    followBatch = true;
+    refresh();
+  } catch (err) { alert(err.message); }
+};
+$("stopBatch").onclick = async () => {
+  $("stopBatch").disabled = true;
+  await api("/api/stop", {}).catch(() => {});
+  setTimeout(() => { $("stopBatch").disabled = false; }, 2000);
+};
+$("batchShow").onclick = () => {
+  if (!batchState) return;
+  runFilter = batchState.id; drawFilter(); renderRuns();
+  $("runsPanel").open = true; $("runsPanel").scrollIntoView({ behavior: "smooth" });
+};
+
+const duration = s => s == null ? "" : s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.round(s % 3600 / 60)} min` : s >= 60 ? `${Math.round(s / 60)} min` : `${s} s`;
+
+function showBatch(b) {
+  const inBatch = mode === "batch";
+  $("batchBox").hidden = !inBatch || !b;
+  if (inBatch) {
+    $("live").hidden = true;
+    $("placeholder").hidden = !!b;
+    $("placeholder").textContent = "Batches run in the background, without the cameras. Set one up above.";
+  } else {
+    $("placeholder").textContent = "Press Run to start.";
+    $("placeholder").hidden = !$("live").hidden;
+  }
+  if (!b) return;
+  const valid = b.counts.success + b.counts.failure;
+  $("batchTitle").textContent = `${batchName(b.id)} · ${b.done} / ${b.total}`;
+  $("batchTime").textContent = b.running ? `${duration(b.elapsed_s)} so far${b.eta_s != null ? ` · about ${duration(b.eta_s)} left` : ""}` : `took ${duration(b.elapsed_s)}`;
+  $("batchBar").style.width = `${100 * b.done / b.total}%`;
+  $("batchCounts").innerHTML = `${chip("success")} ${b.counts.success} ${chip("failure")} ${b.counts.failure} ${chip("invalid")} ${b.counts.invalid}`
+    + (valid ? ` <span class="muted">· ${Math.round(100 * b.counts.success / valid)}% success of valid</span>` : "");
+  $("batchNow").textContent = b.current ? `Now: #${b.current.index} ${b.current.task} (seed ${b.current.seed})`
+    : `${b.layout === "random" ? "Random layouts" : "Scene ± 2 cm"} · ${b.seconds} s each · rules: ${fmt(b.rules.distance_cm)} cm, ${b.rules.release ? "must release" : "can hold"}, ${fmt(b.rules.still_seconds)} s`;
+  $("batchEnd").textContent = b.running ? "" : b.stopped_reason || "Finished.";
+  $("batchEnd").classList.toggle("bad", !b.running && !!b.stopped_reason && b.stopped_reason !== "Stopped by you.");
+}
+
 /* ---------- running ---------- */
 
 function showLive() {
@@ -569,10 +742,28 @@ async function refresh() {
   catch { $("statusText").textContent = "Server is off (run python app.py)"; return; }
 
   showKey(s.key);
-  $("run").disabled = s.running || !s.key.source;
-  $("stop").hidden = !s.running;
-  $("dot").classList.toggle("on", s.running);
-  if (s.running) {
+  const b = s.batch, batchRunning = !!b?.running;
+  batchState = b;
+  if (batchRunning && mode !== "batch") setMode("batch");
+  $("modeSingle").disabled = $("modeBatch").disabled = s.running || batchRunning;
+  $("run").disabled = s.running || batchRunning || !s.key.source;
+  $("startBatch").disabled = s.running || batchRunning || !s.key.source;
+  $("stop").hidden = !s.running || batchRunning;
+  $("stopBatch").hidden = !batchRunning;
+  $("dot").classList.toggle("on", s.running || batchRunning);
+  showBatch(b);
+  if (b && b.done !== lastBatchDone) {  // a batch episode finished: list it
+    lastBatchDone = b.done;
+    if (followBatch) { runFilter = b.id; followBatch = false; }
+    await loadRuns();
+  }
+  if (batchRunning) {
+    $("statusText").textContent = "Batch running";
+    $("statusMore").textContent = b.current ? `episode ${b.current.index} of ${b.total} · ${b.current.task}` : "";
+  } else if (b && mode === "batch") {
+    $("statusText").textContent = b.stopped_reason ? "Batch stopped" : "Batch finished";
+    $("statusMore").textContent = `${b.done} of ${b.total} episodes`;
+  } else if (s.running) {
     $("statusText").textContent = "Running";
     $("statusMore").textContent = `${s.task} · ${s.elapsed_s} s`;
   } else if (s.task) {
@@ -585,9 +776,10 @@ async function refresh() {
   $("log").textContent = s.log.join("\n");
   $("log").scrollTop = $("log").scrollHeight;
 
-  if (s.running && !liveTimer) liveTimer = setInterval(showLive, 250);
-  if (!s.running && liveTimer) { clearInterval(liveTimer); liveTimer = null; showLive(); }
-  if (wasRunning && !s.running) { selected = s.run_id; await loadRuns(); }
+  const live = s.running && !batchRunning && mode === "single";
+  if (live && !liveTimer) liveTimer = setInterval(showLive, 250);
+  if (!live && liveTimer) { clearInterval(liveTimer); liveTimer = null; if (mode === "single") showLive(); }
+  if (wasRunning && !s.running && !batchRunning && !b?.current) { selected = s.run_id; await loadRuns(); }
   wasRunning = s.running;
 }
 

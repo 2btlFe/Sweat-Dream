@@ -5,12 +5,14 @@
 Press Run on the page: sim.py runs the task in its own process, the page shows the cameras live, and the run's
 trajectory is saved in runs/<id>/. The page judges every saved run against the success rules set on it (target
 distance, release, time standing still); the rules are kept in runs/rules.json and each run's label in
-runs/<id>/label.json. Standard library only.
+runs/<id>/label.json. A batch runs many episodes in the background (no camera view), each from a seeded start
+layout, and labels each one with the rules as they were when the batch started. Standard library only.
 """
 
 import argparse
 import json
 import os
+import random
 import re
 import secrets
 import subprocess
@@ -34,6 +36,9 @@ DEFAULT_RULES = judge.DEFAULT_RULES
 OBJECTS = ["apple", "orange", "banana", "water_bottle"]
 TARGETS = ["bowl", "plate"]
 AREA = {"x": (-0.30, 0.30), "y": (-0.22, 0.18)}
+## Footprint radius of each item (metres), for random layouts that keep items apart; the page's map uses the same.
+RADII = {"apple": 0.040, "orange": 0.033, "banana": 0.050, "water_bottle": 0.030, "bowl": 0.083, "plate": 0.072}
+MAX_BATCH = 500
 ID_RE = re.compile(r"^[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$")
 WORK = Path(tempfile.mkdtemp(prefix="dream-web-"))
 LIVE = WORK / "live.jpg"
@@ -101,7 +106,13 @@ class Runner:
     def running(self):
         return self.process is not None and self.process.poll() is None
 
-    def start(self, task, seconds, scene=None):
+    def start(self, task, seconds, scene=None, seed=None, live=True, extra_env=None):
+        """Start one run of sim.py.
+        @param scene The table setup, as parse_scene returns it, or None for the default scene.
+        @param seed Seed for the small start shifts (random when None).
+        @param live Whether to write the camera view for the page (batches do not).
+        @param extra_env More environment variables for sim.py (BATCH_ID, LAYOUT).
+        """
         with self.lock:
             if self.running():
                 raise RuntimeError("A run is already going.")
@@ -111,14 +122,16 @@ class Runner:
             LIVE.unlink(missing_ok=True)
             run_id = datetime.now().strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
             env = {**os.environ, "PYTHONUTF8": "1", "PYTHONUNBUFFERED": "1", "PYTHONWARNINGS": "ignore",
-                   "LIVE_FRAME": str(LIVE), "STOP_FILE": str(STOP), "RUN_DIR": str(RUNS / run_id)}
+                   "STOP_FILE": str(STOP), "RUN_DIR": str(RUNS / run_id), **(extra_env or {})}
+            if live:
+                env["LIVE_FRAME"] = str(LIVE)
             if PAGE_KEY["value"]:
                 env["DREAM_API_KEY"] = PAGE_KEY["value"]
             if scene:
                 env["SCENE_JSON"] = json.dumps(scene)
             self.process = subprocess.Popen(
                 [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds),
-                 "--seed", str(secrets.randbelow(1_000_000_000))], cwd=str(HERE), env=env,
+                 "--seed", str(secrets.randbelow(1_000_000_000) if seed is None else seed)], cwd=str(HERE), env=env,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
             self.task, self.started, self.ended, self.run_id = task, time.time(), None, run_id
             self.log.clear()
@@ -147,6 +160,7 @@ class Runner:
             "log": list(self.log),
             "key": key_status(),
             "examples": EXAMPLES,
+            "batch": BATCH.status(),
         }
 
 
@@ -171,6 +185,156 @@ def parse_scene(scene):
     if not any(name in items for name in TARGETS):
         raise ValueError("Put a bowl or a plate on the table.")
     return {"items": items}
+
+
+def random_layout(names, rng):
+    """Place the named items at random in AREA, at least 2 cm apart.
+    @param names Items on the table.
+    @param rng A random.Random (seeded, so a layout can be made again).
+    @return A scene, as parse_scene returns it.
+    @throws RuntimeError When the items do not fit (should not happen with six items).
+    """
+    placed = {}
+    for name in sorted(names, key=lambda n: -RADII[n]):  # big ones first
+        for _ in range(500):
+            x, y = rng.uniform(*AREA["x"]), rng.uniform(*AREA["y"])
+            if all((x - px) ** 2 + (y - py) ** 2 > (RADII[name] + RADII[other] + 0.02) ** 2
+                   for other, (px, py) in placed.items()):
+                placed[name] = [round(x, 4), round(y, 4)]
+                break
+        else:
+            raise RuntimeError("Could not place the items apart; try fewer items.")
+    return {"items": placed}
+
+
+def write_label(d, verdict, rules, **extra):
+    write_json(d / "label.json", {"label": verdict["label"], "reason": verdict["reason"],
+                                  "success_time_s": verdict.get("success_time_s"), "rules": rules,
+                                  "saved_at": datetime.now().isoformat(timespec="seconds"), **extra})
+
+
+class Batch:
+    """Many episodes one after another in the background: no camera view, a seeded start layout each, and a label
+    from the rules as they were when the batch started. Stops on a run error (such as a rejected API key), after
+    three invalid episodes in a row, or when asked."""
+
+    def __init__(self):
+        self.thread = None
+        self.stop_requested = False
+        self.info = None
+
+    def running(self):
+        return self.thread is not None and self.thread.is_alive()
+
+    def start(self, tasks, count, seconds, layout, scene, seed):
+        if self.running() or RUNNER.running():
+            raise RuntimeError("A run is already going.")
+        if not has_api_key():
+            raise RuntimeError("Enter your API key first.")
+        self.stop_requested = False
+        self.info = {"id": "b" + datetime.now().strftime("%Y%m%d-%H%M%S"), "tasks": tasks, "total": count,
+                     "seconds": seconds, "layout": layout, "seed": seed, "rules": current_rules(),
+                     "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
+                     "started": time.time(), "ended": None, "current": None, "stopped_reason": None, "durations": []}
+        self.thread = threading.Thread(target=self._loop, args=(scene,), daemon=True)
+        self.thread.start()
+
+    def stop(self):
+        if self.running():
+            self.stop_requested = True
+            RUNNER.stop()
+
+    def _loop(self, scene):
+        info = self.info
+        invalid_in_a_row = 0
+        try:
+            for i in range(info["total"]):
+                if self.stop_requested:
+                    break
+                task, seed = info["tasks"][i % len(info["tasks"])], info["seed"] + i
+                episode_scene = scene if info["layout"] == "shift" else random_layout(scene["items"], random.Random(seed))
+                info["current"] = {"index": i + 1, "task": task, "seed": seed}
+                started = time.time()
+                RUNNER.start(task, info["seconds"], episode_scene, seed=seed, live=False,
+                             extra_env={"BATCH_ID": info["id"], "LAYOUT": info["layout"]})
+                run_id, process = RUNNER.run_id, RUNNER.process
+                while process.poll() is None:  # a run that hangs is stopped, then killed
+                    waited = time.time() - started
+                    if waited > info["seconds"] + 180:
+                        RUNNER.stop()
+                    if waited > info["seconds"] + 240:
+                        process.kill()
+                    time.sleep(0.5)
+                d = run_dir(run_id)
+                meta = read_json(d / "meta.json", {}) if d else {}
+                verdict = (judge.evaluate(meta, read_json(d / "trajectory.json", {}), info["rules"]) if d
+                           else judge.invalid("no_result"))
+                if d:
+                    write_label(d, verdict, info["rules"], batch_id=info["id"], source="batch")
+                info["counts"][verdict["label"]] += 1
+                info["done"] += 1
+                info["durations"].append(time.time() - started)
+                invalid_in_a_row = invalid_in_a_row + 1 if verdict["label"] == "invalid" else 0
+                if verdict["reason"] == "execution_error" and not self.stop_requested:
+                    info["stopped_reason"] = f"Run error: {str(meta.get('error') or '')[:160]}"
+                    break
+                if invalid_in_a_row >= 3:
+                    info["stopped_reason"] = "Three invalid episodes in a row."
+                    break
+            if self.stop_requested:
+                info["stopped_reason"] = "Stopped by you."
+        except Exception as error:  # noqa: BLE001  (shown on the page)
+            info["stopped_reason"] = f"Batch error: {error}"
+        finally:
+            info["current"] = None
+            info["ended"] = time.time()
+
+    def status(self):
+        if not self.info:
+            return None
+        info = {k: v for k, v in self.info.items() if k != "durations"}
+        durations = self.info["durations"]
+        remaining = info["total"] - info["done"]
+        info["running"] = self.running()
+        info["elapsed_s"] = round((info["ended"] or time.time()) - info["started"])
+        info["eta_s"] = round(sum(durations) / len(durations) * remaining) if durations and self.running() else None
+        return info
+
+
+BATCH = Batch()
+
+## Verdicts by (run id, rules, meta and trajectory modification times), so the run list stays fast with many runs.
+VERDICTS = {}
+
+
+def run_verdict(d, rules):
+    key = (d.name, json.dumps(rules, sort_keys=True),
+           *((d / name).stat().st_mtime if (d / name).exists() else 0 for name in ("meta.json", "trajectory.json")))
+    if key not in VERDICTS:
+        VERDICTS[key] = judge.evaluate(read_json(d / "meta.json", {}), read_json(d / "trajectory.json", {}), rules)
+    return VERDICTS[key]
+
+
+def brief(verdict):
+    """A verdict without its per-step series (the run list does not draw charts)."""
+    return {k: v for k, v in verdict.items() if k not in ("dist", "touch", "t")}
+
+
+def parse_task_list(tasks, scene):
+    """@return The tasks, checked against the judge and the scene. @throws ValueError"""
+    if not isinstance(tasks, list) or not tasks:
+        raise ValueError("Pick at least one task.")
+    clean = []
+    for task in tasks:
+        task = re.sub(r"\s+", " ", str(task)).strip()
+        parsed = judge.parse_task(task)
+        if parsed is None:
+            raise ValueError(f"Not a task the judge understands: {task}")
+        missing = [name for name in parsed if scene and name not in scene["items"]]
+        if missing:
+            raise ValueError(f"Not on the table for '{task}': {', '.join(missing)}")
+        clean.append(task)
+    return clean
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -207,11 +371,12 @@ class Handler(BaseHTTPRequestHandler):
             if RUNS.is_dir():
                 for d in sorted(RUNS.iterdir(), reverse=True):
                     if run_dir(d.name):
-                        meta = read_json(d / "meta.json", {})
-                        trajectory = read_json(d / "trajectory.json", {})
-                        runs.append({**meta, "id": d.name, "label": read_json(d / "label.json"),
-                                     "verdict": judge.evaluate(meta, trajectory, rules)})
+                        runs.append({**read_json(d / "meta.json", {}), "id": d.name, "label": read_json(d / "label.json"),
+                                     "verdict": brief(run_verdict(d, rules))})
             return self.send_json({"runs": runs})
+        m = re.match(r"^/api/runs/([^/]+)/verdict$", path)
+        if m and run_dir(m.group(1)):
+            return self.send_json(run_verdict(RUNS / m.group(1), current_rules()))
         m = re.match(r"^/api/runs/([^/]+)/(trajectory\.json|last\.jpg)$", path)
         if m and run_dir(m.group(1)) and (RUNS / m.group(1) / m.group(2)).exists():
             kind = "application/json" if m.group(2).endswith(".json") else "image/jpeg"
@@ -236,6 +401,8 @@ class Handler(BaseHTTPRequestHandler):
             missing = [name for name in judge.parse_task(task) if scene and name not in scene["items"]]
             if missing:
                 return self.send_json({"error": f"Not on the table: {', '.join(missing)}"}, 400)
+            if BATCH.running():
+                return self.send_json({"error": "A batch is running."}, 409)
             try:
                 seconds = min(300, max(10, int(float(body.get("seconds") or 60))))
                 RUNNER.start(task, seconds, scene)
@@ -260,11 +427,8 @@ class Handler(BaseHTTPRequestHandler):
             for run_id in run_ids:
                 d = run_dir(run_id)
                 if d:
-                    verdict = judge.evaluate(read_json(d / "meta.json", {}),
-                                             read_json(d / "trajectory.json", {}), rules)
-                    write_json(d / "label.json", {"label": verdict["label"], "reason": verdict["reason"],
-                        "success_time_s": verdict.get("success_time_s"), "rules": rules,
-                        "saved_at": datetime.now().isoformat(timespec="seconds")})
+                    meta = read_json(d / "meta.json", {})
+                    write_label(d, run_verdict(d, rules), rules, batch_id=meta.get("batch_id"))
                     saved += 1
             return self.send_json({"saved": saved})
         if self.path == "/api/key":
@@ -273,7 +437,28 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "That does not look like an API key."}, 400)
             PAGE_KEY["value"] = key or None
             return self.send_json(key_status())
+        if self.path == "/api/batch":
+            try:
+                scene = parse_scene(body.get("scene"))
+                if scene is None:
+                    raise ValueError("Scene: pick what is on the table.")
+                tasks = parse_task_list(body.get("tasks"), scene)
+                count = int(body.get("count") or 0)
+                if not 1 <= count <= MAX_BATCH:
+                    raise ValueError(f"Episodes must be 1 to {MAX_BATCH}.")
+                seconds = min(300, max(10, int(float(body.get("seconds") or 60))))
+                layout = body.get("layout")
+                if layout not in ("shift", "random"):
+                    raise ValueError("Start positions must be 'shift' or 'random'.")
+                seed = int(body["seed"]) if str(body.get("seed", "")).strip() else secrets.randbelow(1_000_000)
+                BATCH.start(tasks, count, seconds, layout, scene, seed)
+            except (ValueError, TypeError, AttributeError) as error:
+                return self.send_json({"error": str(error)}, 400)
+            except RuntimeError as error:
+                return self.send_json({"error": str(error)}, 409)
+            return self.send_json(RUNNER.status())
         if self.path == "/api/stop":
+            BATCH.stop()
             RUNNER.stop()
             return self.send_json(RUNNER.status())
         self.send_json({"error": "not found"}, 404)
@@ -291,6 +476,7 @@ def main():
     try:
         server.serve_forever()
     except KeyboardInterrupt:
+        BATCH.stop()
         RUNNER.stop()
 
 
