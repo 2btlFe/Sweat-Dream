@@ -1,6 +1,12 @@
 """Run one Dream-1 task in the Dream Labs simulator (headless) and save its trajectory.
 
-    python sim.py "put apple into the bowl" --seconds 60
+    python sim.py "put apple into the bowl" --seconds 60                  a new random seed (printed)
+    python sim.py "put apple into the bowl" --seed 42                     the start scene of seed 42 (scene.py)
+    python sim.py "put apple into the bowl" --seed 42 --ood-random light,table --ood '{"blur_px": 2}'
+    python sim.py --preview start.jpg --seed 42                           the start scene as a JPEG (no API call)
+
+The start scene comes from the seed (scene.py: object layout, and the scene controls of ood.py marked random); see
+SCENE_SEED.md. A custom layout from the page (SCENE_JSON) replaces the seed's layout and implies --default-scene.
 
 Every run is saved in runs/<id>/:
   meta.json        task, time limit, start and end, whether it was stopped
@@ -10,9 +16,9 @@ Every run is saved in runs/<id>/:
 
 app.py starts this for every run. Environment variables connect it to the website:
   RUN_DIR     the folder to save the run in (default: runs/<new id>)
-  SCENE_JSON  which objects are on the table and where: {"items": {"apple": [x, y], "bowl": [x, y], ...}} in metres
-              (world frame); objects left out are removed. Without it, the simulator's own scene is used.
-  BATCH_ID, LAYOUT  set by a batch: stored in meta.json
+  SCENE_JSON  a custom layout: which objects are on the table and where: {"items": {"apple": [x, y], ...}} in
+              metres (world frame); objects left out are removed. Without it, the seed's layout is used.
+  BATCH_ID    set by a batch: stored in meta.json
   JUDGE_PAIRS  for a typed prompt: the object -> target pairs it is judged on, as JSON
                [{"object": "apple", "target": "bowl"}, ...] (meta.json "judge")
   LIVE_FRAME  path of a JPEG that is replaced with the latest camera view (top camera + both wrist cameras)
@@ -44,9 +50,10 @@ import dream  # noqa: E402
 from dream import credentials as dream_credentials  # noqa: E402
 import dream_control  # noqa: E402
 import yam_env  # noqa: E402
-import mujoco  # noqa: E402
-import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
+
+import ood  # noqa: E402  scene controls: camera, arm angles, blur, light, table
+import scene  # noqa: E402  the seed's start scene; imported before build_xml is patched below (it keeps the original)
 
 HERE = Path(__file__).resolve().parent
 LIVE_FRAME = os.environ.get("LIVE_FRAME")
@@ -150,9 +157,13 @@ STATS = {"model_responses": 0, "model_actions": 0}
 original_step = yam_env.YamEnv.step
 
 
+RECORDING = {"on": False}  # off while the scene is built and settled, on for the run itself
+
+
 def step(self, left, right):
     result = original_step(self, left, right)
-    TRAJECTORY.record(self)
+    if RECORDING["on"]:
+        TRAJECTORY.record(self)
     if STATS["model_responses"]:
         STATS["model_actions"] += 1
     return result
@@ -197,8 +208,30 @@ def main():
     parser = argparse.ArgumentParser(description="Run one Dream-1 task in the simulator")
     parser.add_argument("task", nargs="?", default="put apple into the bowl")
     parser.add_argument("--seconds", type=float, default=60)
-    parser.add_argument("--seed", type=int, help="Reproducible small shifts to each object's start pose")
+    parser.add_argument("--ood", type=json.loads, default={}, help="Scene settings (ood.py) as a JSON object")
+    parser.add_argument("--preview", type=Path, help="Render the initial camera view to a JPEG and exit")
+    scene.add_arguments(parser)  # --seed, --default-scene, --split, --setting, --ood-random
     args = parser.parse_args()
+    try:
+        ood.validate(args.ood)
+    except ValueError as error:
+        parser.error(str(error))
+    if SCENE:  # a custom layout replaces the seed's: random scene controls need the seed, so they cannot be used
+        if args.seed is not None or args.ood_random:
+            parser.error("A custom layout (SCENE_JSON) cannot be used with --seed or --ood-random.")
+        args.default_scene = True
+    if not args.default_scene:
+        args.seed = scene.pick_seed(args)  # the seed the scene is built from, kept in meta.json
+
+    if args.preview:
+        env, _changes = scene.build_env(args)
+        try:
+            state = env.state()
+            env.step(state["left"], state["right"])
+            save_jpeg(camera_view(env.images()), args.preview)
+        finally:
+            env.close()
+        return
 
     # The key: DREAM_API_KEY first (the website passes the key typed on the page), then ~/.dreamlabs/credentials
     # (batch.py and the command line). The bundled sim would otherwise prefer a separate, possibly stale /login key.
@@ -208,28 +241,35 @@ def main():
 
     run_dir = Path(os.environ.get("RUN_DIR") or HERE / "runs" / new_run_id())
     run_dir.mkdir(parents=True, exist_ok=True)
-    meta = {"id": run_dir.name, "task": args.task, "seconds": args.seconds, "seed": args.seed,
+    meta = {"id": run_dir.name, "task": args.task, "seconds": args.seconds,
+            "seed": args.seed, "split": scene.split_of(args.seed) if args.seed is not None else None,
+            "setting": args.setting, "scene_version": scene.SCENE_VERSION,
+            "layout": "custom" if SCENE else "default" if args.seed is None else "seed",
+            "ood_random": args.ood_random, "ood": None,
             "started_at": datetime.now().isoformat(timespec="seconds"), "stopped_by_user": False,
             "error": None, "error_type": None, "scene": SCENE or None,
-            "batch_id": os.environ.get("BATCH_ID"), "layout": os.environ.get("LAYOUT"),
+            "batch_id": os.environ.get("BATCH_ID"),
             "judge": {"pairs": json.loads(os.environ["JUDGE_PAIRS"])} if os.environ.get("JUDGE_PAIRS") else None}
 
-    env = yam_env.YamEnv()  # built from the scene set on the page (build_xml above)
-    if args.seed is not None:
-        rng = np.random.default_rng(args.seed)
-        for body, joint in (("apple", "apple_free"), ("orange", "orange_free"),
-                            ("banana", "banana_free"), ("water_bottle", "bottle_free")):
-            try:
-                qpos = env.data.joint(joint).qpos
-            except KeyError:  # not on the table in this scene
-                continue
-            qpos[:2] += rng.uniform(-0.02, 0.02, 2)
-            if body != "water_bottle":
-                yaw = np.deg2rad(rng.uniform(-25, 25)) / 2
-                rotated = np.empty(4)
-                mujoco.mju_mulQuat(rotated, np.array([np.cos(yaw), 0, 0, np.sin(yaw)]), qpos[3:7].copy())
-                qpos[3:7] = rotated
-        mujoco.mj_forward(env.model, env.data)
+    def save(env=None):
+        meta["ended_at"] = datetime.now().isoformat(timespec="seconds")
+        meta["sim_seconds"] = TRAJECTORY.t[-1] if TRAJECTORY.t else 0
+        meta.update(STATS)
+        (run_dir / "trajectory.json").write_text(json.dumps(TRAJECTORY.to_json(), separators=(",", ":")))
+        if last_images:
+            save_jpeg(camera_view(last_images), run_dir / "last.jpg")
+        (run_dir / "meta.json").write_text(json.dumps(meta, indent=2))
+        if env is not None:
+            env.close()
+        print(f"Saved to runs/{run_dir.name}", flush=True)
+
+    try:
+        env, changes = scene.build_env(args)  # the seed's layout (or the custom one) and the scene controls
+    except SystemExit:  # build_env printed why it stopped (a bad seed, a pose that overlaps, ...)
+        meta["error"], meta["error_type"] = "The start scene could not be built (see the log).", "SceneError"
+        save()
+        sys.exit(1)
+    meta["ood"] = changes or None
 
     stop = threading.Event()
     if STOP_FILE:
@@ -244,6 +284,7 @@ def main():
         threading.Thread(target=watch, daemon=True).start()
 
     print(f"Starting the simulator: {args.task} ({args.seconds:g} s)", flush=True)
+    RECORDING["on"] = True
     try:
         dream_control.main(["--task", args.task, "--seconds", str(args.seconds), "--headless", "--quiet"],
                            shared_env=env, stop_event=stop)
@@ -253,15 +294,7 @@ def main():
         print(f"Stopped: {error}", flush=True)
     finally:
         stop.set()
-        meta["ended_at"] = datetime.now().isoformat(timespec="seconds")
-        meta["sim_seconds"] = TRAJECTORY.t[-1] if TRAJECTORY.t else 0
-        meta.update(STATS)
-        (run_dir / "trajectory.json").write_text(json.dumps(TRAJECTORY.to_json(), separators=(",", ":")))
-        if last_images:
-            save_jpeg(camera_view(last_images), run_dir / "last.jpg")
-        (run_dir / "meta.json").write_text(json.dumps(meta, indent=2))
-        env.close()
-        print(f"Saved to runs/{run_dir.name}", flush=True)
+        save(env)
     sys.exit(1 if meta["error"] else 0)
 
 

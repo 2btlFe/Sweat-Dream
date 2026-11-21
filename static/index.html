@@ -6,221 +6,215 @@
 <title>Dream-1 Simulator</title>
 <style>
   :root {
-    --bg: #f6f7f9; --panel: #ffffff; --text: #1b1f24; --muted: #5f6b7a; --line: #dde2e8;
-    --accent: #2563eb; --accent-soft: #dbe7ff; --accent-text: #ffffff; --ok: #15803d; --ok-bg: #dcfce7;
-    --bad: #b91c1c; --bad-bg: #fee2e2; --stop: #dc2626; --warn-bg: #fef3c7; --warn: #92400e; --touch: #f59e0b;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0f1216; --panel: #181c22; --text: #e6e9ee; --muted: #9aa5b4; --line: #2a313b;
-      --accent: #4f8cff; --accent-soft: #1c2a45; --accent-text: #0b0d10; --ok: #4ade80; --ok-bg: #12301d;
-      --bad: #f87171; --bad-bg: #3a1515; --stop: #ef4444; --warn-bg: #3a2c0b; --warn: #fcd34d; --touch: #fbbf24;
-    }
+    color-scheme: dark;
+    --bg: #12171d; --panel: #1b222a; --well: #151b22;
+    --line: #343e49; --text: #f2f5f7; --muted: #a7b3bf;
+    --accent: #84e1bd; --accent-text: #112b22; --accent-soft: #1d3a31;
+    --danger: #ffb3ac; --warn-bg: #33291b; --warn: #f6d092;
+    --ok: #84e1bd; --ok-bg: #173a2e; --bad: #ffb3ac; --bad-bg: #3d2220; --touch: #f6c177;
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { width: 100%; margin: 0; }
-  .workspace { display: grid; grid-template-columns: minmax(0, 7fr) minmax(340px, 3fr); height: 100dvh; min-height: 620px; }
-  .operator { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 20px; overflow-y: auto; }
-  .operator-header { flex: none; }
-  .operator-header .sub { margin-bottom: 12px; }
-  .controls { flex: none; }
-  .camera-panel { display: flex; flex-direction: column; flex: 1 0 auto; min-height: 260px; margin-bottom: 0; }
-  .camera-panel > .view { flex: 1; height: 0; min-height: 200px; aspect-ratio: auto; background: #0d1117; object-fit: contain; }
-  .sidebar { min-width: 0; min-height: 0; padding: 20px; overflow-y: auto; border-left: 1px solid var(--line); background: var(--panel); }
-  .sidebar .panel { padding: 16px; }
-  .sidebar details.panel { padding: 0; }
-  .sidebar details.panel > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 16px; cursor: pointer; font-size: 17px; font-weight: 700; list-style: none; user-select: none; }
-  .sidebar details.panel > summary::-webkit-details-marker { display: none; }
-  .sidebar details.panel > summary::after { content: "⌄"; font-size: 20px; line-height: 1; color: var(--muted); transform: rotate(-90deg); transition: transform .18s ease; }
-  .sidebar details.panel[open] > summary::after { transform: rotate(0deg); }
-  .sidebar details.panel > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; border-radius: 10px; }
-  .sidebar details.panel[open] > summary { border-bottom: 1px solid var(--line); }
-  .sidebar .panel-content { padding: 16px; }
-  .sidebar .banners, .sidebar .detail { grid-template-columns: minmax(0, 1fr); }
-  .sidebar .banner { padding: 12px; }
-  .sidebar .banner .value { font-size: 22px; }
-  .sidebar .hint { line-height: 1.4; }
-  .sidebar table { table-layout: fixed; }
-  .sidebar th, .sidebar td { overflow-wrap: anywhere; }
-  .sidebar th:nth-child(1), .sidebar td:nth-child(1) { width: 26%; }
-  .sidebar th:nth-child(2), .sidebar td:nth-child(2) { width: 47%; }
-  .sidebar th:nth-child(3), .sidebar td:nth-child(3) { width: 27%; }
-  .sidebar .hide-sm { display: none; }
-  .sidebar .detail { gap: 12px; }
-  .sidebar .detail > div:last-child { grid-column: auto !important; }
-  .sidebar .detail .view { height: auto; aspect-ratio: 720 / 270; }
-  .sidebar .row { align-items: center; }
-  .sidebar .row h2 { margin: 0; }
-  @media (max-width: 960px) {
-    .workspace { display: block; height: auto; min-height: 0; }
-    .operator { min-height: min(680px, 100dvh); overflow: visible; }
-    .camera-panel { min-height: 360px; }
-    .sidebar { height: auto; overflow: visible; border-left: 0; border-top: 1px solid var(--line); }
-  }
-  @media (max-width: 600px) {
-    .operator, .sidebar { padding: 14px; }
-    .operator { min-height: 0; }
-    .camera-panel { min-height: 280px; }
-    .camera-panel > .view { min-height: 220px; }
-  }
-  h1 { font-size: 22px; margin: 0 0 4px; }
-  h2 { font-size: 17px; margin: 0 0 4px; }
-  .sub { color: var(--muted); margin: 0 0 20px; }
-  .hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
-  .row { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
-  .row .grow { flex: 1 1 260px; }
-  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
-  input[type=text], input[type=number], input[type=password], input:not([type]) { width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
-  #seconds, #batchCount, #batchSeconds, #batchSeed { width: 110px; }
-  select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; max-width: 100%; }
-  .mode { margin-bottom: 14px; max-width: 360px; }
-  .item.on { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, sans-serif; }
+  main { max-width: 1440px; margin: 0 auto; padding: 36px clamp(16px, 4vw, 56px) 48px; }
+  header { margin-bottom: 24px; }
+  h1 { font-size: clamp(28px, 4vw, 40px); line-height: 1.1; letter-spacing: -.045em; margin: 0; }
+  h2 { font-size: 16px; letter-spacing: -.015em; margin: 0 0 16px; }
+  .sub { color: var(--muted); margin: 8px 0 0; }
+  .workspace { display: grid; grid-template-columns: minmax(410px, 1fr) minmax(0, 1.1fr); gap: 16px 20px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .panel { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) 72px; gap: 10px; }
+  .hrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .grid3 { display: grid; grid-template-columns: 90px 90px minmax(0, 1fr); gap: 10px; align-items: end; }
+  label, .label { display: block; font-size: 12px; font-weight: 550; color: var(--muted); margin-bottom: 5px; }
+  input, select { width: 100%; min-width: 0; padding: 8px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--well); color: var(--text); font: inherit; }
+  input[type="number"] { font-variant-numeric: tabular-nums; }
+  input[type="checkbox"] { width: auto; accent-color: var(--accent); }
+  button, summary, input, select { outline-offset: 3px; }
+  :focus-visible { outline: 2px solid var(--accent); }
+  button { padding: 8px 14px; border: 1px solid transparent; border-radius: 8px; font: inherit; font-weight: 650; cursor: pointer; background: var(--accent); color: var(--accent-text); }
+  button:hover:not(:disabled) { filter: brightness(1.12); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.stop { background: var(--danger); color: #441b19; }
+  button.ghost { background: transparent; color: var(--muted); border-color: var(--line); font-weight: 500; }
+  button.small { padding: 4px 9px; font-size: 12px; }
+  .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; align-items: center; }
+  .actions button { min-width: 90px; }
+  .examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .examples button, #oodReset { background: transparent; color: var(--muted); border-color: var(--line); font-weight: 500; padding: 4px 9px; font-size: 11px; }
+  .fold > summary, .ood summary { cursor: pointer; font-size: 15px; font-weight: 650; }
+  .fold > summary::marker, .ood summary::marker { color: var(--accent); }
+  .fold[open] > summary { margin-bottom: 14px; }
+  .ood-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 14px 0 10px; }
+  .ood fieldset { min-width: 0; margin: 0; padding: 9px 11px 11px; background: var(--well); border: 1px solid var(--line); border-radius: 10px; }
+  .ood legend { padding: 0 5px; font-weight: 650; font-size: 12px; }
+  .ood-field + .ood-field { margin-top: 9px; }
+  .ood-slider { display: grid; grid-template-columns: minmax(0, 1fr) 4.4rem; gap: 8px; align-items: center; }
+  .ood-slider input[type="range"] { background: transparent; border: 0; margin: 0; padding: 0; accent-color: var(--accent); cursor: pointer; }
+  .ood-slider input[type="number"], .ood select { padding: 5px 7px; font-size: 12px; }
+  .monitor-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .monitor-header h2 { margin: 0; }
+  .status { display: inline-flex; align-items: center; gap: 7px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 20px; font-size: 11px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .dot.on { background: var(--accent); }
+  .status[data-state="error"] { color: var(--danger); }
+  .status[data-state="error"] .dot { background: var(--danger); }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  #statusMore { margin: 10px 0 0; font-size: 12px; }
+  #statusMore:empty { display: none; }
+  .view { width: 100%; aspect-ratio: 720 / 270; border-radius: 10px; display: block; }
+  img.view { background: #080c10; object-fit: contain; }
+  .placeholder { border: 1px dashed var(--line); background: var(--well); display: grid; place-items: center; color: var(--muted); text-align: center; padding: 12px; }
+  .legend { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted); margin-top: 9px; }
+  pre { margin: 12px 0 0; padding: 10px; border-radius: 8px; background: var(--well); max-height: 160px; overflow: auto; font-size: 12px; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+  details.log summary { font-size: 11px; color: var(--muted); cursor: pointer; margin-top: 10px; }
+
+  /* API key, mode and task notes */
+  .keyrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: end; }
+  .keystate { font-size: 12px; margin: 6px 0 14px; color: var(--ok); }
+  .keystate.none { color: var(--warn); }
+  .toggle { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .toggle button { border-radius: 0; background: var(--well); color: var(--muted); font-weight: 550; padding: 7px 6px; }
+  .toggle button.on { background: var(--accent); color: var(--accent-text); font-weight: 700; }
+  .mode { max-width: 320px; margin-bottom: 4px; }
+  .task-note { font-size: 12px; margin-top: 6px; color: var(--muted); }
+  .task-note.bad, .scene-note.bad, .batch-end.bad { color: var(--bad); }
+
+  /* chips (objects, batch tasks) */
+  .items { display: flex; flex-wrap: wrap; gap: 6px; }
+  .item { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--well); color: var(--text); font-weight: 500; font-size: 12px; }
+  .item i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .item.on { background: var(--accent-soft); border-color: var(--accent); }
+  .item.off { opacity: .45; text-decoration: line-through; }
   .item .judge { color: var(--muted); font-weight: 400; }
   .item .remove { margin-left: 2px; padding: 0 4px; border-radius: 4px; color: var(--muted); font-weight: 700; }
   .item .remove:hover { background: var(--bad-bg); color: var(--bad); }
-  .custom-task { margin-top: 10px; align-items: center; }
-  .custom-task select { width: auto; }
-  .pairs-edit { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; font-size: 13px; }
-  .pair { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
-  .pair select { padding: 4px 6px; font-size: 13px; }
+  .pairs-edit { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; font-size: 12px; }
+  .pair { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--well); }
+  .pair select { width: auto; padding: 3px 6px; font-size: 12px; }
   .pair .remove { cursor: pointer; padding: 0 5px; border-radius: 4px; color: var(--muted); font-weight: 700; }
   .pair .remove:hover { background: var(--bad-bg); color: var(--bad); }
-  button.small { padding: 4px 10px; font-size: 13px; }
-  .batch-box { flex: 1 0 auto; display: flex; flex-direction: column; justify-content: flex-start; gap: 12px; padding: 20px; border: 1px dashed var(--line); border-radius: 8px; overflow-wrap: anywhere; }
-  .batch-box .title { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 17px; }
-  .bar { height: 12px; background: var(--line); border-radius: 999px; overflow: hidden; }
-  .bar div { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
-  .counts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 14px; }
-  .batch-end.bad { color: var(--bad); }
-  button { padding: 9px 20px; border: 0; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; background: var(--accent); color: var(--accent-text); }
-  button.stop { background: var(--stop); color: #fff; }
-  button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); font-weight: 500; }
-  button:disabled { opacity: .45; cursor: default; }
-  .examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-  .examples button { padding: 4px 10px; font-size: 13px; }
-  .keystate { font-size: 13px; margin-top: 8px; color: var(--ok); }
-  .keystate.none { color: var(--warn); }
-  .task-note { font-size: 13px; margin-top: 6px; }
-  .task-note.bad, .scene-note.bad { color: var(--bad); }
 
-  /* Scene setup (sidebar) */
-  .scene { display: flex; flex-direction: column; gap: 12px; }
-  .robot { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: var(--bg); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-  .robot strong { font-size: 14px; }
-  .robot span { font-size: 12px; color: var(--muted); }
-  .items { display: flex; flex-wrap: wrap; gap: 6px; }
-  .item { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--text); font-weight: 500; font-size: 13px; }
-  .item i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-  .item.off { opacity: .45; text-decoration: line-through; }
-  .scene-buttons { display: flex; gap: 6px; }
-  .scene-buttons button { padding: 6px 12px; font-size: 13px; }
-  svg.map { width: 100%; height: auto; display: block; border-radius: 8px; touch-action: none; user-select: none; }
-  svg.map text { font-size: 28px; font-weight: 600; fill: #3b3326; pointer-events: none; }
+  /* custom layout */
+  .check { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text); margin: 0 0 12px; }
+  #layoutBody { display: flex; flex-direction: column; gap: 12px; }
+  #layoutBody.off { opacity: .5; }
+  .robot { border: 1px solid var(--line); border-radius: 8px; padding: 7px 11px; background: var(--well); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .robot strong { font-size: 13px; }
+  .robot span { font-size: 11px; color: var(--muted); }
+  svg.map { width: 100%; max-width: 520px; height: auto; display: block; border-radius: 10px; touch-action: none; user-select: none; }
+  svg.map text { font-size: 22px; font-weight: 600; fill: #3b3326; pointer-events: none; }
   svg.map [data-item] { cursor: grab; }
-  .scene-note { font-size: 13px; color: var(--muted); min-height: 20px; }
-  .status { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
-  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
-  .dot.on { background: var(--ok); animation: pulse 1.2s infinite; }
-  @keyframes pulse { 50% { opacity: .3; } }
-  .muted { color: var(--muted); }
-  .view { width: 100%; aspect-ratio: 720 / 270; border-radius: 8px; display: block; }
-  img.view { background: #000; object-fit: contain; }
-  .placeholder { border: 1px dashed var(--line); display: grid; place-items: center; color: var(--muted); text-align: center; padding: 8px; }
-  .legend { font-size: 12px; color: var(--muted); margin-top: 6px; }
-  pre { margin: 12px 0 0; max-height: 160px; overflow: auto; font-size: 12px; color: var(--muted); white-space: pre-wrap; }
+  .scene-note { font-size: 12px; color: var(--muted); }
 
-  /* The three rule banners */
-  .banners { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-  .banner { border: 1px solid var(--line); border-radius: 10px; padding: 14px; background: var(--bg); display: flex; flex-direction: column; gap: 8px; }
-  .banner .head { display: flex; align-items: center; gap: 8px; font-weight: 600; }
-  .banner .num { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-text); display: grid; place-items: center; font-size: 12px; flex: none; }
-  .banner .value { font-size: 26px; font-weight: 700; color: var(--accent); line-height: 1.1; }
-  .banner .value small { font-size: 14px; font-weight: 500; color: var(--muted); }
-  .banner p { margin: 0; font-size: 13px; color: var(--muted); }
-  .banner input[type=range] { width: 100%; accent-color: var(--accent); }
+  /* batch progress (in the monitor) */
+  .batch-box { display: flex; flex-direction: column; gap: 12px; padding: 18px; border: 1px dashed var(--line); border-radius: 10px; background: var(--well); overflow-wrap: anywhere; }
+  .batch-box .title { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 15px; }
+  .bar { height: 10px; background: var(--line); border-radius: 999px; overflow: hidden; }
+  .bar div { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  .counts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 13px; }
+
+  /* success rules */
+  .banners { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .banner { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--well); display: flex; flex-direction: column; gap: 8px; }
+  .banner .head { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 13px; }
+  .banner .num { width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: var(--accent-text); display: grid; place-items: center; font-size: 11px; flex: none; }
+  .banner .value { font-size: 22px; font-weight: 700; color: var(--accent); line-height: 1.1; }
+  .banner .value small { font-size: 13px; font-weight: 500; color: var(--muted); }
+  .banner p { margin: 0; font-size: 12px; color: var(--muted); }
+  .banner input[type=range] { padding: 0; border: 0; background: transparent; accent-color: var(--accent); }
   .scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: -6px; }
-  .toggle { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
-  .toggle button { border-radius: 0; background: var(--panel); color: var(--text); font-weight: 500; padding: 10px 6px; font-size: 14px; }
-  .toggle button.on { background: var(--accent); color: var(--accent-text); font-weight: 700; }
-  .saved-note { font-size: 12px; color: var(--muted); margin-top: 10px; min-height: 18px; }
+  .hint { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
+  .saved-note { font-size: 12px; color: var(--muted); margin-top: 8px; min-height: 18px; }
 
-  /* Runs and the verdict */
-  .chip { display: inline-block; padding: 1px 9px; border-radius: 999px; font-weight: 700; font-size: 12px; white-space: nowrap; }
+  /* runs */
+  .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-weight: 700; font-size: 11px; white-space: nowrap; }
   .chip.success { background: var(--ok-bg); color: var(--ok); }
   .chip.failure { background: var(--bad-bg); color: var(--bad); }
   .chip.invalid { background: var(--warn-bg); color: var(--warn); }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { color: var(--muted); font-weight: 500; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+  th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+  th { color: var(--muted); font-weight: 550; font-size: 12px; }
+  th:nth-child(1) { width: 17%; } th:nth-child(3) { width: 15%; } th:nth-child(5) { width: 13%; }
   tbody tr { cursor: pointer; }
   tbody tr:hover, tbody tr.sel { background: var(--accent-soft); }
-  .detail { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
-  .checks { list-style: none; padding: 0; margin: 10px 0 0; font-size: 14px; }
-  .checks li { padding: 3px 0; }
+  .detail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 14px; }
+  .checks { list-style: none; padding: 0; margin: 8px 0 0; font-size: 13px; }
+  .checks li { padding: 2px 0; }
   .checks .y { color: var(--ok); font-weight: 700; }
   .checks .n { color: var(--bad); font-weight: 700; }
-  svg.chart { width: 100%; height: auto; display: block; margin-top: 8px; }
+  svg.chart { width: 100%; height: auto; display: block; margin-top: 6px; }
   svg.chart text { fill: var(--muted); font-size: 11px; }
-  .chart-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .chart-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: var(--muted); margin-top: 4px; }
   .sw { display: inline-block; width: 12px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
-  @media (max-width: 760px) {
-    .banners, .detail { grid-template-columns: 1fr; }
+
+  @media (max-width: 900px) {
+    .workspace { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 560px) {
+    main { padding-top: 24px; }
+    .panel { padding: 14px; }
+    .ood-grid, .banners { grid-template-columns: minmax(0, 1fr); }
     .hide-sm { display: none; }
+    th:nth-child(1) { width: 26%; } th:nth-child(3) { width: 26%; }
   }
 </style>
 </head>
 <body>
 <main>
-  <div class="workspace">
-  <div class="operator">
-  <header class="operator-header">
+  <header>
     <h1>Dream-1 Simulator</h1>
-    <p class="sub">Run a task and watch the robot. Set the scene, rules and results on the right.</p>
+    <p class="sub">Set up a start scene, run Dream-1 once or in a batch, and label the runs with your own success rules.</p>
   </header>
 
-  <section class="panel controls">
-    <form class="row" id="keyForm" autocomplete="off">
-      <div class="grow"><label for="apiKey">API key</label><input id="apiKey" type="password" placeholder="Paste your Dream API key" spellcheck="false"></div>
+  <div class="workspace">
+  <div class="col">
+  <section class="panel setup" aria-labelledby="setupTitle">
+    <h2 id="setupTitle">Run setup</h2>
+    <form class="keyrow" id="keyForm" autocomplete="off">
+      <div><label for="apiKey">API key</label><input id="apiKey" type="password" placeholder="Paste your Dream API key" spellcheck="false"></div>
       <button type="submit" id="useKey">Use key</button>
       <button type="button" id="clearKey" class="ghost" hidden>Clear</button>
     </form>
     <div class="keystate" id="keyState"></div>
-  </section>
 
-  <section class="panel controls">
     <div class="toggle mode" role="group" aria-label="Mode">
       <button id="modeSingle" class="on" aria-pressed="true">Single run</button>
       <button id="modeBatch" aria-pressed="false">Batch</button>
     </div>
+    <div id="seedBox"></div>
+
     <div id="singleForm">
-      <div class="row">
-        <div class="grow"><label for="task">Task</label><input id="task" value="put apple into the bowl"></div>
-        <div><label for="seconds">Seconds</label><input id="seconds" type="number" min="10" max="300" value="60"></div>
-        <button id="run">Run</button>
-        <button id="stop" class="stop" hidden>Stop</button>
+      <div class="row" style="margin-top: 12px">
+        <div><label for="task">Task</label><input id="task" value="put apple into the bowl"></div>
+        <div><label for="seconds">Limit (s)</label><input id="seconds" type="number" min="10" max="300" value="60"></div>
       </div>
       <div class="task-note" id="taskNote"></div>
       <div class="examples" id="examples"></div>
+      <div class="actions">
+        <button id="run">Run</button>
+        <button id="stop" class="stop" hidden>Stop</button>
+      </div>
     </div>
+
     <div id="batchForm" hidden>
-      <div class="row">
+      <div class="grid3" style="margin-top: 12px">
         <div><label for="batchCount">Episodes</label><input id="batchCount" type="number" min="1" max="500" value="20"></div>
         <div><label for="batchSeconds">Seconds each</label><input id="batchSeconds" type="number" min="10" max="300" value="60"></div>
-        <div><label for="batchSeed">Seed</label><input id="batchSeed" type="number" placeholder="random"></div>
-        <div class="grow"><label>Start positions</label>
-          <div class="toggle" role="group" aria-label="Start positions">
-            <button id="layoutShift" class="on" aria-pressed="true">Scene ± 2 cm</button>
-            <button id="layoutRandom" aria-pressed="false">Random layout</button>
+        <div><label>Seeds</label>
+          <div class="toggle" role="group" aria-label="Seeds">
+            <button id="splitTrain" class="on" aria-pressed="true">Seed, Seed + 1, …</button>
+            <button id="splitEval" aria-pressed="false">Eval set (50)</button>
           </div>
         </div>
       </div>
-      <label style="margin-top: 12px">Tasks <span class="muted">(taken in turn)</span></label>
+      <p class="muted small" style="margin: 8px 0 12px">Each episode starts from its own seed. The scene settings below apply to every episode; the ones marked <em>random</em> are drawn from each episode's seed. Runs in the background, without the cameras.</p>
+      <label>Tasks <span class="muted">(taken in turn)</span></label>
       <div class="items" id="batchTasks"></div>
-      <div class="row custom-task">
-        <div class="grow"><input id="customPrompt" maxlength="300" placeholder="Your own prompt, e.g. put the apple in the bowl and the banana on the plate" aria-label="Your own prompt"></div>
+      <div class="hrow" style="margin-top: 10px">
+        <div style="flex: 1 1 240px"><input id="customPrompt" maxlength="300" placeholder="Your own prompt, e.g. put the apple in the bowl and the banana on the plate" aria-label="Your own prompt"></div>
         <button class="ghost" id="addTask">Add</button>
       </div>
       <div class="pairs-edit">
@@ -228,119 +222,136 @@
         <span id="pairRows" class="pairs-edit" style="margin: 0"></span>
         <button class="ghost small" id="addPair" title="Judge one more object">+ object</button>
       </div>
-      <div class="row" style="margin-top: 14px; align-items: center; justify-content: space-between;">
-        <span class="muted" id="batchEstimate" style="font-size: 13px"></span>
-        <div class="row"><button id="startBatch">Start batch</button><button id="stopBatch" class="stop" hidden>Stop batch</button></div>
+      <div class="actions" style="justify-content: space-between">
+        <span class="muted small" id="batchEstimate"></span>
+        <span class="hrow"><button id="startBatch">Start batch</button><button id="stopBatch" class="stop" hidden>Stop batch</button></span>
       </div>
     </div>
   </section>
 
-  <section class="panel camera-panel">
-    <div class="status"><span class="dot" id="dot"></span><strong id="statusText">Ready</strong><span class="muted" id="statusMore"></span></div>
+  <section class="panel ood-panel" aria-label="Camera, robot &amp; environment settings">
+    <details class="ood" open>
+      <summary>Camera, robot &amp; environment settings</summary>
+      <form id="ood" class="ood-grid" aria-label="Camera, robot &amp; environment settings"></form>
+      <button id="oodReset" type="reset" form="ood" hidden>Reset scene settings</button>
+      <p id="oodError" class="muted" role="status" hidden></p>
+    </details>
+  </section>
+
+  <section class="panel">
+    <details class="fold" id="layoutPanel">
+      <summary>Custom layout</summary>
+      <label class="check"><input type="checkbox" id="customOn"> Use my own layout instead of the seed's (single runs)</label>
+      <p class="muted small" style="margin: -6px 0 12px">Pick what is on the table and drag it. Settings marked <em>random</em> need the seed's layout, so they are not drawn with a custom layout. Batches always start from seeds.</p>
+      <div id="layoutBody" class="off">
+        <div class="robot"><strong>Robot: YAM · 2 arms</strong><span>The only robot in this simulator</span></div>
+        <div><label>Objects</label><div class="items" id="objectToggles"></div></div>
+        <div><label>Targets</label><div class="items" id="targetToggles"></div></div>
+        <svg class="map" id="map" viewBox="0 0 720 540" role="img" aria-label="Top view of the table. Drag objects to move them."></svg>
+        <div class="hrow" style="justify-content: space-between">
+          <div class="scene-note" id="sceneNote"></div>
+          <div class="hrow"><button id="shuffle" class="ghost small">Shuffle</button><button id="resetScene" class="ghost small">Reset</button></div>
+        </div>
+      </div>
+    </details>
+  </section>
+  </div>
+
+  <div class="col">
+  <section class="panel monitor" aria-labelledby="viewTitle">
+    <div class="monitor-header">
+      <h2 id="viewTitle">Camera feeds</h2>
+      <div class="status" id="statusBadge" role="status"><span class="dot" id="dot"></span><strong id="statusText">Ready</strong></div>
+    </div>
     <img id="live" class="view" alt="Live camera view" hidden>
-    <div id="placeholder" class="view placeholder">Press Run to start.</div>
+    <div id="placeholder" class="view placeholder">Preparing the initial camera view…</div>
     <div id="batchBox" class="batch-box" hidden>
       <div class="title"><strong id="batchTitle"></strong><span class="muted" id="batchTime"></span></div>
       <div class="bar"><div id="batchBar"></div></div>
       <div class="counts" id="batchCounts"></div>
-      <div class="muted" id="batchNow"></div>
-      <div class="batch-end" id="batchEnd"></div>
-      <div><button class="ghost" id="batchShow">Show these runs</button></div>
+      <div class="muted small" id="batchNow"></div>
+      <div class="batch-end small" id="batchEnd"></div>
+      <div><button class="ghost small" id="batchShow">Show these runs</button></div>
     </div>
-    <details id="logBox" hidden><summary class="legend">Log</summary><pre id="log"></pre></details>
+    <div class="legend"><span>Workspace camera</span><span>Wrist cameras</span></div>
+    <p class="muted" id="previewStatus" role="status" hidden></p>
+    <p class="muted" id="statusMore"></p>
+    <details class="log" id="logBox" hidden><summary>Log</summary><pre id="log"></pre></details>
+  </section>
+
+  <section class="panel">
+    <details class="fold" id="rulesPanel" open>
+      <summary>Success rules</summary>
+      <p class="hint">At the end, every judged object must be in its target, released if required, and still for the selected time (under 0.05 m/s).</p>
+      <div class="banners">
+        <div class="banner">
+          <div class="head"><span class="num">1</span>Distance</div>
+          <div class="value"><span id="distanceValue">6.5</span> <small>cm</small></div>
+          <input type="range" id="distance" min="1" max="15" step="0.5" value="6.5" aria-label="Distance to target in centimetres">
+          <div class="scale"><span>strict</span><span>loose</span></div>
+          <p>Object to bowl/plate center</p>
+        </div>
+        <div class="banner">
+          <div class="head"><span class="num">2</span>Release</div>
+          <div class="toggle" role="group" aria-label="Release">
+            <button id="releaseYes" aria-pressed="true">Must release</button>
+            <button id="releaseNo" aria-pressed="false">Can hold</button>
+          </div>
+          <p id="releaseText"></p>
+        </div>
+        <div class="banner">
+          <div class="head"><span class="num">3</span>Still time</div>
+          <div class="value"><span id="stillValue">1.0</span> <small>s</small></div>
+          <input type="range" id="still" min="0" max="5" step="0.5" value="1" aria-label="Seconds the object must stay still">
+          <div class="scale"><span>0 s</span><span>5 s</span></div>
+          <p>Final time in target, standing still</p>
+        </div>
+      </div>
+      <div class="saved-note" id="rulesNote"></div>
+    </details>
+  </section>
+
+  <section class="panel">
+    <details class="fold" id="runsPanel" open>
+      <summary>Runs</summary>
+      <div class="hrow" style="justify-content: space-between">
+        <select id="runFilter" aria-label="Which runs" style="width: auto; max-width: 100%"></select>
+        <button id="saveLabels" class="ghost small">Save labels</button>
+      </div>
+      <div class="muted small" id="runSummary" style="margin-top: 8px"></div>
+      <table style="margin-top: 8px">
+        <thead><tr><th>When</th><th>Task</th><th>Result</th><th class="hide-sm">Why</th><th class="hide-sm">Saved</th></tr></thead>
+        <tbody id="runs"><tr><td colspan="5" class="muted">No runs yet.</td></tr></tbody>
+      </table>
+      <div id="detail" class="detail" hidden>
+        <div>
+          <img id="detailImage" class="view" alt="Last frame">
+          <div class="legend"><span>Last frame</span></div>
+        </div>
+        <div>
+          <div id="detailHead"></div>
+          <ul class="checks" id="detailChecks"></ul>
+        </div>
+        <div>
+          <svg class="chart" id="chart" viewBox="0 0 640 190" role="img" aria-label="Distance from each judged object to its target over time"></svg>
+          <div class="chart-legend" id="chartLegend"></div>
+        </div>
+      </div>
+    </details>
   </section>
   </div>
-
-  <aside class="sidebar" aria-label="Scene, success rules and runs">
-  <details class="panel" id="scenePanel" open>
-    <summary>Scene</summary>
-    <div class="panel-content scene">
-      <div class="robot"><strong>Robot: YAM · 2 arms</strong><span>The only robot in this simulator</span></div>
-      <div><label>Objects</label><div class="items" id="objectToggles"></div></div>
-      <div><label>Targets</label><div class="items" id="targetToggles"></div></div>
-      <div>
-        <svg class="map" id="map" viewBox="0 0 720 540" role="img" aria-label="Top view of the table. Drag objects to move them."></svg>
-        <div class="row" style="justify-content: space-between; align-items: center; margin-top: 8px;">
-          <div class="scene-note" id="sceneNote"></div>
-          <div class="scene-buttons"><button id="shuffle" class="ghost">Shuffle</button><button id="resetScene" class="ghost">Reset</button></div>
-        </div>
-      </div>
-    </div>
-  </details>
-
-  <details class="panel" id="rulesPanel" open>
-    <summary>Success rules</summary>
-    <div class="panel-content">
-    <p class="hint">At the end, the object must be in the target, released if required, and stable for the selected time. Stable means under 0.05 m/s.</p>
-    <div class="banners">
-      <div class="banner">
-        <div class="head"><span class="num">1</span>Distance</div>
-        <div class="value"><span id="distanceValue">6.5</span> <small>cm</small></div>
-        <input type="range" id="distance" min="1" max="15" step="0.5" value="6.5" aria-label="Distance to target in centimetres">
-        <div class="scale"><span>strict</span><span>loose</span></div>
-        <p>Object to bowl/plate center</p>
-      </div>
-      <div class="banner">
-        <div class="head"><span class="num">2</span>Release</div>
-        <div class="toggle" role="group" aria-label="Release">
-          <button id="releaseYes" aria-pressed="true">Must release</button>
-          <button id="releaseNo" aria-pressed="false">Can hold</button>
-        </div>
-        <p id="releaseText"></p>
-      </div>
-      <div class="banner">
-        <div class="head"><span class="num">3</span>Still time</div>
-        <div class="value"><span id="stillValue">1.0</span> <small>s</small></div>
-        <input type="range" id="still" min="0" max="5" step="0.5" value="1" aria-label="Seconds the object must stay still">
-        <div class="scale"><span>0 s</span><span>5 s</span></div>
-        <p>Final continuous time in target; speed under 0.05 m/s</p>
-      </div>
-    </div>
-    <div class="saved-note" id="rulesNote"></div>
-    </div>
-  </details>
-
-  <details class="panel" id="runsPanel" open>
-    <summary>Runs</summary>
-    <div class="panel-content">
-    <div class="row" style="justify-content: space-between; align-items: center;">
-      <select id="runFilter" aria-label="Which runs"></select>
-      <button id="saveLabels" class="ghost">Save labels</button>
-    </div>
-    <div class="muted" id="runSummary" style="font-size: 13px; margin-top: 8px;"></div>
-    <table style="margin-top:10px">
-      <thead><tr><th>When</th><th>Task</th><th>Result</th><th class="hide-sm">Why</th><th class="hide-sm">Saved</th></tr></thead>
-      <tbody id="runs"><tr><td colspan="5" class="muted">No runs yet.</td></tr></tbody>
-    </table>
-    <div id="detail" class="detail" hidden>
-      <div>
-        <img id="detailImage" class="view" alt="Last frame">
-        <div class="legend">Last frame</div>
-      </div>
-      <div>
-        <div id="detailHead"></div>
-        <ul class="checks" id="detailChecks"></ul>
-      </div>
-      <div style="grid-column: 1 / -1">
-        <svg class="chart" id="chart" viewBox="0 0 640 190" role="img" aria-label="Distance from the object to the target over time"></svg>
-        <div class="chart-legend" id="chartLegend">
-          <span><span class="sw" style="background:var(--accent)"></span>distance</span>
-          <span><span class="sw" style="background:var(--muted)"></span>limit</span>
-          <span><span class="sw" style="background:var(--touch)"></span>gripping</span>
-          <span><span class="sw" style="background:var(--ok);opacity:.35"></span>success</span>
-        </div>
-      </div>
-    </div>
-    </div>
-  </details>
-  </aside>
   </div>
 </main>
 
-<script>
+<script type="module">
+import { loadOOD, readOOD } from "/ood.js";
+import { initSeed, seeding, afterPreview } from "/seed.js";
+
 const $ = id => document.getElementById(id);
 let rules = { distance_cm: 6.5, release: true, still_seconds: 1.0 };
 let runs = [], selected = null, liveTimer = null, wasRunning = false;
+// Open-ended tasks (HSY): Dream-1 runs them; they are not judged (no object -> target).
+const OPEN_EXAMPLES = ["Move an object to the center of the workspace", "Move an object to the left side of the workspace"];
 
 async function api(path, body) {
   const options = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
@@ -439,9 +450,10 @@ async function renderDetail() {
   if (!run) return;
   const v = verdict(run);
   $("detailImage").src = `/api/runs/${run.id}/last.jpg`;
-  const extra = [run.batch_id ? batchName(run.batch_id) : "Single run", run.seed != null ? `seed ${run.seed}` : "",
-                 run.judge ? `judged: ${pairText(run.judge.pairs || [run.judge])}` : "",
-                 run.layout === "random" ? "random layout" : ""].filter(Boolean).join(" · ");
+  const extra = [run.batch_id ? batchName(run.batch_id) : "Single run",
+                 run.layout === "custom" ? "custom layout" : run.seed != null ? `seed ${run.seed}${run.split === "eval" ? " (eval)" : ""}` : "",
+                 run.ood_random?.length ? `random: ${run.ood_random.join(", ")}` : "",
+                 run.judge ? `judged: ${pairText(run.judge.pairs || [run.judge])}` : ""].filter(Boolean).join(" · ");
   $("detailHead").innerHTML = `${chip(v.label)} <strong>${esc(run.task)}</strong><div class="muted" style="font-size:13px">${when(run.started_at)} · ${fmt(run.sim_seconds || 0)} s · ${esc(extra)}</div>`;
   $("detailChecks").innerHTML = (v.checks?.length ? v.checks : [{ ok: false, text: v.reason }])
     .map(c => `<li><span class="${c.ok ? "y" : c.ok === false ? "n" : "muted"}">${c.ok ? "✓" : c.ok === false ? "✗" : "–"}</span> ${esc(c.text)}</li>`).join("");
@@ -580,10 +592,11 @@ function drawScene() {
   $("map").innerHTML = out;
 
   const problem = sceneProblem();
-  $("sceneNote").textContent = problem || "Drag to move. The next run uses this.";
-  $("sceneNote").classList.toggle("bad", !!problem);
+  $("sceneNote").textContent = problem || (customOn() ? "Drag to move. Single runs start from this layout." : "Not in use: tick the box above.");
+  $("sceneNote").classList.toggle("bad", customOn() && !!problem);
   drawExamples();
   checkTask();
+  if (customOn()) schedulePreview();
 }
 
 function eventToWorld(e) {
@@ -626,36 +639,61 @@ function sceneForRun() {
 }
 
 /** Example tasks for what is on the table. */
+const WORDS = { apple: "apple", orange: "orange", banana: "banana", water_bottle: "water bottle" };
+const ALL_OBJECTS = Object.keys(ITEMS).filter(n => !ITEMS[n].target);
+const ALL_TARGETS = Object.keys(ITEMS).filter(n => ITEMS[n].target);
+// What is on the table for a single run: everything (a seed's scene has all six), or the custom layout's items.
+const onTable = n => !customOn() || sceneOn[n];
+
+/** Example tasks: for a single run, what is on the table plus open-ended ones (not judged); for a batch, every
+ *  object -> target prompt and a few that move two objects (a seed's scene has all six items). */
 function drawExamples() {
-  const objects = Object.keys(ITEMS).filter(n => sceneOn[n] && !ITEMS[n].target);
-  const targets = Object.keys(ITEMS).filter(n => sceneOn[n] && ITEMS[n].target);
-  const words = { apple: "apple", orange: "orange", banana: "banana", water_bottle: "water bottle" };
-  const list = [];
-  for (const t of targets) for (const o of objects) list.push(t === "bowl" ? `put ${words[o]} into the bowl` : `put ${words[o]} on the plate`);
-  // Batch examples: the one-object prompts, and up to two that move two objects.
-  const into = t => t === "bowl" ? "into the bowl" : "on the plate";
-  const batchList = list.map(prompt => { const t = parseTask(prompt); return { prompt, pairs: [{ object: t.object, target: t.target }] }; });
-  for (let k = 0; k + 1 < objects.length && k < 4; k += 2) {
-    const [a, b] = [objects[k], objects[k + 1]], [ta, tb] = [targets[0], targets[targets.length - 1]];
-    batchList.unshift({ prompt: ta === tb ? `put ${words[a]} and ${words[b]} ${into(ta)}` : `put ${words[a]} ${into(ta)} and ${words[b]} ${into(tb)}`,
-                        pairs: [{ object: a, target: ta }, { object: b, target: tb }] });
-  }
-  drawBatchTasks(batchList);
+  const prompt = (o, t) => t === "bowl" ? `put ${WORDS[o]} into the bowl` : `put ${WORDS[o]} on the plate`;
+  const single = [];
+  for (const t of ALL_TARGETS.filter(onTable)) for (const o of ALL_OBJECTS.filter(onTable)) single.push(prompt(o, t));
   $("examples").innerHTML = "";
-  for (const text of list.slice(0, 8)) {
+  for (const text of [...single.slice(0, 6), ...OPEN_EXAMPLES]) {
     const b = document.createElement("button");
-    b.className = "ghost"; b.textContent = text;
+    b.textContent = text;
     b.onclick = () => { $("task").value = text; checkTask(); };
     $("examples").appendChild(b);
   }
+  const batchList = [];
+  for (const t of ALL_TARGETS) for (const o of ALL_OBJECTS) batchList.push({ prompt: prompt(o, t), pairs: [{ object: o, target: t }] });
+  const into = t => t === "bowl" ? "into the bowl" : "on the plate";
+  for (const [a, b] of [["apple", "banana"], ["orange", "water_bottle"]]) {
+    batchList.unshift({ prompt: `put ${WORDS[a]} ${into("bowl")} and ${WORDS[b]} ${into("plate")}`,
+                        pairs: [{ object: a, target: "bowl" }, { object: b, target: "plate" }] });
+  }
+  drawBatchTasks(batchList);
 }
 
-/** Warn when the task names something that is not on the table. */
+/** The object -> target pairs a prompt names: each object goes to the next bowl or plate named after it.
+ *  @param available Which items may be used. */
+function derivePairs(text, available = () => true) {
+  const words = [...String(text).toLowerCase().matchAll(/water bottle|bottle|apple|orange|banana|bowl|plate/g)]
+    .map(m => ({ name: m[0].includes("bottle") ? "water_bottle" : m[0], at: m.index }))
+    .filter(w => available(w.name));
+  const targets = words.filter(w => ITEMS[w.name].target);
+  const pairs = [];
+  for (const w of words.filter(w => !ITEMS[w.name].target)) {
+    if (pairs.some(p => p.object === w.name) || pairs.length >= 4 || !targets.length) continue;
+    pairs.push({ object: w.name, target: (targets.find(t => t.at > w.at) || targets[targets.length - 1]).name });
+  }
+  return pairs;
+}
+
+/** Under the task: what the run will be judged on, or why it will not be (and block a task naming an item the
+ *  custom layout does not have). @return Whether the task can run. */
 function checkTask() {
-  const parsed = parseTask($("task").value);
-  const missing = parsed ? [parsed.object, parsed.target].filter(n => !sceneOn[n]) : [];
-  $("taskNote").textContent = missing.length ? `Not on the table: ${missing.map(n => ITEMS[n].label).join(", ")}` : "";
-  $("taskNote").classList.toggle("bad", missing.length > 0);
+  const text = $("task").value;
+  const named = derivePairs(text);
+  const missing = [...new Set(named.flatMap(p => [p.object, p.target]))].filter(n => !onTable(n));
+  const pairs = derivePairs(text, onTable);
+  const note = $("taskNote");
+  note.classList.toggle("bad", missing.length > 0);
+  note.textContent = missing.length ? `Not on the table: ${missing.map(n => ITEMS[n].label).join(", ")}`
+    : pairs.length ? `Judged on: ${pairText(pairs)}` : "Not judged: name an object and a bowl or plate to judge the run.";
   return !missing.length;
 }
 $("task").addEventListener("input", checkTask);
@@ -677,7 +715,7 @@ $("clearKey").onclick = async () => { $("apiKey").value = ""; showKey(await api(
 
 /* ---------- batch ---------- */
 
-let mode = "single", layout = "shift", lastBatchDone = null, followBatch = false, batchState = null;
+let mode = "single", split = "train", lastBatchDone = null, followBatch = false, batchState = null;
 // Batch tasks: the scene's example prompts and the user's own prompts, each judged on an object and a target.
 let batchTasks = new Set(), exampleList = [], customTasks = [];
 
@@ -693,27 +731,28 @@ function setMode(next) {
 $("modeSingle").onclick = () => setMode("single");
 $("modeBatch").onclick = () => setMode("batch");
 
-function setLayout(next) {
-  layout = next;
-  for (const [id, l] of [["layoutShift", "shift"], ["layoutRandom", "random"]]) {
-    $(id).classList.toggle("on", layout === l); $(id).setAttribute("aria-pressed", layout === l);
+function setSplit(next) {
+  split = next;
+  for (const [id, l] of [["splitTrain", "train"], ["splitEval", "eval"]]) {
+    $(id).classList.toggle("on", split === l); $(id).setAttribute("aria-pressed", split === l);
   }
+  $("batchCount").max = split === "eval" ? 50 : 500;
+  if (split === "eval" && Number($("batchCount").value) > 50) $("batchCount").value = 50;
+  estimate();
 }
-$("layoutShift").onclick = () => setLayout("shift");
-$("layoutRandom").onclick = () => setLayout("random");
+$("splitTrain").onclick = () => setSplit("train");
+$("splitEval").onclick = () => setSplit("eval");
 
 const pairText = pairs => pairs.map(p => `${ITEMS[p.object]?.label || p.object} · ${ITEMS[p.target]?.label || p.target}`).join(", ");
-const onTable = pairs => pairs.every(p => sceneOn[p.object] && sceneOn[p.target]);
 
 function taskOptions() {
   const examples = exampleList.map(e => ({ ...e, custom: false, usable: true }));
-  const own = customTasks.map(t => ({ ...t, custom: true, usable: onTable(t.pairs) }));
+  const own = customTasks.map(t => ({ ...t, custom: true, usable: true }));  // a seed's scene has every item
   return [...own, ...examples];
 }
 
 function drawBatchTasks(list) {
   exampleList = list;
-  draftPairs = draftPairs.filter(p => sceneOn[p.object] && sceneOn[p.target]);
   drawPairRows();
   renderBatchTasks();
 }
@@ -743,8 +782,8 @@ function renderBatchTasks() {
 
 /* The "judge as" pairs for the prompt being typed: object -> target, each object at most once. */
 let draftPairs = [];
-const tableObjects = () => Object.keys(ITEMS).filter(n => sceneOn[n] && !ITEMS[n].target);
-const tableTargets = () => Object.keys(ITEMS).filter(n => sceneOn[n] && ITEMS[n].target);
+const tableObjects = () => ALL_OBJECTS;  // batches start from seeds: all six items are on the table
+const tableTargets = () => ALL_TARGETS;
 
 function drawPairRows() {
   const objects = tableObjects(), targets = tableTargets();
@@ -765,23 +804,14 @@ $("addPair").onclick = () => {
 
 // Fill the pairs from the prompt's words: each object named goes to the next bowl or plate named after it.
 $("customPrompt").addEventListener("input", () => {
-  const text = $("customPrompt").value.toLowerCase();
-  const words = [...text.matchAll(/water bottle|bottle|apple|orange|banana|bowl|plate/g)]
-    .map(m => ({ name: m[0].includes("bottle") ? "water_bottle" : m[0], at: m.index }));
-  const targets = words.filter(w => ITEMS[w.name].target && sceneOn[w.name]);
-  const pairs = [];
-  for (const w of words.filter(w => !ITEMS[w.name].target && sceneOn[w.name])) {
-    if (pairs.some(p => p.object === w.name) || pairs.length >= 4) continue;
-    const target = targets.find(t => t.at > w.at) || targets[targets.length - 1];
-    pairs.push({ object: w.name, target: target ? target.name : (draftPairs[0]?.target || tableTargets()[0]) });
-  }
+  const pairs = derivePairs($("customPrompt").value);
   if (pairs.length) { draftPairs = pairs; drawPairRows(); }
 });
 function addCustomTask() {
   const prompt = $("customPrompt").value.replace(/\s+/g, " ").trim();
   if (!prompt) return;
   const pairs = draftPairs.filter(p => p.object && p.target);
-  if (!pairs.length) { alert("Put an object and a bowl or plate on the table first."); return; }
+  if (!pairs.length) { alert("Pick an object and a bowl or plate to judge it on."); return; }
   if (new Set(pairs.map(p => p.object)).size !== pairs.length) { alert("Each object can be judged only once."); return; }
   customTasks = [{ prompt, pairs: pairs.map(p => ({ ...p })) }, ...customTasks.filter(c => c.prompt !== prompt)];
   batchTasks.add(prompt);
@@ -793,23 +823,24 @@ $("customPrompt").addEventListener("keydown", e => { if (e.key === "Enter") { e.
 
 function estimate() {
   const count = Number($("batchCount").value) || 0, secs = Number($("batchSeconds").value) || 0;
-  const minutes = Math.round(count * (secs + 15) / 60);
-  $("batchEstimate").textContent = count && secs ? `${count} episodes · about ${minutes} min · ${batchTasks.size} task${batchTasks.size > 1 ? "s" : ""}` : "";
+  const minutes = Math.round(count * (secs + 20) / 60);
+  const seeds = split === "eval" ? `eval seeds 1-${Math.min(count, 50)}` : `seeds ${$("seed")?.value || "?"}…${(Number($("seed")?.value) || 0) + count - 1}`;
+  $("batchEstimate").textContent = count && secs ? `${count} episodes · ${seeds} · about ${minutes} min · ${batchTasks.size} task${batchTasks.size > 1 ? "s" : ""}` : "";
   return minutes;
 }
 $("batchCount").oninput = estimate;
 $("batchSeconds").oninput = estimate;
 
 $("startBatch").onclick = async () => {
-  const problem = sceneProblem();
-  if (problem) { alert(problem); return; }
+  const ood = readOOD();
+  if (ood === null) return;
   const count = Number($("batchCount").value);
   if (!confirm(`Run ${count} episodes in the background (about ${estimate()} min of Dream-1 use)?`)) return;
   try {
     const tasks = taskOptions().filter(o => o.usable && batchTasks.has(o.prompt))
       .map(({ prompt, pairs }) => ({ prompt, pairs }));
-    await api("/api/batch", { tasks, count, seconds: $("batchSeconds").value, seed: $("batchSeed").value,
-                              layout, scene: sceneForRun() });
+    const { seed, ood_random } = seeding();
+    await api("/api/batch", { tasks, count, seconds: $("batchSeconds").value, split, seed, ood, ood_random });
     followBatch = true;
     refresh();
   } catch (err) { alert(err.message); }
@@ -830,14 +861,9 @@ const duration = s => s == null ? "" : s >= 3600 ? `${Math.floor(s / 3600)} h ${
 function showBatch(b) {
   const inBatch = mode === "batch";
   $("batchBox").hidden = !inBatch || !b;
-  if (inBatch) {
-    $("live").hidden = true;
-    $("placeholder").hidden = !!b;
-    $("placeholder").textContent = "Batches run in the background, without the cameras. Set one up above.";
-  } else {
-    $("placeholder").textContent = "Press Run to start.";
-    $("placeholder").hidden = !$("live").hidden;
-  }
+  if (inBatch && b) { $("live").hidden = true; $("placeholder").hidden = true; }
+  else if (!$("live").src) { $("placeholder").hidden = false; }
+  else { $("live").hidden = false; $("placeholder").hidden = true; }
   if (!b) return;
   const valid = b.counts.success + b.counts.failure;
   $("batchTitle").textContent = `${batchName(b.id)} · ${b.done} / ${b.total}`;
@@ -846,9 +872,68 @@ function showBatch(b) {
   $("batchCounts").innerHTML = `${chip("success")} ${b.counts.success} ${chip("failure")} ${b.counts.failure} ${chip("invalid")} ${b.counts.invalid}`
     + (valid ? ` <span class="muted">· ${Math.round(100 * b.counts.success / valid)}% success of valid</span>` : "");
   $("batchNow").textContent = b.current ? `Now: #${b.current.index} ${b.current.task} (seed ${b.current.seed})`
-    : `${b.layout === "random" ? "Random layouts" : "Scene ± 2 cm"} · ${b.seconds} s each · rules: ${fmt(b.rules.distance_cm)} cm, ${b.rules.release ? "must release" : "can hold"}, ${fmt(b.rules.still_seconds)} s`;
+    : `${b.split === "eval" ? "Eval seeds" : `Seeds from ${b.seed}`}${b.ood_random?.length ? ` · random: ${b.ood_random.join(", ")}` : ""} · ${b.seconds} s each · rules: ${fmt(b.rules.distance_cm)} cm, ${b.rules.release ? "must release" : "can hold"}, ${fmt(b.rules.still_seconds)} s`;
   $("batchEnd").textContent = b.running ? "" : b.stopped_reason || "Finished.";
   $("batchEnd").classList.toggle("bad", !b.running && !!b.stopped_reason && b.stopped_reason !== "Stopped by you.");
+}
+
+
+/* ---------- custom layout ---------- */
+
+const customOn = () => !!$("customOn")?.checked;
+$("customOn").addEventListener("change", () => {
+  $("layoutBody").classList.toggle("off", !customOn());
+  drawScene();
+  schedulePreview();
+});
+
+/* ---------- start-scene preview (no Dream API) ---------- */
+
+let running = false, starting = false, settingsReady = false;
+let previewTimer, previewPending = false, previewRevision = 0, previewUrl;
+
+function schedulePreview() {
+  previewRevision++;
+  clearTimeout(previewTimer);
+  if (settingsReady && !starting && !running) previewTimer = setTimeout(renderPreview, 350);
+}
+
+async function renderPreview() {
+  if (running || starting || previewPending) return;
+  const ood = readOOD(false);
+  if (ood === null) return;
+  if (customOn() && sceneProblem()) return;
+  const revision = previewRevision;
+  previewPending = true;
+  const note = $("previewStatus");
+  note.hidden = false;
+  note.textContent = "Updating initial scene…";
+  try {
+    const response = await fetch("/api/preview", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ood, ...seeding(), scene: customOn() ? sceneForRun() : null }),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(response.status === 404 ? "Restart app.py and reload the page." : error.error || "Rendering failed.");
+    }
+    if (!customOn()) afterPreview(response);
+    const frame = await response.blob();
+    if (revision !== previewRevision || running || starting) return;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(frame);
+    $("live").src = previewUrl;
+    if (!(mode === "batch" && batchState)) { $("live").hidden = false; $("placeholder").hidden = true; }
+    note.textContent = customOn() ? "Initial scene · custom layout · settings apply on Run" : "Initial scene · settings apply on Run";
+  } catch (error) {
+    if (revision === previewRevision && !running && !starting) {
+      note.textContent = "Preview unavailable: " + error.message;
+      if (!$("placeholder").hidden) $("placeholder").textContent = "No initial camera image available.";
+    }
+  } finally {
+    previewPending = false;
+    if (revision !== previewRevision && !running && !starting) schedulePreview();
+  }
 }
 
 /* ---------- running ---------- */
@@ -862,18 +947,21 @@ function showLive() {
 async function refresh() {
   let s;
   try { s = await api("/api/status"); }
-  catch { $("statusText").textContent = "Server is off (run python app.py)"; return; }
+  catch { $("statusText").textContent = "Cannot reach app.py. Is it running?"; return; }
 
   showKey(s.key);
   const b = s.batch, batchRunning = !!b?.running;
   batchState = b;
+  running = s.running || batchRunning;
+  if (running) $("previewStatus").hidden = true;
   if (batchRunning && mode !== "batch") setMode("batch");
-  $("modeSingle").disabled = $("modeBatch").disabled = s.running || batchRunning;
-  $("run").disabled = s.running || batchRunning || !s.key.source;
-  $("startBatch").disabled = s.running || batchRunning || !s.key.source;
+  $("modeSingle").disabled = $("modeBatch").disabled = running;
+  $("run").disabled = running || !s.key.source;
+  $("startBatch").disabled = running || !s.key.source;
   $("stop").hidden = !s.running || batchRunning;
   $("stopBatch").hidden = !batchRunning;
-  $("dot").classList.toggle("on", s.running || batchRunning);
+  $("dot").classList.toggle("on", running);
+  $("statusBadge").dataset.state = !running && s.exit_code > 0 ? "error" : "";
   showBatch(b);
   if (b && b.done !== lastBatchDone) {  // a batch episode finished: list it
     lastBatchDone = b.done;
@@ -882,7 +970,7 @@ async function refresh() {
   }
   if (batchRunning) {
     $("statusText").textContent = "Batch running";
-    $("statusMore").textContent = b.current ? `episode ${b.current.index} of ${b.total} · ${b.current.task}` : "";
+    $("statusMore").textContent = b.current ? `episode ${b.current.index} of ${b.total} · ${b.current.task} · seed ${b.current.seed}` : "";
   } else if (b && mode === "batch") {
     $("statusText").textContent = b.stopped_reason ? "Batch stopped" : "Batch finished";
     $("statusMore").textContent = `${b.done} of ${b.total} episodes`;
@@ -891,7 +979,7 @@ async function refresh() {
     $("statusMore").textContent = `${s.task} · ${s.elapsed_s} s`;
   } else if (s.task) {
     const rejected = s.log.some(line => line.includes("UNAUTHORIZED"));
-    $("statusText").textContent = s.exit_code === 0 ? "Done" : rejected ? "Error: API key rejected" : "Error (see Log)";
+    $("statusText").textContent = s.exit_code === 0 ? "Finished" : rejected ? "Error: API key rejected" : "Stopped with an error";
     if (s.exit_code !== 0 && wasRunning) $("logBox").open = true;
     $("statusMore").textContent = `${s.task} · ${s.elapsed_s} s`;
   }
@@ -908,15 +996,23 @@ async function refresh() {
 
 $("run").onclick = async () => {
   try {
-    const problem = sceneProblem();
-    if (problem) { alert(problem); return; }
+    const ood = readOOD();
+    if (ood === null) return;
+    if (customOn()) { const problem = sceneProblem(); if (problem) { alert(problem); return; } }
     if (!checkTask()) { alert($("taskNote").textContent); return; }
-    await api("/api/run", { task: $("task").value, seconds: $("seconds").value, scene: sceneForRun() });
+    starting = true;
+    previewRevision++;
+    clearTimeout(previewTimer);
+    $("previewStatus").hidden = true;
+    await api("/api/run", { task: $("task").value, seconds: $("seconds").value, ood, ...seeding(),
+                            scene: customOn() ? sceneForRun() : null, pairs: derivePairs($("task").value, onTable) });
     $("live").hidden = true;
     $("placeholder").hidden = false;
-    $("placeholder").textContent = "Starting…";
-    refresh();
+    $("placeholder").textContent = "Starting the simulator… (the first picture takes a few seconds)";
+    running = true;
+    await refresh();
   } catch (err) { alert(err.message); }
+  finally { starting = false; }
 };
 $("stop").onclick = async () => {
   $("stop").disabled = true;
@@ -925,12 +1021,27 @@ $("stop").onclick = async () => {
   setTimeout(() => { $("stop").disabled = false; }, 2000);
 };
 
+$("ood").addEventListener("input", schedulePreview);
+$("ood").addEventListener("reset", schedulePreview);
+
 (async () => {
   try { rules = await api("/api/rules"); } catch {}
   showRules();
   resetScene();
+  const ready = await loadOOD(api);
+  settingsReady = ready;
+  if (ready) {
+    initSeed(schedulePreview);
+    // seed.js puts the Seed field above the examples; it serves both modes, so it goes under the mode switch.
+    $("seedBox").append(...document.querySelectorAll(".seed-row, .seed-note"));
+    $("seed").addEventListener("input", estimate);
+    $("newSeed").addEventListener("click", estimate);
+    estimate();
+  }
   await loadRuns().catch(() => {});
-  refresh();
+  await refresh();
+  if (ready) schedulePreview();
+  else $("placeholder").textContent = "Restart app.py to load the current scene settings.";
   setInterval(refresh, 1000);
 })();
 </script>

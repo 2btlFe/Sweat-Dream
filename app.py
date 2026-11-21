@@ -3,16 +3,21 @@
     python app.py              then open http://localhost:8000
 
 Press Run on the page: sim.py runs the task in its own process, the page shows the cameras live, and the run's
-trajectory is saved in runs/<id>/. The page judges every saved run against the success rules set on it (target
-distance, release, time standing still); the rules are kept in runs/rules.json and each run's label in
-runs/<id>/label.json. A batch runs many episodes in the background (no camera view), each from a seeded start
-layout, and labels each one with the rules as they were when the batch started. Standard library only.
+trajectory is saved in runs/<id>/. The start scene comes from a seed (scene.py; see SCENE_SEED.md) with the scene
+settings of ood.py (camera, arm angles, blur, light, table; any of them drawn from the seed when marked random), or
+from a custom layout set on the page. /api/preview renders a start scene without the Dream API.
+
+The page judges every saved run against the success rules set on it (target distance, release, time standing
+still); the rules are kept in runs/rules.json and each run's label in runs/<id>/label.json. A batch runs many
+episodes in the background (no camera view), one seed each (seed, seed + 1, ... or the fixed eval seeds), and
+labels each one with the rules as they were when the batch started. Standard library only (plus ood.py and
+seed_web.py, which are standard library too).
 """
 
 import argparse
 import json
+import ast
 import os
-import random
 import re
 import secrets
 import subprocess
@@ -26,6 +31,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import judge
+import ood
+import seed_web  # the seed (scene.py): seed field, random scene controls
 
 HERE = Path(__file__).resolve().parent
 PAGE = HERE / "static" / "index.html"
@@ -36,14 +43,29 @@ DEFAULT_RULES = judge.DEFAULT_RULES
 OBJECTS = ["apple", "orange", "banana", "water_bottle"]
 TARGETS = ["bowl", "plate"]
 AREA = {"x": (-0.30, 0.30), "y": (-0.22, 0.18)}
-## Footprint radius of each item (metres), for random layouts that keep items apart; the page's map uses the same.
-RADII = {"apple": 0.040, "orange": 0.033, "banana": 0.050, "water_bottle": 0.030, "bowl": 0.083, "plate": 0.072}
 MAX_BATCH = 500
+FULL_TABLE = {"items": {name: None for name in OBJECTS + TARGETS}}  # a seed's scene has all six items
 ID_RE = re.compile(r"^[0-9]{8}-[0-9]{6}-[0-9a-f]{4}$")
 WORK = Path(tempfile.mkdtemp(prefix="dream-web-"))
 LIVE = WORK / "live.jpg"
 STOP = WORK / "stop"
-EXAMPLES = ["put apple into the bowl", "put orange into the bowl", "put banana on the plate"]
+PREVIEW_LOCK = threading.Lock()
+## Tasks without a bowl or plate are run but not judged (the judge needs an object and a target).
+EXAMPLES = [
+    "Move an object to the center of the workspace",
+    "Move an object to the left side of the workspace",
+    "Move an object to the right side of the workspace",
+]
+
+
+def eval_seeds():
+    """@return scene.EVAL_SEEDS, the 50 fixed evaluation seeds, read from scene.py without importing it (app.py
+    stays light: scene.py needs numpy, shapely and MuJoCo)."""
+    tree = ast.parse((HERE / "scene.py").read_text(encoding="utf-8"))
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(getattr(t, "id", None) == "EVAL_SEEDS" for t in node.targets):
+            return list(ast.literal_eval(node.value))
+    return []
 
 
 def read_json(path, default=None):
@@ -106,12 +128,13 @@ class Runner:
     def running(self):
         return self.process is not None and self.process.poll() is None
 
-    def start(self, task, seconds, scene=None, seed=None, live=True, extra_env=None):
+    def start(self, task, seconds, changes=None, seeding=(), scene=None, live=True, extra_env=None):
         """Start one run of sim.py.
-        @param scene The table setup, as parse_scene returns it, or None for the default scene.
-        @param seed Seed for the small start shifts (random when None).
+        @param changes Scene settings (ood.validate output).
+        @param seeding sim.py's seed arguments (seed_web.seeding_args): --seed, --ood-random.
+        @param scene A custom layout (parse_scene), which replaces the seed's; seeding is then not used.
         @param live Whether to write the camera view for the page (batches do not).
-        @param extra_env More environment variables for sim.py (BATCH_ID, LAYOUT).
+        @param extra_env More environment variables for sim.py (BATCH_ID, JUDGE_PAIRS).
         """
         with self.lock:
             if self.running():
@@ -127,11 +150,15 @@ class Runner:
                 env["LIVE_FRAME"] = str(LIVE)
             if PAGE_KEY["value"]:
                 env["DREAM_API_KEY"] = PAGE_KEY["value"]
+            command = [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds)]
+            if changes:
+                command.extend(["--ood", json.dumps(changes)])
             if scene:
-                env["SCENE_JSON"] = json.dumps(scene)
+                env["SCENE_JSON"] = json.dumps(scene)  # sim.py then builds the default scene with this layout
+            else:
+                command.extend(seeding)
             self.process = subprocess.Popen(
-                [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds),
-                 "--seed", str(secrets.randbelow(1_000_000_000) if seed is None else seed)], cwd=str(HERE), env=env,
+                command, cwd=str(HERE), env=env,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
             self.task, self.started, self.ended, self.run_id = task, time.time(), None, run_id
             self.log.clear()
@@ -187,26 +214,6 @@ def parse_scene(scene):
     return {"items": items}
 
 
-def random_layout(names, rng):
-    """Place the named items at random in AREA, at least 2 cm apart.
-    @param names Items on the table.
-    @param rng A random.Random (seeded, so a layout can be made again).
-    @return A scene, as parse_scene returns it.
-    @throws RuntimeError When the items do not fit (should not happen with six items).
-    """
-    placed = {}
-    for name in sorted(names, key=lambda n: -RADII[n]):  # big ones first
-        for _ in range(500):
-            x, y = rng.uniform(*AREA["x"]), rng.uniform(*AREA["y"])
-            if all((x - px) ** 2 + (y - py) ** 2 > (RADII[name] + RADII[other] + 0.02) ** 2
-                   for other, (px, py) in placed.items()):
-                placed[name] = [round(x, 4), round(y, 4)]
-                break
-        else:
-            raise RuntimeError("Could not place the items apart; try fewer items.")
-    return {"items": placed}
-
-
 def write_label(d, verdict, rules, **extra):
     write_json(d / "label.json", {"label": verdict["label"], "reason": verdict["reason"],
                                   "success_time_s": verdict.get("success_time_s"), "rules": rules,
@@ -214,9 +221,9 @@ def write_label(d, verdict, rules, **extra):
 
 
 class Batch:
-    """Many episodes one after another in the background: no camera view, a seeded start layout each, and a label
-    from the rules as they were when the batch started. Stops on a run error (such as a rejected API key), after
-    three invalid episodes in a row, or when asked."""
+    """Many episodes one after another in the background: no camera view, one seed each (its start scene, and the
+    scene settings marked random drawn from it), and a label from the rules as they were when the batch started.
+    Stops on a run error (such as a rejected API key), after three invalid episodes in a row, or when asked."""
 
     def __init__(self):
         self.thread = None
@@ -226,17 +233,20 @@ class Batch:
     def running(self):
         return self.thread is not None and self.thread.is_alive()
 
-    def start(self, tasks, count, seconds, layout, scene, seed):
+    def start(self, tasks, seeds, seconds, changes, random_names, split):
+        """@param seeds One seed per episode. @param changes, random_names The scene settings, and the ones drawn
+        from each seed. @param split "train" or "eval" (shown on the page)."""
         if self.running() or RUNNER.running():
             raise RuntimeError("A run is already going.")
         if not has_api_key():
             raise RuntimeError("Enter your API key first.")
         self.stop_requested = False
-        self.info = {"id": "b" + datetime.now().strftime("%Y%m%d-%H%M%S"), "tasks": tasks, "total": count,
-                     "seconds": seconds, "layout": layout, "seed": seed, "rules": current_rules(),
+        self.info = {"id": "b" + datetime.now().strftime("%Y%m%d-%H%M%S"), "tasks": tasks, "total": len(seeds),
+                     "seconds": seconds, "seeds": seeds, "seed": seeds[0], "split": split, "ood": changes,
+                     "ood_random": random_names, "rules": current_rules(),
                      "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
                      "started": time.time(), "ended": None, "current": None, "stopped_reason": None, "durations": []}
-        self.thread = threading.Thread(target=self._loop, args=(scene,), daemon=True)
+        self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
 
     def stop(self):
@@ -244,21 +254,20 @@ class Batch:
             self.stop_requested = True
             RUNNER.stop()
 
-    def _loop(self, scene):
+    def _loop(self):
         info = self.info
         invalid_in_a_row = 0
         try:
             for i in range(info["total"]):
                 if self.stop_requested:
                     break
-                task, seed = info["tasks"][i % len(info["tasks"])], info["seed"] + i
+                task, seed = info["tasks"][i % len(info["tasks"])], info["seeds"][i]
                 prompt = task["prompt"]
-                episode_scene = scene if info["layout"] == "shift" else random_layout(scene["items"], random.Random(seed))
                 info["current"] = {"index": i + 1, "task": prompt, "seed": seed}
                 started = time.time()
-                RUNNER.start(prompt, info["seconds"], episode_scene, seed=seed, live=False,
-                             extra_env={"BATCH_ID": info["id"], "LAYOUT": info["layout"],
-                                        "JUDGE_PAIRS": json.dumps(task["pairs"])})
+                seeding = ["--seed", str(seed)] + (["--ood-random", ",".join(info["ood_random"])] if info["ood_random"] else [])
+                RUNNER.start(prompt, info["seconds"], info["ood"], seeding, live=False,
+                             extra_env={"BATCH_ID": info["id"], "JUDGE_PAIRS": json.dumps(task["pairs"])})
                 run_id, process = RUNNER.run_id, RUNNER.process
                 while process.poll() is None:  # a run that hangs is stopped, then killed
                     waited = time.time() - started
@@ -294,7 +303,7 @@ class Batch:
     def status(self):
         if not self.info:
             return None
-        info = {k: v for k, v in self.info.items() if k != "durations"}
+        info = {k: v for k, v in self.info.items() if k not in ("durations", "seeds")}
         durations = self.info["durations"]
         remaining = info["total"] - info["done"]
         info["running"] = self.running()
@@ -356,15 +365,32 @@ def parse_task_list(tasks, scene):
     return clean
 
 
+def run_options(body):
+    """The start-scene options of a run or preview request.
+    @return (changes, seeding, scene): the scene settings, sim.py's seed arguments, and a custom layout (or None;
+    a custom layout replaces the seed's, so the seed and the random settings are not used with it).
+    @throws ValueError
+    """
+    changes = ood.validate(body.get("ood") or {})
+    try:
+        scene = parse_scene(body.get("scene"))
+    except (TypeError, AttributeError) as error:
+        raise ValueError(f"Scene: {error}") from error
+    seeding = () if scene else seed_web.seeding_args(body, ood.FIELDS)
+    return changes, seeding, scene
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
-    def send(self, body, content_type, status=200):
+    def send(self, body, content_type, status=200, headers=None):
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
         self.wfile.write(body)
 
@@ -375,6 +401,10 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split("?", 1)[0]
         if path in ("/", "/index.html"):
             return self.send(PAGE.read_bytes(), "text/html; charset=utf-8")
+        if path in ("/ood.js", "/seed.js"):
+            return self.send(PAGE.with_name(path[1:]).read_bytes(), "text/javascript; charset=utf-8")
+        if path == "/api/ood":
+            return self.send_json(ood.GROUPS)
         if path == "/api/status":
             return self.send_json(RUNNER.status())
         if path == "/api/live.jpg":
@@ -402,29 +432,59 @@ class Handler(BaseHTTPRequestHandler):
             return self.send((RUNS / m.group(1) / m.group(2)).read_bytes(), kind)
         self.send_json({"error": "not found"}, 404)
 
+    def preview(self, body):
+        """The start scene as a JPEG (sim.py --preview: no Dream API), with the values the seed drew in a header."""
+        try:
+            changes, seeding, scene = run_options(body)
+        except ValueError as error:
+            return self.send_json({"error": str(error)}, 400)
+        if RUNNER.running() or BATCH.running() or not PREVIEW_LOCK.acquire(blocking=False):
+            return self.send_json({"error": "The simulator is busy."}, 409)
+        try:
+            env = {**os.environ, "PYTHONWARNINGS": "ignore", **({"SCENE_JSON": json.dumps(scene)} if scene else {})}
+            with tempfile.TemporaryDirectory(prefix="dream-preview-") as folder:
+                frame = Path(folder) / "initial.jpg"
+                result = subprocess.run(
+                    [sys.executable, str(HERE / "sim.py"), "--preview", str(frame), "--ood", json.dumps(changes),
+                     *seeding], cwd=HERE, env=env, capture_output=True, text=True, timeout=60)
+                if result.returncode:
+                    error = (result.stderr or result.stdout).strip().splitlines()
+                    return self.send_json({"error": error[-1] if error else "Camera rendering failed."}, 422)
+                return self.send(frame.read_bytes(), "image/jpeg", headers=seed_web.drawn_header(result.stdout))
+        except (OSError, subprocess.TimeoutExpired):
+            return self.send_json({"error": "Could not render the initial camera view."}, 500)
+        finally:
+            PREVIEW_LOCK.release()
+
     def do_POST(self):
         try:
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
         except ValueError:
             return self.send_json({"error": "Invalid request."}, 400)
+        if not isinstance(body, dict):
+            return self.send_json({"error": "Expected a JSON object."}, 400)
+        if self.path == "/api/preview":
+            return self.preview(body)
         if self.path == "/api/run":
             task = re.sub(r"\s+", " ", str(body.get("task") or "")).strip()
             if not task:
-                return self.send_json({"error": "Type a task, such as: put apple into the bowl"}, 400)
-            if judge.parse_task(task) is None:
-                return self.send_json({"error": "Automatic judging supports putting apple, orange, banana, or bottle in a bowl or on a plate."}, 400)
+                return self.send_json({"error": "Describe what to pick up and where to place it."}, 400)
             try:
-                scene = parse_scene(body.get("scene"))
-            except (ValueError, TypeError, AttributeError) as error:
-                return self.send_json({"error": f"Scene: {error}"}, 400)
-            missing = [name for name in judge.parse_task(task) if scene and name not in scene["items"]]
-            if missing:
-                return self.send_json({"error": f"Not on the table: {', '.join(missing)}"}, 400)
+                changes, seeding, scene = run_options(body)
+                # Judged on the pairs sent (from the task's words), or on the object and target the task names;
+                # a task with neither runs but is not judged.
+                pairs = body.get("pairs") or ([dict(zip(("object", "target"), judge.parse_task(task)))]
+                                              if judge.parse_task(task) else [])
+                if pairs:
+                    pairs = parse_task_list([{"prompt": task, "pairs": pairs}], scene or FULL_TABLE)[0]["pairs"]
+            except ValueError as error:
+                return self.send_json({"error": str(error)}, 400)
             if BATCH.running():
                 return self.send_json({"error": "A batch is running."}, 409)
             try:
                 seconds = min(300, max(10, int(float(body.get("seconds") or 60))))
-                RUNNER.start(task, seconds, scene)
+                RUNNER.start(task, seconds, changes, seeding, scene,
+                             extra_env={"JUDGE_PAIRS": json.dumps(pairs)} if pairs else None)
             except (ValueError, TypeError):
                 return self.send_json({"error": "The time limit must be a number."}, 400)
             except RuntimeError as error:
@@ -458,19 +518,28 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(key_status())
         if self.path == "/api/batch":
             try:
-                scene = parse_scene(body.get("scene"))
-                if scene is None:
-                    raise ValueError("Scene: pick what is on the table.")
-                tasks = parse_task_list(body.get("tasks"), scene)
+                tasks = parse_task_list(body.get("tasks"), FULL_TABLE)  # a seed's scene has all six items
                 count = int(body.get("count") or 0)
                 if not 1 <= count <= MAX_BATCH:
                     raise ValueError(f"Episodes must be 1 to {MAX_BATCH}.")
                 seconds = min(300, max(10, int(float(body.get("seconds") or 60))))
-                layout = body.get("layout")
-                if layout not in ("shift", "random"):
-                    raise ValueError("Start positions must be 'shift' or 'random'.")
-                seed = int(body["seed"]) if str(body.get("seed", "")).strip() else secrets.randbelow(1_000_000)
-                BATCH.start(tasks, count, seconds, layout, scene, seed)
+                changes = ood.validate(body.get("ood") or {})
+                seed_web.seeding_args({"ood_random": body.get("ood_random")}, ood.FIELDS)  # checks the names
+                random_names = list(body.get("ood_random") or [])
+                split = body.get("split") or "train"
+                if split == "eval":  # the fixed evaluation seeds, in order
+                    seeds = eval_seeds()[:count]
+                    if len(seeds) < count:
+                        raise ValueError(f"There are {len(seeds)} eval seeds.")
+                elif split == "train":
+                    first = str(body.get("seed", "")).strip()
+                    first = int(first) if first else secrets.randbelow(1_000_000)
+                    if not 0 <= first or first + count > 1_000_000:
+                        raise ValueError("Train seeds are 0 to 999999.")
+                    seeds = list(range(first, first + count))
+                else:
+                    raise ValueError("Seeds must be 'train' or 'eval'.")
+                BATCH.start(tasks, seeds, seconds, changes, random_names, split)
             except (ValueError, TypeError, AttributeError) as error:
                 return self.send_json({"error": str(error)}, 400)
             except RuntimeError as error:
