@@ -33,7 +33,7 @@ Open http://localhost:8000.
 
 Dream Labs Sandbox currently lists YAM, Trossen WidowX AI, MakerMods Metal, SO-101, OpenYAM, AgileX PiPER, Universal Robots UR5e, Seeed reBot B601, and MakerMods Maker Arm. Its rooms are Kitchen, Sunny apartment, Cottage, Walnut study, and Evening den. Objects can be selected from Food, Toys, Kitchen, Home and tools, Containers, and Pictures, up to eight on the table. The public Playground's **SIM 1–4** buttons switch between shared live rooms; they are not local scene presets.
 
-The bundled `dream_examples/yam_mujoco` package used by this app contains one local YAM tabletop scene. The right panel lists Sandbox robots and rooms for comparison, but **Run** is available only for YAM tabletop. For another robot or room, use the panel's Sandbox link. The local lighting presets change rendering; they do not reproduce Dream Labs' Sandbox rooms. The four fruit/bottle objects, bowl, and plate are part of the fixed local scene. Each run records its robot, room, layout, lighting, and actual seed in `meta.json`.
+The bundled `dream_examples/yam_mujoco` package provides the YAM robot and tabletop. **Run** supports YAM in the tabletop and five original MuJoCo room backdrops inspired by the Sandbox themes. These backdrops are approximations, not Dream Labs Sandbox assets or equivalent tasks; the table, robot, objects, and calibrated policy cameras stay the same. Other robots are listed for reference but require their own MuJoCo model and Dream-1 observation/action adapter before a local run can be enabled. Lighting changes rendering. Each run records its robot, room, layout, lighting, and seed in `meta.json`.
 
 The run list also shows episodes collected from the command line, including after a page reload.
 

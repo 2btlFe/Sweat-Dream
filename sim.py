@@ -43,6 +43,7 @@ import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
 
 import simulator_settings as sim_settings
+from local_rooms import themed_xml
 
 HERE = Path(__file__).resolve().parent
 LIVE_FRAME = os.environ.get("LIVE_FRAME")
@@ -180,6 +181,7 @@ def main():
     parser.add_argument("--seed", type=int, help="Seed for reproducible object variation")
     parser.add_argument("--layout", choices=sim_settings.LAYOUTS, default="fixed")
     parser.add_argument("--lighting", choices=sim_settings.LIGHTING, default="standard")
+    parser.add_argument("--room", choices=sim_settings.ROOMS, default="yam_tabletop")
     args = parser.parse_args()
     if args.layout == "varied" and args.seed is None:
         parser.error("--layout varied requires --seed")
@@ -195,10 +197,13 @@ def main():
     run_dir = Path(os.environ.get("RUN_DIR") or HERE / "runs" / new_run_id())
     run_dir.mkdir(parents=True, exist_ok=True)
     meta = {"id": run_dir.name, "task": args.task, "seconds": args.seconds, "seed": args.seed,
-            "robot": "yam", "room": "yam_tabletop", "layout": args.layout, "lighting": args.lighting,
+            "robot": "yam", "room": args.room, "layout": args.layout, "lighting": args.lighting,
             "started_at": datetime.now().isoformat(timespec="seconds"), "stopped_by_user": False,
             "error": None, "error_type": None}
 
+    if args.room != "yam_tabletop":
+        build_base_xml = yam_env.build_xml
+        yam_env.build_xml = lambda: themed_xml(build_base_xml(), args.room)
     env = yam_env.YamEnv()
     apply_lighting(env, args.lighting)
     if args.layout == "varied":

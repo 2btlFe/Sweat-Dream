@@ -18,6 +18,7 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(len(settings.ROBOTS), 9)
         self.assertEqual(len(settings.ROOMS), 6)  # Five Sandbox rooms plus local tabletop.
         self.assertTrue(settings.local_supported(settings.normalize({})))
+        self.assertTrue(settings.local_supported(settings.normalize({"room": "kitchen"})))
         self.assertFalse(settings.local_supported(settings.normalize({"robot": "piper", "room": "kitchen"})))
         for bad in ({"robot": "unknown"}, {"room": []}, {"seed": -1}, {"seed": True}):
             with self.assertRaises(ValueError):

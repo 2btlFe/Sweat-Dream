@@ -110,7 +110,8 @@ class Runner:
             env = {**os.environ, "PYTHONUTF8": "1", "PYTHONUNBUFFERED": "1", "PYTHONWARNINGS": "ignore",
                    "LIVE_FRAME": str(LIVE), "STOP_FILE": str(STOP), "RUN_DIR": str(RUNS / run_id)}
             command = [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds),
-                       "--lighting", settings["lighting"], "--layout", settings["layout"]]
+                       "--lighting", settings["lighting"], "--layout", settings["layout"],
+                       "--room", settings["room"]]
             if settings["layout"] == "varied":
                 command += ["--seed", str(settings["seed"] if settings["seed"] is not None
                                           else secrets.randbelow(2**32))]
@@ -210,7 +211,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "Automatic judging supports putting apple, orange, banana, or bottle in a bowl or on a plate."}, 400)
             settings = current_settings()
             if not sim_settings.local_supported(settings):
-                return self.send_json({"error": "This robot and room are available in Dream Labs Sandbox, not the local YAM simulator."}, 400)
+                return self.send_json({"error": "The selected robot has no local control adapter. Choose YAM to run a local scene."}, 400)
             try:
                 seconds = min(300, max(10, int(float(body.get("seconds") or 60))))
                 RUNNER.start(task, seconds, settings)

@@ -44,10 +44,10 @@ def normalize(value):
 
 
 def local_supported(settings):
-    return settings["robot"] == "yam" and settings["room"] == "yam_tabletop"
+    return settings["robot"] == "yam" and settings["room"] in ROOMS
 
 
 def catalog():
     return {"robots": ROBOTS, "rooms": ROOMS, "lighting": LIGHTING,
-            "layouts": LAYOUTS, "local_robot": "yam", "local_room": "yam_tabletop",
+            "layouts": LAYOUTS, "local_robot": "yam", "local_rooms": list(ROOMS),
             "sandbox_url": "https://platform.dreamlabs.ai/sandbox"}
