@@ -45,6 +45,10 @@ import mujoco  # noqa: E402
 import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
 
+import simulator_settings as sim_settings
+from local_rooms import desk_texture, themed_xml
+from sandbox_env import SandboxEnv
+
 HERE = Path(__file__).resolve().parent
 LIVE_FRAME = os.environ.get("LIVE_FRAME")
 STOP_FILE = os.environ.get("STOP_FILE")
@@ -112,16 +116,18 @@ class Trajectory:
     def record(self, env):
         m, d = env.model, env.data
         if self.ids is None:
+            bodies = getattr(env, "object_bodies", {name: name for name in OBJECTS + TARGETS})
+            fingertips = getattr(env, "fingertip_bodies", FINGERTIPS)
             self.ids = {}
             for name in OBJECTS + TARGETS:  # only the ones on the table
                 try:
-                    self.ids[name] = m.body(name).id
+                    self.ids[name] = m.body(bodies[name]).id
                 except KeyError:
                     continue
                 self.positions[name] = []
                 if name in OBJECTS:
                     self.touching[name] = []
-            self.tips = {m.body(name).id for name in FINGERTIPS}
+            self.tips = {m.body(name).id for name in fingertips}
             self.object_of = {self.ids[name]: name for name in OBJECTS if name in self.ids}
         touching = set()
         for contact in d.contact[: d.ncon]:
@@ -158,11 +164,17 @@ def step(self, left, right):
 # Render the cameras only on the steps the model sees (1 in 4); the others reuse the last images. Much faster.
 original_capture = dream_control.capture
 last_images = {}
+REPLAY_DIR = None
+FRAME_COUNT = 0
 
 
 def capture(env, windows, keep=True):
+    global FRAME_COUNT
     if keep or not last_images:
         last_images.update(original_capture(env, windows, keep))
+        if keep and REPLAY_DIR is not None:
+            save_jpeg(camera_view(last_images), REPLAY_DIR / f"{FRAME_COUNT:05d}.jpg")
+            FRAME_COUNT += 1
         if LIVE_FRAME:
             save_jpeg(camera_view(last_images), LIVE_FRAME)
     return dict(last_images)
@@ -189,13 +201,54 @@ yam_env.YamEnv.step = step
 dream_control.capture = capture
 dream.DreamClient.get_action = get_action
 
+original_sandbox_step = SandboxEnv.step
+
+
+def sandbox_step(self, left, right):
+    result = original_sandbox_step(self, left, right)
+    TRAJECTORY.record(self)
+    if STATS["model_responses"]:
+        STATS["model_actions"] += 1
+    return result
+
+
+SandboxEnv.step = sandbox_step
+
+
+def apply_lighting(env, lighting):
+    """Change rendering only; physics, cameras, and object geometry stay fixed."""
+    if lighting == "standard":
+        return
+    palette = {
+        "warm": ([0.32, 0.25, 0.18], [0.52, 0.39, 0.28],
+                 [0.72, 0.56, 0.42], [0.54, 0.43, 0.34], [0.83, 0.76, 0.69, 1]),
+        "cool": ([0.18, 0.22, 0.30], [0.30, 0.39, 0.55],
+                 [0.42, 0.52, 0.68], [0.35, 0.46, 0.62], [0.68, 0.75, 0.84, 1]),
+    }
+    ambient, diffuse, key_light, fill_light, floor = palette[lighting]
+    env.model.vis.headlight.ambient[:] = ambient
+    env.model.vis.headlight.diffuse[:] = diffuse
+    env.model.light_diffuse[0] = key_light
+    env.model.light_diffuse[1] = fill_light
+    for geom_id in range(env.model.ngeom):
+        if env.model.geom_type[geom_id] == mujoco.mjtGeom.mjGEOM_PLANE:
+            env.model.geom_rgba[geom_id] = floor
+
 
 def main():
     parser = argparse.ArgumentParser(description="Run one Dream-1 task in the simulator")
     parser.add_argument("task", nargs="?", default="put apple into the bowl")
     parser.add_argument("--seconds", type=float, default=60)
-    parser.add_argument("--seed", type=int, help="Reproducible small shifts to each object's start pose")
+    parser.add_argument("--seed", type=int, help="Seed for reproducible object variation")
+    parser.add_argument("--layout", choices=sim_settings.LAYOUTS, default="fixed")
+    parser.add_argument("--lighting", choices=sim_settings.LIGHTING, default="standard")
+    parser.add_argument("--room", choices=sim_settings.ROOMS, default="yam_tabletop")
+    parser.add_argument("--robot", choices=("yam", "openyam"), default="yam")
     args = parser.parse_args()
+    if args.layout == "varied" and args.seed is None:
+        parser.error("--layout varied requires --seed")
+    if args.layout == "fixed" and args.seed is not None:
+        parser.error("--seed requires --layout varied")
 
     # The key: DREAM_API_KEY first (the website passes the key typed on the page), then ~/.dreamlabs/credentials
     # (batch.py and the command line). The bundled sim would otherwise prefer a separate, possibly stale /login key.
@@ -205,15 +258,36 @@ def main():
 
     run_dir = Path(os.environ.get("RUN_DIR") or HERE / "runs" / new_run_id())
     run_dir.mkdir(parents=True, exist_ok=True)
+    global REPLAY_DIR
+    REPLAY_DIR = run_dir / "frames"
+    REPLAY_DIR.mkdir(exist_ok=True)
     meta = {"id": run_dir.name, "task": args.task, "seconds": args.seconds, "seed": args.seed,
+            "robot": args.robot, "room": args.room, "layout": args.layout, "lighting": args.lighting,
             "started_at": datetime.now().isoformat(timespec="seconds"), "stopped_by_user": False,
             "error": None, "error_type": None, "scene": SCENE or None}
 
-    env = yam_env.YamEnv()  # built from the scene set on the page (build_xml above)
-    if args.seed is not None:
+    if args.robot == "yam":
+        if args.room != "yam_tabletop":
+            build_base_xml = yam_env.build_xml
+            try:
+                texture = desk_texture(args.room)
+            except (OSError, ValueError) as error:
+                texture = None
+                print(f"Room desk texture unavailable; using catalog color: {error}", flush=True)
+            yam_env.build_xml = lambda: themed_xml(build_base_xml(), args.room, texture)
+        env = yam_env.YamEnv()
+    else:
+        env = SandboxEnv(args.room)
+        meta["relative_height_bands"] = {"bowl": [0.01, 0.12], "plate": [0.0, 0.09]}
+        meta["off_table_z"] = -0.1
+    apply_lighting(env, args.lighting)
+    if args.layout == "varied":
         rng = np.random.default_rng(args.seed)
-        for body, joint in (("apple", "apple_free"), ("orange", "orange_free"),
-                            ("banana", "banana_free"), ("water_bottle", "bottle_free")):
+        object_joints = (("apple", "apple_free"), ("orange", "orange_free"),
+                         ("banana", "banana_free"), ("water_bottle", "bottle_free"))
+        if args.robot == "openyam":
+            object_joints = tuple((body, f"{body}/free") for body, _ in object_joints)
+        for body, joint in object_joints:
             try:
                 qpos = env.data.joint(joint).qpos
             except KeyError:  # not on the table in this scene
@@ -250,6 +324,8 @@ def main():
         stop.set()
         meta["ended_at"] = datetime.now().isoformat(timespec="seconds")
         meta["sim_seconds"] = TRAJECTORY.t[-1] if TRAJECTORY.t else 0
+        meta["replay_frames"] = FRAME_COUNT
+        meta["replay_fps"] = 5
         meta.update(STATS)
         (run_dir / "trajectory.json").write_text(json.dumps(TRAJECTORY.to_json(), separators=(",", ":")))
         if last_images:

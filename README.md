@@ -10,7 +10,9 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install dreamlabs
 ```
 
-Get an API key at https://platform.dreamlabs.ai.
+OpenYAM scene loading also needs Node.js on `PATH`. The first OpenYAM run downloads the publicly served Sandbox MuJoCo package into a temporary cache; later runs reuse it. The web build's catalog URL is not a documented API and may change.
+
+Get an API key at https://platform.dreamlabs.ai. The website keeps the key you enter in server memory and clears it when you press **Clear** or restart the server.
 
 ## Run
 
@@ -21,12 +23,21 @@ python app.py
 Open http://localhost:8000.
 
 1. Paste your API key → **Use key**. It is kept in memory only; **Clear** removes it.
-2. **Scene** (right): pick the objects and a bowl/plate and drag them on the map. The robot is YAM, the only one in this simulator.
-3. Type a task such as `put apple into the bowl` → **Run**.
-4. Set the distance, release, and still-time rules. Existing runs are re-evaluated immediately.
-5. Select a run to inspect its final frame, checks, and distance chart. **Save labels** writes the current server-side verdicts to `label.json`.
+2. Choose YAM or OpenYAM and a room under **Simulation setup**. The room styles, layout, and lighting affect the next run.
+3. With YAM, use **Scene** to choose objects and targets and drag them on the table map. OpenYAM currently uses its fixed Sandbox object layout.
+4. Type a task such as `put apple into the bowl` → **Run**.
+5. Set the distance, release, and still-time rules. Existing runs are re-evaluated immediately.
+6. Select a run to inspect and replay it. **Save labels** writes the current server-side verdicts to `label.json`.
+
+## Simulator selection
+
+Dream Labs Sandbox currently lists YAM, Trossen WidowX AI, MakerMods Metal, SO-101, OpenYAM, AgileX PiPER, Universal Robots UR5e, Seeed reBot B601, and MakerMods Maker Arm. Its rooms are Kitchen, Sunny apartment, Cottage, Walnut study, and Evening den. Objects can be selected from Food, Toys, Kitchen, Home and tools, Containers, and Pictures, up to eight on the table. The public Playground's **SIM 1–4** buttons switch between shared live rooms; they are not local scene presets.
+
+The bundled `dream_examples/yam_mujoco` package provides YAM. OpenYAM uses the public Sandbox `fruit_table` MuJoCo robot, scene, camera, and object packages, with a local Dream-1 control adapter. **Run** supports YAM and OpenYAM in the tabletop and five simplified local room styles. The room styles use publicly served Sandbox desk textures and color/light descriptors at runtime; the room walls are local geometry because the Sandbox's baked room meshes render in Three.js, outside MuJoCo. No Dream Labs asset is committed to this repository. Other robots are marked **unavailable** until their distinct action mapping and gripper contact rules are validated. Lighting changes rendering. Each run records its robot, room, layout, lighting, and seed in `meta.json`.
 
 The run list also shows episodes collected from the command line, including after a page reload.
+
+Select a run and press **Play** to replay it. New runs save camera frames at 5 fps and support scrubbing. Earlier runs save only object coordinates and the last camera image, so they replay as a top-down object path without robot motion. The full camera replay is not recoverable for earlier runs.
 
 To collect 30 episodes across the three sample tasks with ten seeded starting layouts:
 
@@ -34,7 +45,7 @@ To collect 30 episodes across the three sample tasks with ten seeded starting la
 python batch.py --repeats 10 --seconds 60 --budget-minutes 60
 ```
 
-The batch uses the default scene, the key in `~/.dreamlabs/credentials` (`DREAM_API_KEY=...`), and a snapshot of the rules saved in the UI. It writes each episode to `runs/<id>/` and stops on an invalid run, such as an API authentication error. Check the API key and endpoint before starting a large batch. `--tasks`, `--seed`, `--repeats`, and `--seconds` are adjustable.
+The batch uses the selected robot and room, the key in `~/.dreamlabs/credentials` (`DREAM_API_KEY=...`), and a snapshot of the rules saved in the UI. Batch runs use the simulator's default object layout. It writes each episode to `runs/<id>/` and stops on an invalid run, such as an API authentication error. Check the API key and endpoint before starting a large batch. `--tasks`, `--seed`, `--repeats`, and `--seconds` are adjustable.
 
 ## Rules
 

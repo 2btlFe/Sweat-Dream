@@ -61,6 +61,15 @@ class JudgeTests(unittest.TestCase):
         verdict = judge.evaluate({**META, "error": "UNAUTHORIZED"}, episode(), judge.DEFAULT_RULES)
         self.assertEqual(verdict["label"], "invalid")
 
+    def test_sandbox_relative_height_band(self):
+        trace = episode()
+        for position in trace["positions"]["apple"]:
+            position[2] = .055
+        for position in trace["positions"]["bowl"]:
+            position[2] = .001
+        meta = {**META, "relative_height_bands": {"bowl": [.01, .12]}, "off_table_z": -.1}
+        self.assertEqual(judge.evaluate(meta, trace, judge.DEFAULT_RULES)["label"], "success")
+
 
 if __name__ == "__main__":
     unittest.main()

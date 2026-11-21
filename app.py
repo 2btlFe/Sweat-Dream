@@ -24,11 +24,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import judge
+import simulator_settings as sim_settings
 
 HERE = Path(__file__).resolve().parent
 PAGE = HERE / "static" / "index.html"
 RUNS = HERE / "runs"
 RULES = RUNS / "rules.json"
+SETTINGS = RUNS / "simulator_settings.json"
 DEFAULT_RULES = judge.DEFAULT_RULES
 ## What can be on the table, and the area objects may be placed in (metres, world frame; reachable by both arms).
 OBJECTS = ["apple", "orange", "banana", "water_bottle"]
@@ -60,6 +62,14 @@ def current_rules():
         return judge.normalize_rules({**DEFAULT_RULES, **saved})
     except (TypeError, ValueError):
         return dict(DEFAULT_RULES)
+
+
+def current_settings():
+    saved = read_json(SETTINGS, {})
+    try:
+        return sim_settings.normalize(saved)
+    except ValueError:
+        return dict(sim_settings.DEFAULT)
 
 
 def run_dir(run_id):
@@ -101,7 +111,7 @@ class Runner:
     def running(self):
         return self.process is not None and self.process.poll() is None
 
-    def start(self, task, seconds, scene=None):
+    def start(self, task, seconds, settings, scene=None):
         with self.lock:
             if self.running():
                 raise RuntimeError("A run is already going.")
@@ -116,9 +126,14 @@ class Runner:
                 env["DREAM_API_KEY"] = PAGE_KEY["value"]
             if scene:
                 env["SCENE_JSON"] = json.dumps(scene)
+            command = [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds),
+                       "--lighting", settings["lighting"], "--layout", settings["layout"],
+                       "--room", settings["room"], "--robot", settings["robot"]]
+            if settings["layout"] == "varied":
+                command += ["--seed", str(settings["seed"] if settings["seed"] is not None
+                                          else secrets.randbelow(2**32))]
             self.process = subprocess.Popen(
-                [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds),
-                 "--seed", str(secrets.randbelow(1_000_000_000))], cwd=str(HERE), env=env,
+                command, cwd=str(HERE), env=env,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
             self.task, self.started, self.ended, self.run_id = task, time.time(), None, run_id
             self.log.clear()
@@ -201,6 +216,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "no frame yet"}, 404)
         if path == "/api/rules":
             return self.send_json(current_rules())
+        if path == "/api/simulator-settings":
+            return self.send_json({"settings": current_settings(), "catalog": sim_settings.catalog()})
         if path == "/api/runs":
             runs = []
             rules = current_rules()
@@ -216,6 +233,11 @@ class Handler(BaseHTTPRequestHandler):
         if m and run_dir(m.group(1)) and (RUNS / m.group(1) / m.group(2)).exists():
             kind = "application/json" if m.group(2).endswith(".json") else "image/jpeg"
             return self.send((RUNS / m.group(1) / m.group(2)).read_bytes(), kind)
+        m = re.match(r"^/api/runs/([^/]+)/frames/(\d{5})\.jpg$", path)
+        if m and run_dir(m.group(1)):
+            frame = RUNS / m.group(1) / "frames" / f"{m.group(2)}.jpg"
+            if frame.is_file():
+                return self.send(frame.read_bytes(), "image/jpeg")
         self.send_json({"error": "not found"}, 404)
 
     def do_POST(self):
@@ -229,6 +251,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "Type a task, such as: put apple into the bowl"}, 400)
             if judge.parse_task(task) is None:
                 return self.send_json({"error": "Automatic judging supports putting apple, orange, banana, or bottle in a bowl or on a plate."}, 400)
+            settings = current_settings()
+            if not sim_settings.local_supported(settings):
+                return self.send_json({"error": "The selected robot has no local control adapter. Choose YAM or OpenYAM."}, 400)
+            if settings["robot"] == "openyam" and body.get("scene"):
+                return self.send_json({"error": "Custom object placement is available with YAM; OpenYAM uses its fixed Sandbox table."}, 400)
             try:
                 scene = parse_scene(body.get("scene"))
             except (ValueError, TypeError, AttributeError) as error:
@@ -238,12 +265,19 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": f"Not on the table: {', '.join(missing)}"}, 400)
             try:
                 seconds = min(300, max(10, int(float(body.get("seconds") or 60))))
-                RUNNER.start(task, seconds, scene)
+                RUNNER.start(task, seconds, settings, scene)
             except (ValueError, TypeError):
                 return self.send_json({"error": "The time limit must be a number."}, 400)
             except RuntimeError as error:
                 return self.send_json({"error": str(error)}, 409)
             return self.send_json(RUNNER.status())
+        if self.path == "/api/simulator-settings":
+            try:
+                settings = sim_settings.normalize(body)
+            except ValueError as error:
+                return self.send_json({"error": str(error)}, 400)
+            write_json(SETTINGS, settings)
+            return self.send_json({"settings": settings, "catalog": sim_settings.catalog()})
         if self.path == "/api/rules":
             try:
                 rules = judge.normalize_rules(body)

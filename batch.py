@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 import judge
+import simulator_settings as sim_settings
 
 HERE = Path(__file__).resolve().parent
 RUNS = HERE / "runs"
@@ -28,11 +29,17 @@ def rules_snapshot():
     return judge.normalize_rules(json.loads(path.read_text(encoding="utf-8")))
 
 
+def settings_snapshot():
+    path = RUNS / "simulator_settings.json"
+    return sim_settings.normalize(json.loads(path.read_text(encoding="utf-8"))) if path.exists() else dict(sim_settings.DEFAULT)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tasks", nargs="+", default=TASKS)
     parser.add_argument("--repeats", type=int, default=10)
-    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=None,
+                        help="Base seed for varied layout; overrides the UI seed")
     parser.add_argument("--seconds", type=float, default=60)
     parser.add_argument("--budget-minutes", type=float, default=60)
     args = parser.parse_args()
@@ -41,22 +48,30 @@ def main():
     if any(judge.parse_task(task) is None for task in args.tasks):
         parser.error("Tasks must name apple, orange, banana, or bottle and a bowl or plate")
     rules = rules_snapshot()
+    settings = settings_snapshot()
+    if not sim_settings.local_supported(settings):
+        parser.error("Selected robot has no local control adapter; choose YAM or OpenYAM in the UI")
+    base_seed = args.seed if args.seed is not None else (settings["seed"] if settings["seed"] is not None else 0)
     counts = Counter()
     total = args.repeats * len(args.tasks)
     started = time.monotonic()
     RUNS.mkdir(exist_ok=True)
-    for n, (seed, task) in enumerate(((args.seed + i, task) for i in range(args.repeats)
+    for n, (seed, task) in enumerate(((base_seed + i, task) for i in range(args.repeats)
                                       for task in args.tasks), 1):
         if time.monotonic() - started >= args.budget_minutes * 60:
             print("Wall-time budget reached; remaining episodes were not started.")
             break
         run_id = datetime.now().strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
         folder = RUNS / run_id
-        print(f"[{n}/{total}] {task} (seed {seed})", flush=True)
+        print(f"[{n}/{total}] {task} ({'seed ' + str(seed) if settings['layout'] == 'varied' else 'fixed layout'})", flush=True)
+        command = [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(args.seconds),
+                   "--layout", settings["layout"], "--lighting", settings["lighting"],
+                   "--room", settings["room"], "--robot", settings["robot"]]
+        if settings["layout"] == "varied":
+            command += ["--seed", str(seed)]
         try:
             proc = subprocess.run(
-                [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(args.seconds),
-                 "--seed", str(seed)], cwd=HERE, env={**os.environ, "RUN_DIR": str(folder)},
+                command, cwd=HERE, env={**os.environ, "RUN_DIR": str(folder)},
                 capture_output=True, text=True, timeout=args.seconds + 180)
         except subprocess.TimeoutExpired:
             counts["invalid"] += 1
