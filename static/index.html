@@ -379,11 +379,7 @@ $("saveLabels").onclick = async () => {
 /* ---------- API key ---------- */
 
 function showKey(key) {
-  const text = {
-    page: `✓ Using your key (…${key.hint}). Kept in memory only, not saved.`,
-    env: "✓ Using DREAM_API_KEY from the environment.",
-    file: "✓ Using the key saved on this computer.",
-  }[key.source] || "No key yet. Paste one to run.";
+  const text = key.source ? `✓ Using your key (…${key.hint}). Kept in memory only, not saved.` : "No key. Paste one to run.";
   $("keyState").textContent = text;
   $("keyState").classList.toggle("none", !key.source);
   $("clearKey").hidden = key.source !== "page";
@@ -394,7 +390,7 @@ $("keyForm").onsubmit = async e => {
   try { showKey(await api("/api/key", { key: $("apiKey").value })); $("apiKey").value = ""; refresh(); }
   catch (err) { alert(err.message); }
 };
-$("clearKey").onclick = async () => { showKey(await api("/api/key", { key: "" })); refresh(); };
+$("clearKey").onclick = async () => { $("apiKey").value = ""; showKey(await api("/api/key", { key: "" })); refresh(); };
 
 /* ---------- running ---------- */
 

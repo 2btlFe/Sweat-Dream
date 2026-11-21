@@ -20,7 +20,7 @@ python app.py
 
 Open http://localhost:8000.
 
-1. Paste your API key → **Use key** (kept in memory only; or put `DREAM_API_KEY=...` in `~/.dreamlabs/credentials`)
+1. Paste your API key → **Use key** (kept in memory only; **Clear** removes it)
 2. Type a task → **Run**
 3. Set the 3 rules
 4. **Save labels**

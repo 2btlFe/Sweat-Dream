@@ -56,30 +56,16 @@ def run_dir(run_id):
     return d if (d / "meta.json").exists() else None
 
 
-## A key typed on the page: kept in this process's memory only (never written to disk or logged), and handed to
-## each run as DREAM_API_KEY, which the simulator prefers over the credentials files.
+## The API key typed on the page: the only key the website uses. Kept in this process's memory only (never written
+## to disk or logged) and handed to each run as DREAM_API_KEY. Clear on the page removes it.
 PAGE_KEY = {"value": None}
 
 
-def file_has_key():
-    """Whether a key is saved where the simulator looks: ~/.dreamlabs/credentials or the sim's /login file."""
-    try:
-        if "DREAM_API_KEY=" in (Path.home() / ".dreamlabs" / "credentials").read_text(encoding="utf-8"):
-            return True
-    except OSError:
-        pass
-    return bool(read_json(Path.home() / ".config" / "dream-yam-sim" / "credentials.json", {}).get("api_key"))
-
-
 def key_status():
-    """Which key the next run uses: typed on the page, from the environment, from a file, or none.
-    @return {"source": "page" | "env" | "file" | None, "hint": the last 4 characters of a page key}.
-    """
+    """@return {"source": "page" or None, "hint": the key's last 4 characters}."""
     if PAGE_KEY["value"]:
         return {"source": "page", "hint": PAGE_KEY["value"][-4:]}
-    if os.environ.get("DREAM_API_KEY"):
-        return {"source": "env", "hint": None}
-    return {"source": "file" if file_has_key() else None, "hint": None}
+    return {"source": None, "hint": None}
 
 
 def has_api_key():
