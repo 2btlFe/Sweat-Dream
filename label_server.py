@@ -59,6 +59,19 @@ def episode_summary(d):
         "verifier_label": verifier.get("label") if verifier else None,
         "verifier_confidence": verifier.get("confidence") if verifier else None,
         "pca_state": (read_json(d / "pca" / "status.json") or {}).get("state"),
+        **_auto_fields(d),
+    }
+
+
+def _auto_fields(d):
+    """The auto label (autolabel.py) and the disturbance (perturb.py), for the list and the filters."""
+    auto = read_json(d / "auto_label.json") or {}
+    pert = read_json(d / "perturbation.json") or {}
+    return {
+        "auto_label": auto.get("label"), "auto_review": auto.get("review"), "auto_confidence": auto.get("confidence"),
+        "perturb_kind": pert.get("kind"), "recovered": pert.get("recovered") if pert else None,
+        "perturb_policy": ("dream-1" if pert.get("policy") == "dream-1" else "hold") if pert else None,
+        "looks": len((read_json(d / "aug" / "index.json") or {}).get("variants", [])),
     }
 
 
@@ -81,6 +94,8 @@ def episode_detail(d):
             "videos": sorted(f.name for f in (d / "pca").iterdir() if f.name in VIDEO_FILES) if (d / "pca").is_dir() else [],
         },
         "aug": read_json(d / "aug" / "index.json"),  # appearance variants made by rerender.py (same motion and label)
+        "auto": read_json(d / "auto_label.json"),  # autolabel.py
+        "perturbation": read_json(d / "perturbation.json"),  # perturb.py
     }
 
 
@@ -98,6 +113,11 @@ def stats(items):
         "uncertain": sum(e["human_label"] == "uncertain" for e in items),
         "human_vs_sim_agreement": round(agree / len(labeled), 3) if labeled else None,
         "human_vs_sim_n": len(labeled),
+        "review_queue": sum(bool(e.get("auto_review")) and not e["human_label"] for e in items),
+        "auto_labeled": sum(e.get("auto_label") is not None for e in items),
+        "recovery_runs": sum(e.get("perturb_policy") == "dream-1" for e in items),  # baselines (hold) not counted
+        "recovered": sum(bool(e.get("recovered")) and e.get("perturb_policy") == "dream-1" for e in items),
+        "baselines": sum(e.get("perturb_policy") == "hold" for e in items),
         "confusion": confusion,
         "verifier_vs_sim_agreement": round(sum(e["verifier_label"] == e["sim_label"] for e in with_verifier)
                                            / len(with_verifier), 3) if with_verifier else None,

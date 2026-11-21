@@ -41,6 +41,9 @@ C:\dream\.venv\Scripts\python.exe pca.py --all                                  
 C:\dream\.venv\Scripts\python.exe pca.py --all --watch                                          # ...and keep doing new ones
 C:\dream\.venv\Scripts\python.exe rerender.py --all --variants 4                                 # appearance augmentation
 C:\dream\.venv\Scripts\python.exe rerender.py <episode_id> --check                              # replay vs recorded video
+C:\dream\.venv\Scripts\python.exe autolabel.py                                                  # auto labels + review queue
+C:\dream\.venv\Scripts\python.exe perturb.py --clean --perturb drop@grasp+0.5 --repeats 2          # failure-recovery runs
+C:\dream\.venv\Scripts\python.exe auto_mode.py --perturb drop@grasp+0.5 --perturb push@lift --looks 2   # all of it
 ```
 
 Labeling UI: `C:\dream\.venv\Scripts\python.exe label_server.py --labeler <name>` then open http://localhost:8765.
@@ -55,6 +58,42 @@ their wall time is used ($3/hour list price).
 
 Each episode is written to `episodes/<id>/`: `meta.json`, `steps.npz` (t, state, action, object positions,
 fingertip contact; object orientations from now on), `top.mp4` / `left.mp4` / `right.mp4` (H.264, 5 fps), `outcome.json`.
+
+## Auto labeling, failure-recovery data and auto mode
+
+`autolabel.py` gives every episode `auto_label.json`: the simulator judge's label, a confidence and a review flag,
+without touching `outcome.json` or a human `label.json`. It sends an episode to the review queue when the judgement is
+less certain: unknown instruction, judge warning, run error, object ending within 1 cm of the target's edge, object
+still moving at the end, another object moved, replay drift, or a human label that disagrees. Tags slice the data:
+`clean_success`, `failure`, `recovery_run`, `recovered` / `not_recovered`, `disturbance:<kind>`, `scripted`, `looks:<n>`.
+
+`perturb.py` makes failure-recovery data from clean runs. A clean success is replayed action by action from its seed's
+start (MuJoCo is deterministic: 0 mm replay error, checked on Dream-1 and scripted episodes) up to a trigger, a
+disturbance is applied, and Dream-1 takes over from that state; the run is recorded and judged like any episode, with
+`perturbation.json` (what, when, recovered, recovery time). The replayed prefix costs nothing.
+
+| Disturbance | Effect (defaults) |
+| --- | --- |
+| `drop` | the gripper holding the object opens for `seconds` (0.6) |
+| `push` | velocity kick to the object: `vx, vy, vz` m/s (0, 0.4, 0) |
+| `shift` | the object moves instantly by `dx, dy` m (0.05, 0) |
+| `nudge_arm` | one joint (`joint` 2) of the holding or nearest arm turns by `rad` (0.3) |
+| `move_target` | the bowl or plate moves by `dx, dy` m (0.08, 0): the goal changes mid-task |
+| `freeze` | the last command stays in force for `seconds` (1.5): a stall |
+| `noise` | Gaussian noise `std` rad (0.05) on every joint command for `seconds` (2) |
+| `occlude` | a `camera` (left) sends black frames to the model for `seconds` (2) |
+
+A SPEC is `kind[:key=value,...]@trigger[+delay]`; triggers are a time in seconds, `grasp`, `lift` or `release` of the
+clean run. Variations: `--repeats` with `--delay-jitter` (a later trigger, up to s) and `--scale-jitter` (magnitudes
+scaled by up to +-x), drawn from a seed per repeat and kept in `perturbation.json`. `--no-dream` keeps the last command
+after the disturbance instead of calling Dream-1: a no-recovery baseline at no cost (the UI marks it "baseline").
+
+`auto_mode.py` runs it end to end: optional collection (`--dream-repeats`, `--scripted`), auto labels, disturbances on
+every high-confidence clean success (`--perturb ...`, `--perturb-repeats`, jitters, `--no-dream-recovery`), auto labels
+again, `--looks` re-rendered variants of every high-confidence episode, optional `--pca`, and a report in
+`batches/auto-<time>.json` with label counts, the review queue and the recovery rate per disturbance. Low-confidence
+episodes are neither disturbed nor multiplied; they wait for review. The labeling UI shows the auto label, the
+disturbance (with a mark on the timeline), and filters for the review queue, recovery runs and recovered runs.
 
 ## Appearance augmentation (re-rendering)
 
@@ -107,6 +146,9 @@ upsamples bilinearly; the NAF weights download on first use (torch hub cache), t
 | `live_view.py` | Plain viewer run without recording |
 | `pca.py` | Feature PCA videos for recorded episodes (DINOv2 + NAF, 224x224), paused while an episode records |
 | `rerender.py` | Appearance augmentation: re-render recorded episodes under new lighting, colours and camera poses |
+| `autolabel.py` | Auto labels from the simulator judge, confidence, review queue, tags (`auto_label.json`) |
+| `perturb.py` | Failure-recovery runs: replay a clean episode, disturb it, let Dream-1 recover (`perturbation.json`) |
+| `auto_mode.py` | Collect, auto-label, disturb, re-render and report in one command |
 | `feature_pca.py` | DINOv2 patch features and the per-episode PCA basis |
 | `naf_upsampler.py` | NAF upsampling of the PCA projection, with the speed-ups; `third_party/naf` is the vendored NAF |
 

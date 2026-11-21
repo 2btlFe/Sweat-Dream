@@ -37,7 +37,7 @@ aside { border-right: 1px solid var(--line); background: var(--panel); display: 
 .item:hover { background: var(--soft); }
 .item.sel { background: var(--soft); box-shadow: inset 3px 0 0 var(--accent); }
 .item .task { font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.item .sub { display: flex; gap: 6px; align-items: center; margin-top: 3px; font-size: 12px; color: var(--muted); }
+.item .sub { display: flex; gap: 4px 6px; align-items: center; margin-top: 3px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
 .chip { display: inline-block; padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 600; line-height: 18px; background: var(--soft); color: var(--muted); }
 .chip.success { background: var(--ok-bg); color: var(--ok); }
 .chip.failure { background: var(--bad-bg); color: var(--bad); }
@@ -69,6 +69,7 @@ details.method .facts { margin-top: 6px; font-variant-numeric: tabular-nums; }
 .timeline .pin { position: absolute; top: 0; transform: translateX(-50%); font-size: 10px; font-weight: 700; white-space: nowrap; }
 .timeline .pin::after { content: ""; display: block; width: 2px; height: 22px; margin: 1px auto 0; background: currentColor; }
 .pin.sim-fail { color: var(--bad); } .pin.sim-ok { color: var(--ok); }
+.pin.disturb { color: var(--unc); }
 .pin.human { color: var(--mark); top: 12px; }
 .pin.human::after { display: none; }
 .pin.human::before { content: ""; display: block; width: 2px; height: 12px; margin: 0 auto 1px; background: currentColor; }
@@ -124,7 +125,7 @@ const $ = (s, el = document) => el.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 const store = { get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
                 set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
-const FILTERS = [["all", "All"], ["unlabeled", "Unlabeled"], ["disagree", "Disagree"], ["sim_failure", "Sim: failure"], ["sim_success", "Sim: success"], ["dream", "Dream-1"], ["scripted", "Scripted"]];
+const FILTERS = [["all", "All"], ["review", "Review queue"], ["unlabeled", "Unlabeled"], ["disagree", "Disagree"], ["sim_failure", "Sim: failure"], ["sim_success", "Sim: success"], ["recovery", "Recovery runs"], ["recovered", "Recovered"], ["dream", "Dream-1"], ["scripted", "Scripted"]];
 let state = { episodes: [], reasons: [], filter: store.get("filter", "unlabeled"), sel: null, ep: null, draft: null };
 
 function chip(label) { return label ? `<span class="chip ${esc(label)}">${esc(label)}</span>` : `<span class="chip">—</span>`; }
@@ -136,6 +137,9 @@ function visible() {
   return state.episodes.filter(e =>
     f === "all" ? true :
     f === "unlabeled" ? !e.human_label :
+    f === "review" ? e.auto_review && !e.human_label :
+    f === "recovery" ? e.perturb_policy === "dream-1" :
+    f === "recovered" ? e.recovered === true :
     f === "disagree" ? e.human_label && e.human_label !== "uncertain" && e.human_label !== e.sim_label :
     f === "sim_failure" ? e.sim_label === "failure" :
     f === "sim_success" ? e.sim_label === "success" :
@@ -155,6 +159,8 @@ function renderStats(s) {
   const pct = v => v == null ? "—" : Math.round(v * 100) + "%";
   $("#stats").innerHTML = `<span><b>${s.episodes}</b> episodes</span><span><b>${s.human_labeled}</b> labeled</span>` +
     `<span>human vs sim <b>${pct(s.human_vs_sim_agreement)}</b> (n=${s.human_vs_sim_n})</span>` +
+    `<span><b>${s.auto_labeled ?? 0}</b> auto-labeled · review queue <b>${s.review_queue ?? 0}</b></span>` +
+    `<span>Dream-1 recovery <b>${s.recovered ?? 0}/${s.recovery_runs ?? 0}</b> · baselines ${s.baselines ?? 0}</span>` +
     `<span>verifier vs sim <b>${pct(s.verifier_vs_sim_agreement)}</b> (n=${s.verifier_vs_sim_n})</span>`;
 }
 
@@ -169,7 +175,7 @@ function renderList() {
     <div class="item ${e.id === state.sel ? "sel" : ""}" data-id="${e.id}">
       <div class="task">${esc(e.task)}</div>
       <div class="sub">${blind() && !e.human_label ? "" : "sim " + chip(e.sim_label)} you ${chip(e.human_label)}
-        <span>${esc((e.source || "").replace("scripted:", "script:"))}</span>${e.pca_state === "ready" ? `<span title="feature PCA ready">· PCA</span>` : ""}</div>
+        <span>${esc((e.source || "").replace("scripted:", "script:").replace("perturb:", "disturb:"))}</span>${e.auto_review && !e.human_label ? `<span class="chip uncertain" title="auto label needs review">review</span>` : ""}${e.perturb_kind ? (e.perturb_policy === "hold" ? `<span class="chip" title="disturbance with no recovery attempt">baseline</span>` : `<span class="chip ${e.recovered ? "success" : "failure"}">${e.recovered ? "recovered" : "not recovered"}</span>`) : ""}${e.pca_state === "ready" ? `<span title="feature PCA ready">· PCA</span>` : ""}</div>
     </div>`).join("") : `<div class="empty">Nothing here.</div>`;
   $("#list").onclick = e => { const it = e.target.closest(".item"); if (it) select(it.dataset.id); };
 }
@@ -275,6 +281,7 @@ function renderPins() {
     if (ep.outcome.success_time_s != null) at(ep.outcome.success_time_s, "sim-ok", "sim ✓");
   }
   if (state.draft.label === "failure" && state.draft.failure_time_s != null) at(state.draft.failure_time_s, "human", "you");
+  if (ep.perturbation) at(ep.perturbation.applied_at_s, "disturb", "⚡ " + ep.perturbation.kind);
   const el = $("#pins"); if (el) el.innerHTML = pins.join("");
 }
 
@@ -292,6 +299,28 @@ function judgementCard(title, o, extra = "") {
       ${o.evidence ? `<span>evidence</span><b>${esc(o.evidence)}</b>` : ""}
     </div>
     ${(o.warnings || []).map(w => `<div class="warn">⚠ ${esc(w)}</div>`).join("")}${extra}</div>`;
+}
+
+function autoCard(a) {
+  if (!a) return `<div class="card"><h3>Auto label</h3><div class="hidden-note">Not run yet (python autolabel.py).</div></div>`;
+  return `<div class="card"><h3>Auto label</h3>
+    <div class="verdict">${chip(a.label)} ${esc(pretty(a.reason))}</div>
+    <div class="kv"><span>confidence</span><b>${esc(a.confidence)}</b>
+      ${a.review ? `<span>review</span><b>${esc(a.review_reasons.map(pretty).join(", "))}</b>` : ""}
+      <span>tags</span><b>${esc((a.tags || []).join(" · "))}</b>
+      ${a.variants && a.variants.looks ? `<span>looks</span><b>${a.variants.looks} re-rendered variants, same label</b>` : ""}</div></div>`;
+}
+function disturbCard(p) {
+  if (!p) return "";
+  const app = Object.entries(p.applied || {}).map(([k, v]) => `${k} ${Array.isArray(v) ? v.join(", ") : v}`).join(" · ");
+  return `<div class="card"><h3>Disturbance</h3>
+    <div class="verdict">${p.policy === "dream-1" ? `${chip(p.recovered ? "success" : "failure")} ${p.recovered ? "recovered" : "not recovered"}` : `${chip("")} baseline: no recovery attempted`}</div>
+    <div class="kv"><span>disturbance</span><b>${esc(p.spec)}</b><span>applied at</span><b>${p.applied_at_s} s</b>
+      ${p.window_s ? `<span>lasting</span><b>${p.window_s} s</b>` : ""}${app ? `<span>applied</span><b>${esc(app)}</b>` : ""}
+      ${p.recovery_time_s != null ? `<span>recovered in</span><b>${p.recovery_time_s} s</b>` : ""}
+      <span>after</span><b>${esc(p.policy)}</b><span>clean run</span><b>${esc(p.clean_episode)}</b>
+      ${p.variation ? `<span>variation</span><b>+${p.variation.extra_delay_s} s, ${esc(JSON.stringify(p.variation.scaled))}</b>` : ""}
+      <span>replay drift</span><b>${(p.replay_drift_m * 1000).toFixed(3)} mm</b></div></div>`;
 }
 
 function renderRight() {
@@ -313,6 +342,8 @@ function renderRight() {
       <div class="status" id="status">${ep.label ? `Saved by ${esc(ep.label.labeler)} at ${esc(ep.label.labeled_at)}` : "Not labeled yet."}</div>
     </div>
     ${hide ? `<div class="card"><h3>Simulator judgement</h3><div class="hidden-note">Hidden in blind mode until you save your label.</div></div>` : judgementCard("Simulator judgement (ground truth)", ep.outcome)}
+    ${hide ? "" : autoCard(ep.auto)}
+    ${disturbCard(ep.perturbation)}
     ${hide ? "" : judgementCard("VLM verifier", ep.verifier)}
     <div class="card keys"><h3>Keys</h3><kbd>Space</kbd> play · <kbd>←</kbd><kbd>→</kbd> frame · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> label · <kbd>M</kbd> mark failure time · <kbd>Enter</kbd> save &amp; next · <kbd>J</kbd><kbd>K</kbd> next / previous</div>`;
   $(".choices").onclick = e => { const b = e.target.closest("button"); if (b) setLabel(b.dataset.l); };
