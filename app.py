@@ -39,6 +39,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import judge
+import lerobot_export  # the Dream Labs dataset format (LeRobot v2.1) for saved datasets
 import ood
 import seed_web
 import simulator_settings as sim_settings  # the seed (scene.py): seed field, random scene controls
@@ -423,9 +424,11 @@ def link_tree(source, target):
     shutil.copytree(source, target, copy_function=link)
 
 
-def save_dataset(run_ids, name):
+def save_dataset(run_ids, name, dream_format=False):
     """A dataset of the chosen runs: datasets/<time>-<name>/ with runs/<id>/ (trajectory, labels, meta), episodes/<id>/
     (recording: steps, physics, cameras) and manifest.json (each run's label, task, judge spec and settings).
+    @param dream_format Also write the recordings in the Dream Labs format (LeRobot v2.1, lerobot_export.py) to
+        dream_format/, with embodiment.json, and run the Dream Labs checks on it.
     @return (folder, manifest). @throws ValueError when no chosen run can be saved."""
     rules = current_rules()
     slug = re.sub(r"[^A-Za-z0-9_-]+", "-", str(name or "")).strip("-")[:40] or "dataset"
@@ -461,8 +464,35 @@ def save_dataset(run_ids, name):
                 "layout": {"runs/<id>/": "meta.json, trajectory.json (object poses, contacts per step), label.json, last.jpg",
                            "episodes/<id>/": "steps.npz (states, actions, who sent each step, physics), events.json, "
                                              "top/left/right.mp4, meta.json, outcome.json (recorded runs only)"}}
+    if dream_format:
+        manifest["dream_format"] = export_dream_format(folder, entries)
+        manifest["layout"]["dream_format/"] = ("the recordings in the Dream Labs format (LeRobot v2.1): upload with "
+                                               "client.upload_dataset(..., embodiment), embodiment.json holds its config")
     write_json(folder / "manifest.json", manifest)
     return folder, manifest
+
+
+def export_dream_format(folder, entries):
+    """The dataset's recordings as one LeRobot v2.1 dataset in folder/dream_format/, checked with the Dream Labs checks.
+    Each manifest entry gets its episode_index there. @return What was written, skipped and the checks' report."""
+    recorded = [e for e in entries if e["recorded"]]
+    result = lerobot_export.export([(folder / "episodes" / e["id"], e["task"]) for e in recorded],
+                                   folder / "dream_format", robot_type=(recorded[0]["settings"].get("robot") or "yam")
+                                   if recorded else "yam")
+    by_source = {w["source"]: w["episode_index"] for w in result["episodes"]}
+    for e in entries:
+        e["dream_episode"] = by_source.get(e["id"])
+    skipped = result["skipped"] + [{"source": e["id"], "reason": "not recorded (plain run)"}
+                                   for e in entries if not e["recorded"]]
+    write_json(folder / "embodiment.json", {
+        "note": "client.add_embodiment(<name>, config); then client.upload_dataset(<folder>/dream_format, <dataset "
+                "name>, <embodiment name>). State and action: right arm first, joints in rad, gripper 0 closed .. 1 "
+                "open; 5 frames per second.",
+        "config": lerobot_export.EMBODIMENT})
+    return {"folder": "dream_format/", "format": "LeRobot v2.1", "fps": lerobot_export.FPS,
+            "episodes": len(result["episodes"]), "frames": result["frames"], "skipped": skipped,
+            "check": lerobot_export.validate(folder / "dream_format") if result["episodes"] else
+            {"ok": False, "error": "No recorded run to convert."}}
 
 
 def list_datasets():
@@ -936,11 +966,12 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(run_ids, list) or not run_ids or any(not isinstance(r, str) for r in run_ids):
                 return self.send_json({"error": "Pick at least one run."}, 400)
             try:
-                folder, manifest = save_dataset(run_ids, body.get("name"))
+                folder, manifest = save_dataset(run_ids, body.get("name"), bool(body.get("dream_format")))
             except ValueError as error:
                 return self.send_json({"error": str(error)}, 400)
             return self.send_json({"folder": f"datasets/{folder.name}", "count": manifest["count"],
-                                   "labels": manifest["labels"], "skipped": manifest["skipped"]})
+                                   "labels": manifest["labels"], "skipped": manifest["skipped"],
+                                   "dream_format": manifest.get("dream_format")})
         if self.path == "/api/runs/delete":  # {"run_ids": [...]}: finished runs and their recordings, for good
             run_ids = body.get("run_ids")
             if not isinstance(run_ids, list) or not run_ids or any(not isinstance(r, str) for r in run_ids):

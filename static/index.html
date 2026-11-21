@@ -207,6 +207,8 @@
   .dataset-bar input { width: 150px; padding: 5px 8px; font-size: 12px; }
   .dataset-note { font-size: 12px; color: var(--muted); margin-top: 6px; }
   .dataset-note.ok { color: var(--ok); }
+  .dataset-bar label.check { display: inline-flex; gap: 5px; align-items: center; font-size: 12px; white-space: nowrap; cursor: pointer; }
+  .dataset-bar label.check input { width: auto; margin: 0; }
   dl.settings { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 12px; font-size: 12px; margin: 6px 0 0; }
   dl.settings dt { color: var(--muted); }
   dl.settings dd { margin: 0; overflow-wrap: anywhere; }
@@ -466,6 +468,7 @@
         <button class="ghost small" id="pickSuccesses" title="Pick every success the list shows">+ Add successes</button>
         <button class="ghost small" id="pickClear">Clear</button>
         <span class="hrow" style="margin-left: auto">
+          <label class="check" title="Also convert the recordings to the Dream Labs dataset format (LeRobot v2.1) for fine-tuning, in dream_format/, and check them with the Dream Labs checks"><input type="checkbox" id="dreamFormat" checked> Dream Labs format</label>
           <input id="datasetName" maxlength="40" placeholder="dataset name" aria-label="Dataset name">
           <button class="small" id="saveDataset" title="Save the picked runs, their recordings and a manifest to datasets/">Save dataset</button>
         </span>
@@ -836,15 +839,33 @@ $("pickSuccesses").onclick = () => {
   renderRuns();
 };
 $("pickClear").onclick = () => { picked.clear(); keepPicked(); renderRuns(); };
+try { if (localStorage.getItem("dreamFormat") === "off") $("dreamFormat").checked = false; } catch {}
+$("dreamFormat").onchange = () => {
+  try { localStorage.setItem("dreamFormat", $("dreamFormat").checked ? "on" : "off"); } catch {}
+};
+/** One line on the Dream Labs format copy: how many episodes, and whether the Dream Labs checks passed. */
+function dreamFormatText(d) {
+  if (!d) return "";
+  const left = d.skipped.length ? `, ${d.skipped.length} left out (${[...new Set(d.skipped.map(s => s.reason))].join("; ")})` : "";
+  const check = d.check.ok === true ? "passes the Dream Labs checks"
+    : d.check.ok === false ? "fails the Dream Labs checks: " + d.check.error
+    : "Dream Labs checks did not run: " + d.check.error;
+  return ` · Dream Labs format: ${d.episodes} episodes, ${d.frames} frames in ${d.folder}${left}; ${check}`;
+}
 $("saveDataset").onclick = async () => {
   const ids = runs.filter(r => picked.has(r.id)).map(r => r.id);
   if (!ids.length) return;
   $("saveDataset").disabled = true;
+  const dreamFormat = $("dreamFormat").checked;
+  $("datasetNote").className = "dataset-note";
+  $("datasetNote").textContent = dreamFormat ? `Saving ${ids.length} runs and converting their recordings to the Dream Labs format…`
+                                             : `Saving ${ids.length} runs…`;
   try {
-    const r = await api("/api/datasets", { run_ids: ids, name: $("datasetName").value });
-    $("datasetNote").className = "dataset-note ok";
+    const r = await api("/api/datasets", { run_ids: ids, name: $("datasetName").value, dream_format: dreamFormat });
+    $("datasetNote").className = r.dream_format && r.dream_format.check.ok !== true ? "dataset-note" : "dataset-note ok";
     $("datasetNote").textContent = `Saved ${r.folder}: ${r.count} runs (success ${r.labels.success}, failure ${r.labels.failure}, invalid ${r.labels.invalid})`
-      + (r.skipped.length ? ` · ${r.skipped.length} skipped (still going or gone)` : "") + " · with manifest.json";
+      + (r.skipped.length ? ` · ${r.skipped.length} skipped (still going or gone)` : "") + " · with manifest.json"
+      + dreamFormatText(r.dream_format);
     picked.clear(); keepPicked(); renderRuns();
   } catch (err) {
     $("datasetNote").className = "dataset-note";

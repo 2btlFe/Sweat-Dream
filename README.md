@@ -46,6 +46,13 @@ Open http://localhost:8000.
    and `manifest.json` with each run's final label (yours first), the rules' verdict, the judge spec, who acted, and
    its settings. Each run's settings (mode, robot and room, seed or layout, scene settings and the ones drawn from
    the seed, data collection settings, time limit, batch) show under its task in the list and in full in its detail.
+   With **Dream Labs format** ticked (the default), the recordings are also written as one LeRobot v2.1 dataset in
+   `dream_format/`, the format Dream Labs fine-tuning uploads, and checked with the Dream Labs checks
+   (`dream.datasets.validate_dataset`, on this computer, nothing sent). One row per camera frame (5 per second):
+   `observation.state` and `action` are 14 values, right arm first (6 joints in rad, gripper 0 closed .. 1 open, then
+   the left arm); cameras `overhead`, `wrist_l`, `wrist_r`. `embodiment.json` holds the config to register the robot
+   with; then `client.upload_dataset("<folder>/dream_format", "<name>", "<embodiment>")` uploads it.
+   Runs without a recording (Plain mode) and recordings shorter than 1.6 s are left out (`lerobot_export.py`).
 10. **Delete**: **Delete this run** (in a run's detail), **Delete shown** (every run the list shows, e.g. one batch) or
    **Delete** in Recordings removes a finished run for good: `runs/<id>` and its recording `episodes/<id>`. The page
    asks first; the run going now is never deleted.
