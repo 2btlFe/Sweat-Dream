@@ -46,10 +46,23 @@ Then open http://localhost:8000.
 2. Press **Run**. The cameras appear after a few seconds.
 3. Press **Stop** at any time, or let it run until the time limit.
 
+## 5. Decide what counts as success
+
+Under **Success rules** there are three settings. A run is a success when all three hold:
+
+1. **Distance to target**: how close (in cm) the object must get to the centre of the bowl or plate.
+2. **Letting go**: whether the robot must release the object, or may still be holding it.
+3. **Time standing still**: how many seconds the object must then stay put.
+
+Every run under **Runs** is judged again as soon as you change a setting. Click a run to see which rule failed,
+with a chart of the distance over time. **Save labels for all runs** writes each result to `runs/<id>/label.json`.
+
+Every run is saved in `runs/<id>/` (`trajectory.json` has the object positions and gripper contact at each step).
+
 ## Files
 
 | File | What it does |
 | --- | --- |
 | `app.py` | The website |
 | `static/index.html` | The page |
-| `sim.py` | Runs one task in the simulator. Also works alone: `python sim.py "put apple into the bowl"` |
+| `sim.py` | Runs one task in the simulator and saves its trajectory. Also works alone: `python sim.py "put apple into the bowl"` |

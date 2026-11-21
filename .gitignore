@@ -1,5 +1,6 @@
 # Recorded data and run state (large, machine-specific)
 episodes/
+runs/
 batches/
 MUJOCO_LOG.TXT
 mock_results/

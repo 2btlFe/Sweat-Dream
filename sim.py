@@ -1,19 +1,29 @@
-"""Run one Dream-1 task in the Dream Labs simulator (headless).
+"""Run one Dream-1 task in the Dream Labs simulator (headless) and save its trajectory.
 
     python sim.py "put apple into the bowl" --seconds 60
 
-app.py starts this for every run. Two environment variables connect it to the website:
+Every run is saved in runs/<id>/:
+  meta.json        task, time limit, start and end, whether it was stopped
+  trajectory.json  every control step (20 per simulated second): where each object, the bowl and the plate are,
+                   and whether a gripper fingertip touches each object
+  last.jpg         the cameras at the end of the run
+
+app.py starts this for every run. Environment variables connect it to the website:
+  RUN_DIR     the folder to save the run in (default: runs/<new id>)
   LIVE_FRAME  path of a JPEG that is replaced with the latest camera view (top camera + both wrist cameras)
   STOP_FILE   when this file appears, the run stops and the Dream session is released
 """
 
 import argparse
 import importlib.util
+import json
 import os
+import secrets
 import sys
 import threading
 import time
 import warnings
+from datetime import datetime
 from pathlib import Path
 
 warnings.filterwarnings("ignore")
@@ -26,20 +36,78 @@ sys.path.insert(0, str(Path(next(iter(spec.submodule_search_locations))) / "yam_
 
 import dream  # noqa: E402
 import dream_control  # noqa: E402
+import yam_env  # noqa: E402
 from PIL import Image  # noqa: E402
 
+HERE = Path(__file__).resolve().parent
 LIVE_FRAME = os.environ.get("LIVE_FRAME")
 STOP_FILE = os.environ.get("STOP_FILE")
+OBJECTS = ["apple", "orange", "banana", "water_bottle"]
+TARGETS = ["bowl", "plate"]
+FINGERTIPS = [f"{side}_{part}" for side in ("left", "right") for part in ("tip_left", "tip_right", "gripper")]
 
 
-def save_live_frame(images, path):
-    """The top camera on the left, the two wrist cameras stacked on the right, as one JPEG (replaced atomically)."""
+def new_run_id():
+    return datetime.now().strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
+
+
+def camera_view(images):
+    """The top camera on the left, the two wrist cameras stacked on the right, as one image."""
     canvas = Image.new("RGB", (720, 270))
     canvas.paste(Image.fromarray(images["top"]).resize((480, 270)), (0, 0))
     canvas.paste(Image.fromarray(images["left"]).resize((240, 135)), (480, 0))
     canvas.paste(Image.fromarray(images["right"]).resize((240, 135)), (480, 135))
-    canvas.save(path + ".tmp", format="JPEG", quality=80)
-    os.replace(path + ".tmp", path)
+    return canvas
+
+
+def save_jpeg(image, path):
+    """Write a JPEG so that readers never see half a file."""
+    image.save(str(path) + ".tmp", format="JPEG", quality=80)
+    os.replace(str(path) + ".tmp", path)
+
+
+class Trajectory:
+    """Positions of the objects and targets, and fingertip contact, after every control step."""
+
+    def __init__(self):
+        self.t = []
+        self.positions = {name: [] for name in OBJECTS + TARGETS}
+        self.touching = {name: [] for name in OBJECTS}
+        self.ids = None
+
+    def record(self, env):
+        m, d = env.model, env.data
+        if self.ids is None:
+            self.ids = {name: m.body(name).id for name in OBJECTS + TARGETS}
+            self.tips = {m.body(name).id for name in FINGERTIPS}
+            self.object_of = {self.ids[name]: name for name in OBJECTS}
+        touching = set()
+        for contact in d.contact[: d.ncon]:
+            a, b = m.geom_bodyid[contact.geom1], m.geom_bodyid[contact.geom2]
+            if a in self.tips and b in self.object_of:
+                touching.add(self.object_of[b])
+            elif b in self.tips and a in self.object_of:
+                touching.add(self.object_of[a])
+        self.t.append(round(float(d.time), 3))
+        for name, body in self.ids.items():
+            self.positions[name].append([round(float(v), 4) for v in d.xpos[body]])
+        for name in OBJECTS:
+            self.touching[name].append(int(name in touching))
+
+    def to_json(self):
+        return {"t": self.t, "positions": self.positions, "touching": self.touching}
+
+
+TRAJECTORY = Trajectory()
+
+# Record the scene after every control step.
+original_step = yam_env.YamEnv.step
+
+
+def step(self, left, right):
+    result = original_step(self, left, right)
+    TRAJECTORY.record(self)
+    return result
 
 
 # Render the cameras only on the steps the model sees (1 in 4); the others reuse the last images. Much faster.
@@ -51,7 +119,7 @@ def capture(env, windows, keep=True):
     if keep or not last_images:
         last_images.update(original_capture(env, windows, keep))
         if LIVE_FRAME:
-            save_live_frame(last_images, LIVE_FRAME)
+            save_jpeg(camera_view(last_images), LIVE_FRAME)
     return dict(last_images)
 
 
@@ -70,6 +138,7 @@ def get_action(self, *args, **kwargs):
             time.sleep(0.2)
 
 
+yam_env.YamEnv.step = step
 dream_control.capture = capture
 dream.DreamClient.get_action = get_action
 
@@ -80,12 +149,18 @@ def main():
     parser.add_argument("--seconds", type=float, default=60)
     args = parser.parse_args()
 
+    run_dir = Path(os.environ.get("RUN_DIR") or HERE / "runs" / new_run_id())
+    run_dir.mkdir(parents=True, exist_ok=True)
+    meta = {"id": run_dir.name, "task": args.task, "seconds": args.seconds,
+            "started_at": datetime.now().isoformat(timespec="seconds"), "stopped_by_user": False, "error": None}
+
     stop = threading.Event()
     if STOP_FILE:
         def watch():
             while not stop.is_set():
                 if os.path.exists(STOP_FILE):
                     print("  Stopped by user.", flush=True)
+                    meta["stopped_by_user"] = True
                     stop.set()
                 time.sleep(0.3)
 
@@ -96,11 +171,18 @@ def main():
         dream_control.main(["--task", args.task, "--seconds", str(args.seconds), "--headless", "--quiet"],
                            stop_event=stop)
     except (RuntimeError, ValueError, KeyError, OSError) as error:
+        meta["error"] = str(error)
         print(f"Stopped: {error}", flush=True)
-        sys.exit(1)
     finally:
         stop.set()
-    print("Done.", flush=True)
+        meta["ended_at"] = datetime.now().isoformat(timespec="seconds")
+        meta["sim_seconds"] = TRAJECTORY.t[-1] if TRAJECTORY.t else 0
+        (run_dir / "trajectory.json").write_text(json.dumps(TRAJECTORY.to_json(), separators=(",", ":")))
+        if last_images:
+            save_jpeg(camera_view(last_images), run_dir / "last.jpg")
+        (run_dir / "meta.json").write_text(json.dumps(meta, indent=2))
+        print(f"Saved to runs/{run_dir.name}", flush=True)
+    sys.exit(1 if meta["error"] else 0)
 
 
 if __name__ == "__main__":
