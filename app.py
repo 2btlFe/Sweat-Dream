@@ -252,11 +252,13 @@ class Batch:
                 if self.stop_requested:
                     break
                 task, seed = info["tasks"][i % len(info["tasks"])], info["seed"] + i
+                prompt = task["prompt"]
                 episode_scene = scene if info["layout"] == "shift" else random_layout(scene["items"], random.Random(seed))
-                info["current"] = {"index": i + 1, "task": task, "seed": seed}
+                info["current"] = {"index": i + 1, "task": prompt, "seed": seed}
                 started = time.time()
-                RUNNER.start(task, info["seconds"], episode_scene, seed=seed, live=False,
-                             extra_env={"BATCH_ID": info["id"], "LAYOUT": info["layout"]})
+                RUNNER.start(prompt, info["seconds"], episode_scene, seed=seed, live=False,
+                             extra_env={"BATCH_ID": info["id"], "LAYOUT": info["layout"],
+                                        "JUDGE_OBJECT": task["object"], "JUDGE_TARGET": task["target"]})
                 run_id, process = RUNNER.run_id, RUNNER.process
                 while process.poll() is None:  # a run that hangs is stopped, then killed
                     waited = time.time() - started
@@ -321,19 +323,31 @@ def brief(verdict):
 
 
 def parse_task_list(tasks, scene):
-    """@return The tasks, checked against the judge and the scene. @throws ValueError"""
+    """Check a batch's tasks. Each is a prompt the judge understands ("put apple into the bowl"), or any prompt with
+    the object and target it is judged on: {"prompt": ..., "object": "apple", "target": "bowl"}.
+    @return [{"prompt", "object", "target"}], every object and target on the table.
+    @throws ValueError
+    """
     if not isinstance(tasks, list) or not tasks:
         raise ValueError("Pick at least one task.")
     clean = []
     for task in tasks:
-        task = re.sub(r"\s+", " ", str(task)).strip()
-        parsed = judge.parse_task(task)
-        if parsed is None:
-            raise ValueError(f"Not a task the judge understands: {task}")
-        missing = [name for name in parsed if scene and name not in scene["items"]]
+        given = task if isinstance(task, dict) else {"prompt": task}
+        prompt = re.sub(r"\s+", " ", str(given.get("prompt") or "")).strip()
+        if not prompt or len(prompt) > 300:
+            raise ValueError("A prompt must be 1 to 300 characters.")
+        if given.get("object") or given.get("target"):
+            if given.get("object") not in OBJECTS or given.get("target") not in TARGETS:
+                raise ValueError(f"Pick the object and target to judge '{prompt}' on.")
+            parsed = (given["object"], given["target"])
+        else:
+            parsed = judge.parse_task(prompt)
+            if parsed is None:
+                raise ValueError(f"Pick the object and target to judge '{prompt}' on.")
+        missing = [name for name in parsed if name not in scene["items"]]
         if missing:
-            raise ValueError(f"Not on the table for '{task}': {', '.join(missing)}")
-        clean.append(task)
+            raise ValueError(f"Not on the table for '{prompt}': {', '.join(missing)}")
+        clean.append({"prompt": prompt, "object": parsed[0], "target": parsed[1]})
     return clean
 
 

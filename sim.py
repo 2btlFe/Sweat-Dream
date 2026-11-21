@@ -13,6 +13,7 @@ app.py starts this for every run. Environment variables connect it to the websit
   SCENE_JSON  which objects are on the table and where: {"items": {"apple": [x, y], "bowl": [x, y], ...}} in metres
               (world frame); objects left out are removed. Without it, the simulator's own scene is used.
   BATCH_ID, LAYOUT  set by a batch: stored in meta.json
+  JUDGE_OBJECT, JUDGE_TARGET  for a custom prompt: the object and target it is judged on (meta.json "judge")
   LIVE_FRAME  path of a JPEG that is replaced with the latest camera view (top camera + both wrist cameras)
   STOP_FILE   when this file appears, the run stops and the Dream session is released
 """
@@ -209,7 +210,9 @@ def main():
     meta = {"id": run_dir.name, "task": args.task, "seconds": args.seconds, "seed": args.seed,
             "started_at": datetime.now().isoformat(timespec="seconds"), "stopped_by_user": False,
             "error": None, "error_type": None, "scene": SCENE or None,
-            "batch_id": os.environ.get("BATCH_ID"), "layout": os.environ.get("LAYOUT")}
+            "batch_id": os.environ.get("BATCH_ID"), "layout": os.environ.get("LAYOUT"),
+            "judge": ({"object": os.environ["JUDGE_OBJECT"], "target": os.environ["JUDGE_TARGET"]}
+                      if os.environ.get("JUDGE_OBJECT") and os.environ.get("JUDGE_TARGET") else None)}
 
     env = yam_env.YamEnv()  # built from the scene set on the page (build_xml above)
     if args.seed is not None:

@@ -57,6 +57,13 @@ class JudgeTests(unittest.TestCase):
                                               "still_seconds": 1.5})
         self.assertEqual(longer["label"], "failure")
 
+    def test_custom_prompt_is_judged_on_the_chosen_items(self):
+        meta = {**META, "task": "grab the red fruit and drop it somewhere round",
+                "judge": {"object": "apple", "target": "bowl"}}
+        self.assertEqual(judge.evaluate(meta, episode(), judge.DEFAULT_RULES)["label"], "success")
+        unparsed = {**META, "task": "grab the red fruit and drop it somewhere round"}
+        self.assertEqual(judge.evaluate(unparsed, episode(), judge.DEFAULT_RULES)["reason"], "unsupported_task")
+
     def test_execution_error_is_invalid(self):
         verdict = judge.evaluate({**META, "error": "UNAUTHORIZED"}, episode(), judge.DEFAULT_RULES)
         self.assertEqual(verdict["label"], "invalid")

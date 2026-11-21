@@ -78,6 +78,11 @@
   select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; max-width: 100%; }
   .mode { margin-bottom: 14px; max-width: 360px; }
   .item.on { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+  .item .judge { color: var(--muted); font-weight: 400; }
+  .item .remove { margin-left: 2px; padding: 0 4px; border-radius: 4px; color: var(--muted); font-weight: 700; }
+  .item .remove:hover { background: var(--bad-bg); color: var(--bad); }
+  .custom-task { margin-top: 10px; align-items: center; }
+  .custom-task select { width: auto; }
   .batch-box { flex: 1 0 auto; display: flex; flex-direction: column; justify-content: flex-start; gap: 12px; padding: 20px; border: 1px dashed var(--line); border-radius: 8px; overflow-wrap: anywhere; }
   .batch-box .title { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 17px; }
   .bar { height: 12px; background: var(--line); border-radius: 999px; overflow: hidden; }
@@ -208,6 +213,14 @@
       </div>
       <label style="margin-top: 12px">Tasks <span class="muted">(taken in turn)</span></label>
       <div class="items" id="batchTasks"></div>
+      <div class="row custom-task">
+        <div class="grow"><input id="customPrompt" maxlength="300" placeholder="Your own prompt, e.g. pick up the red apple and drop it in the bowl" aria-label="Your own prompt"></div>
+        <span class="muted" style="font-size: 13px">judge as</span>
+        <select id="customObject" aria-label="Object to judge"></select>
+        <span class="muted">→</span>
+        <select id="customTarget" aria-label="Target to judge"></select>
+        <button class="ghost" id="addTask">Add</button>
+      </div>
       <div class="row" style="margin-top: 14px; align-items: center; justify-content: space-between;">
         <span class="muted" id="batchEstimate" style="font-size: 13px"></span>
         <div class="row"><button id="startBatch">Start batch</button><button id="stopBatch" class="stop" hidden>Stop batch</button></div>
@@ -420,6 +433,7 @@ async function renderDetail() {
   const v = verdict(run);
   $("detailImage").src = `/api/runs/${run.id}/last.jpg`;
   const extra = [run.batch_id ? batchName(run.batch_id) : "Single run", run.seed != null ? `seed ${run.seed}` : "",
+                 run.judge ? `judged: ${run.judge.object.replace("water_", "")} → ${run.judge.target}` : "",
                  run.layout === "random" ? "random layout" : ""].filter(Boolean).join(" · ");
   $("detailHead").innerHTML = `${chip(v.label)} <strong>${esc(run.task)}</strong><div class="muted" style="font-size:13px">${when(run.started_at)} · ${fmt(run.sim_seconds || 0)} s · ${esc(extra)}</div>`;
   $("detailChecks").innerHTML = (v.checks?.length ? v.checks : [{ ok: false, text: v.reason }])
@@ -635,7 +649,9 @@ $("clearKey").onclick = async () => { $("apiKey").value = ""; showKey(await api(
 
 /* ---------- batch ---------- */
 
-let mode = "single", layout = "shift", batchTasks = new Set(), lastBatchDone = null, followBatch = false, batchState = null;
+let mode = "single", layout = "shift", lastBatchDone = null, followBatch = false, batchState = null;
+// Batch tasks: the scene's example prompts and the user's own prompts, each judged on an object and a target.
+let batchTasks = new Set(), exampleList = [], customTasks = [];
 
 function setMode(next) {
   mode = next;
@@ -658,17 +674,66 @@ function setLayout(next) {
 $("layoutShift").onclick = () => setLayout("shift");
 $("layoutRandom").onclick = () => setLayout("random");
 
+function taskOptions() {
+  const examples = exampleList.map(prompt => ({ prompt, ...parseTask(prompt), custom: false, usable: true }));
+  const own = customTasks.map(t => ({ ...t, custom: true, usable: !!(sceneOn[t.object] && sceneOn[t.target]) }));
+  return [...own, ...examples];
+}
+
 function drawBatchTasks(list) {
-  for (const t of [...batchTasks]) if (!list.includes(t)) batchTasks.delete(t);
-  if (!batchTasks.size && list.length) batchTasks.add(list[0]);
-  $("batchTasks").innerHTML = list.map(t => `<button class="item ${batchTasks.has(t) ? "on" : ""}" data-task="${esc(t)}" aria-pressed="${batchTasks.has(t)}">${esc(t)}</button>`).join("");
-  document.querySelectorAll("[data-task]").forEach(b => b.onclick = () => {
+  exampleList = list;
+  // The judge pickers offer what is on the table.
+  for (const [id, wantTarget] of [["customObject", false], ["customTarget", true]]) {
+    const keep = $(id).value;
+    const names = Object.keys(ITEMS).filter(n => sceneOn[n] && !!ITEMS[n].target === wantTarget);
+    $(id).innerHTML = names.map(n => `<option value="${n}">${ITEMS[n].label}</option>`).join("");
+    if (names.includes(keep)) $(id).value = keep;
+  }
+  renderBatchTasks();
+}
+
+function renderBatchTasks() {
+  const options = taskOptions();
+  for (const t of [...batchTasks]) if (!options.some(o => o.usable && o.prompt === t)) batchTasks.delete(t);
+  if (!batchTasks.size && options.some(o => o.usable)) batchTasks.add(options.find(o => o.usable).prompt);
+  $("batchTasks").innerHTML = options.map(o => {
+    const on = batchTasks.has(o.prompt);
+    const judge = o.custom ? ` <span class="judge">→ ${ITEMS[o.object].label} · ${ITEMS[o.target].label}${o.usable ? "" : " (not on the table)"}</span>` : "";
+    const remove = o.custom ? `<span class="remove" data-remove="${esc(o.prompt)}" title="Remove" role="button" aria-label="Remove">×</span>` : "";
+    return `<button class="item ${on ? "on" : ""} ${o.usable ? "" : "off"}" data-task="${esc(o.prompt)}" data-usable="${o.usable}" aria-pressed="${on}">${esc(o.prompt)}${judge}${remove}</button>`;
+  }).join("");
+  document.querySelectorAll("[data-task]").forEach(b => b.onclick = e => {
     const t = b.dataset.task;
-    if (batchTasks.has(t)) { if (batchTasks.size > 1) batchTasks.delete(t); } else batchTasks.add(t);
-    drawBatchTasks(list);
+    if (e.target.dataset.remove != null) {
+      customTasks = customTasks.filter(c => c.prompt !== t);
+      batchTasks.delete(t);
+    } else if (b.dataset.usable !== "true") { return; }
+    else if (batchTasks.has(t)) { if (batchTasks.size > 1) batchTasks.delete(t); }
+    else batchTasks.add(t);
+    renderBatchTasks();
   });
   estimate();
 }
+
+// Pre-fill the judge pickers from the words in the prompt.
+$("customPrompt").addEventListener("input", () => {
+  const text = $("customPrompt").value.toLowerCase();
+  const object = /(water bottle|bottle|apple|orange|banana)/.exec(text), target = /(bowl|plate)/.exec(text);
+  if (object) { const n = object[1].includes("bottle") ? "water_bottle" : object[1]; if (sceneOn[n]) $("customObject").value = n; }
+  if (target && sceneOn[target[1]]) $("customTarget").value = target[1];
+});
+function addCustomTask() {
+  const prompt = $("customPrompt").value.replace(/\s+/g, " ").trim();
+  if (!prompt) return;
+  const object = $("customObject").value, target = $("customTarget").value;
+  if (!object || !target) { alert("Put an object and a bowl or plate on the table first."); return; }
+  customTasks = [{ prompt, object, target }, ...customTasks.filter(c => c.prompt !== prompt)];
+  batchTasks.add(prompt);
+  $("customPrompt").value = "";
+  renderBatchTasks();
+}
+$("addTask").onclick = addCustomTask;
+$("customPrompt").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addCustomTask(); } });
 
 function estimate() {
   const count = Number($("batchCount").value) || 0, secs = Number($("batchSeconds").value) || 0;
@@ -685,7 +750,9 @@ $("startBatch").onclick = async () => {
   const count = Number($("batchCount").value);
   if (!confirm(`Run ${count} episodes in the background (about ${estimate()} min of Dream-1 use)?`)) return;
   try {
-    await api("/api/batch", { tasks: [...batchTasks], count, seconds: $("batchSeconds").value, seed: $("batchSeed").value,
+    const tasks = taskOptions().filter(o => o.usable && batchTasks.has(o.prompt))
+      .map(({ prompt, object, target }) => ({ prompt, object, target }));
+    await api("/api/batch", { tasks, count, seconds: $("batchSeconds").value, seed: $("batchSeed").value,
                               layout, scene: sceneForRun() });
     followBatch = true;
     refresh();

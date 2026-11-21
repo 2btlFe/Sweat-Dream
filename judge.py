@@ -24,6 +24,17 @@ def parse_task(task):
     return (OBJECTS[match.group(1).lower()], match.group(2).lower()) if match else None
 
 
+def judged_items(meta):
+    """Which object and target a run is judged on: the ones chosen for a custom prompt (meta["judge"]), otherwise
+    the ones the task names.
+    @return (object body, target body), or None when neither gives them.
+    """
+    chosen = meta.get("judge") or {}
+    if chosen.get("object") in OBJECTS.values() and chosen.get("target") in HEIGHT_BANDS:
+        return chosen["object"], chosen["target"]
+    return parse_task(meta.get("task"))
+
+
 def normalize_rules(value):
     """Return validated, reproducible rule values without silent clamping."""
     if not isinstance(value, dict) or type(value.get("release")) is not bool:
@@ -52,7 +63,7 @@ def evaluate(meta, trajectory, rules):
         return invalid("execution_error", meta.get("error"))
     if meta.get("stopped_by_user"):
         return invalid("user_stopped")
-    parsed = parse_task(meta.get("task"))
+    parsed = judged_items(meta)
     if parsed is None:
         return invalid("unsupported_task")
     if meta.get("model_responses", 0) < 1 or meta.get("model_actions", 0) < 1:

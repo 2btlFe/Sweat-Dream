@@ -35,6 +35,10 @@ invalid counts and the time left instead.
 - **Scene ± 2 cm**: the scene set on the right, every object shifted a little (seeded).
 - **Random layout**: the items on the right placed anywhere on the reachable table, at least 2 cm apart (seeded).
 
+Tasks: pick the example prompts, or type your own prompt and **Add** it. Dream-1 gets your prompt as written; the
+judge cannot read free text, so each own prompt is judged on the object and target picked next to it (filled in from
+the prompt when it names them, e.g. "grab the red apple and drop it on the blue plate" → apple · plate).
+
 Episode *i* uses seed *seed + i* (the seed is random unless you set one), so a layout can be made again. Each episode
 is labeled with the rules as they were when the batch started (`runs/<id>/label.json`, `source: batch`). A batch
 stops on a run error such as a rejected API key, after three invalid episodes in a row, or on **Stop batch**. Pick a
