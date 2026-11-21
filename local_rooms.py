@@ -60,7 +60,9 @@ def themed_xml(base_xml, room, texture_path=None):
     profile = ROOMS[room]
     root = ET.fromstring(base_xml)
     world = root.find("worldbody")
-    table = world.find("geom[@name='table']")
+    table = world.find(".//geom[@name='table']")
+    if table is None:
+        raise ValueError("Local scene has no table geometry")
     table.attrib.pop("material", None)
     table.set("rgba", _rgb(profile["desk"]))
     if texture_path is not None:
@@ -70,10 +72,10 @@ def themed_xml(base_xml, room, texture_path=None):
                       texrepeat="1 1", rgba=_rgb(profile["desk"]))
         table.set("material", "sandbox_desk_material")
         table.set("rgba", "1 1 1 1")
-    for geom in world.findall("geom"):
+    for geom in world.findall(".//geom"):
         if geom.get("type") == "plane":
             geom.set("rgba", _rgb(profile["background"]))
-    for light in world.findall("light"):
+    for light in world.findall(".//light"):
         light.set("diffuse", " ".join(str(v) for v in profile["light"]))
     # Nonphysical background walls; no task object or collision parameters change.
     color = _rgb(profile["background"])

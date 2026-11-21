@@ -111,7 +111,7 @@ class Runner:
                    "LIVE_FRAME": str(LIVE), "STOP_FILE": str(STOP), "RUN_DIR": str(RUNS / run_id)}
             command = [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds),
                        "--lighting", settings["lighting"], "--layout", settings["layout"],
-                       "--room", settings["room"]]
+                       "--room", settings["room"], "--robot", settings["robot"]]
             if settings["layout"] == "varied":
                 command += ["--seed", str(settings["seed"] if settings["seed"] is not None
                                           else secrets.randbelow(2**32))]
@@ -196,6 +196,11 @@ class Handler(BaseHTTPRequestHandler):
         if m and run_dir(m.group(1)) and (RUNS / m.group(1) / m.group(2)).exists():
             kind = "application/json" if m.group(2).endswith(".json") else "image/jpeg"
             return self.send((RUNS / m.group(1) / m.group(2)).read_bytes(), kind)
+        m = re.match(r"^/api/runs/([^/]+)/frames/(\d{5})\.jpg$", path)
+        if m and run_dir(m.group(1)):
+            frame = RUNS / m.group(1) / "frames" / f"{m.group(2)}.jpg"
+            if frame.is_file():
+                return self.send(frame.read_bytes(), "image/jpeg")
         self.send_json({"error": "not found"}, 404)
 
     def do_POST(self):
@@ -211,7 +216,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"error": "Automatic judging supports putting apple, orange, banana, or bottle in a bowl or on a plate."}, 400)
             settings = current_settings()
             if not sim_settings.local_supported(settings):
-                return self.send_json({"error": "The selected robot has no local control adapter. Choose YAM to run a local scene."}, 400)
+                return self.send_json({"error": "The selected robot has no local control adapter. Choose YAM or OpenYAM."}, 400)
             try:
                 seconds = min(300, max(10, int(float(body.get("seconds") or 60))))
                 RUNNER.start(task, seconds, settings)

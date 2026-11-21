@@ -50,7 +50,7 @@ def main():
     rules = rules_snapshot()
     settings = settings_snapshot()
     if not sim_settings.local_supported(settings):
-        parser.error("Selected robot has no local control adapter; choose YAM in the UI")
+        parser.error("Selected robot has no local control adapter; choose YAM or OpenYAM in the UI")
     base_seed = args.seed if args.seed is not None else (settings["seed"] if settings["seed"] is not None else 0)
     counts = Counter()
     total = args.repeats * len(args.tasks)
@@ -66,7 +66,7 @@ def main():
         print(f"[{n}/{total}] {task} ({'seed ' + str(seed) if settings['layout'] == 'varied' else 'fixed layout'})", flush=True)
         command = [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(args.seconds),
                    "--layout", settings["layout"], "--lighting", settings["lighting"],
-                   "--room", settings["room"]]
+                   "--room", settings["room"], "--robot", settings["robot"]]
         if settings["layout"] == "varied":
             command += ["--seed", str(seed)]
         try:

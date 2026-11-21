@@ -130,6 +130,9 @@
   tbody tr { cursor: pointer; }
   tbody tr:hover, tbody tr.sel { background: var(--accent-soft); }
   .detail { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  .replay-controls { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .replay-controls input { flex: 1; min-width: 80px; }
+  #replayCanvas { width: 100%; aspect-ratio: 8 / 3; background: #eee; border-radius: 8px; }
   .checks { list-style: none; padding: 0; margin: 10px 0 0; font-size: 14px; }
   .checks li { padding: 3px 0; }
   .checks .y { color: var(--ok); font-weight: 700; }
@@ -236,7 +239,9 @@
     <div id="detail" class="detail" hidden>
       <div>
         <img id="detailImage" class="view" alt="Last frame">
-        <div class="legend">Last frame</div>
+        <canvas id="replayCanvas" width="720" height="270" hidden role="img" aria-label="Top-down object trajectory replay"></canvas>
+        <div class="replay-controls"><button id="replayPlay" type="button" class="ghost">Play</button><input id="replaySeek" type="range" min="0" max="0" value="0" aria-label="Replay position"><span id="replayTime" class="muted">0 s</span></div>
+        <div class="legend" id="replayNote">Last frame</div>
       </div>
       <div>
         <div id="detailHead"></div>
@@ -264,6 +269,7 @@ let rules = { distance_cm: 6.5, release: true, still_seconds: 1.0 };
 let settings = { robot: "yam", room: "yam_tabletop", layout: "varied", seed: null, lighting: "standard" };
 let catalog = null, settingsTimer = null;
 let runs = [], selected = null, liveTimer = null, wasRunning = false;
+let replay = null, replayTimer = null;
 
 async function api(path, body) {
   const options = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
@@ -279,7 +285,7 @@ const fmt = (x, n = 1) => Number(x).toFixed(n);
 
 /* ---------- simulation setup ---------- */
 
-const localSupported = () => settings.robot === "yam" && !!catalog?.local_rooms?.includes(settings.room);
+const localSupported = () => !!catalog?.local_robots?.includes(settings.robot) && !!catalog?.local_rooms?.includes(settings.room);
 function fillOptions(id, entries, suffix = () => "") {
   $(id).innerHTML = Object.entries(entries).map(([value, label]) =>
     `<option value="${esc(value)}">${esc(label + suffix(value))}</option>`).join("");
@@ -297,16 +303,16 @@ function showSettings() {
   $("seedInput").disabled = !local || settings.layout !== "varied";
   $("run").disabled = !local || wasRunning;
   $("runNotice").hidden = local;
-  if (!local) $("runNotice").innerHTML = `Local Run is unavailable for ${esc(catalog.robots[settings.robot])}. <button type="button" id="useLocal">Use local YAM</button> or <a href="${esc(catalog.sandbox_url)}" target="_blank" rel="noopener noreferrer">open Dream Labs Sandbox ↗</a> for this robot.`;
+  if (!local) $("runNotice").innerHTML = `Local Run is unavailable for ${esc(catalog.robots[settings.robot])}. <button type="button" id="useLocal">Use YAM</button> or <a href="${esc(catalog.sandbox_url)}" target="_blank" rel="noopener noreferrer">open Dream Labs Sandbox ↗</a> for this robot.`;
   if (!local) $("useLocal").onclick = () => changeSettings({ robot: "yam" });
   $("settingsNote").classList.toggle("remote", !local);
   $("settingsNote").innerHTML = local
-    ? `Local YAM scene: ${settings.room === "yam_tabletop" ? "bundled tabletop" : "Sandbox desk texture and room colors, with simplified local walls"}. The robot, task objects, and policy cameras use the bundled YAM model; layout and lighting affect the next run.`
+    ? `${settings.robot === "openyam" ? "OpenYAM Sandbox MuJoCo model" : "Bundled YAM model"}: ${settings.room === "yam_tabletop" ? "tabletop" : "Sandbox desk texture and room colors with simplified local walls"}. Layout and lighting affect the next run.`
     : `This robot requires a separate MuJoCo model and Dream-1 action adapter. <a href="${esc(catalog.sandbox_url)}" target="_blank" rel="noopener noreferrer">Open Sandbox ↗</a>`;
 }
 function changeSettings(patch) {
   settings = { ...settings, ...patch };
-  if (patch.robot && settings.robot !== "yam" && settings.room === "yam_tabletop") settings.room = "kitchen";
+  if (patch.robot && !catalog.local_robots.includes(settings.robot) && settings.room === "yam_tabletop") settings.room = "kitchen";
   showSettings();
   clearTimeout(settingsTimer);
   settingsTimer = setTimeout(async () => {
@@ -380,7 +386,86 @@ function renderDetail() {
   $("detailChecks").innerHTML = (v.checks || [{ ok: false, text: v.reason }])
     .map(c => `<li><span class="${c.ok ? "y" : c.ok === false ? "n" : "muted"}">${c.ok ? "✓" : c.ok === false ? "✗" : "–"}</span> ${esc(c.text)}</li>`).join("");
   drawChart(v);
+  setupReplay(run);
 }
+
+function stopReplay() {
+  clearInterval(replayTimer); replayTimer = null;
+  $("replayPlay").textContent = "Play";
+}
+
+async function setupReplay(run) {
+  stopReplay();
+  const current = run.id;
+  replay = null;
+  if (run.replay_frames > 0) {
+    replay = { id: current, count: run.replay_frames, fps: run.replay_fps || 5, index: 0, camera: true };
+    $("replayNote").textContent = "Camera replay · captured during this run";
+  } else {
+    try {
+      const trace = await api(`/api/runs/${current}/trajectory.json`);
+      if (selected !== current) return;
+      const count = trace.t?.length || 0;
+      replay = { id: current, count, fps: 20, index: 0, camera: false, trace };
+      $("replayNote").textContent = count ? "Object path replay · robot video was not saved for this older run" : "Replay unavailable: no recorded trajectory";
+    } catch {
+      $("replayNote").textContent = "Replay unavailable: trajectory could not be loaded";
+    }
+  }
+  $("replayPlay").disabled = !replay?.count;
+  $("replaySeek").disabled = !replay?.count;
+  $("replaySeek").max = Math.max(0, (replay?.count || 1) - 1);
+  $("replaySeek").value = 0;
+  if (replay?.count) showReplayFrame(0);
+}
+
+function showReplayFrame(index) {
+  if (!replay?.count) return;
+  replay.index = Math.max(0, Math.min(index, replay.count - 1));
+  $("replaySeek").value = replay.index;
+  const seconds = replay.camera ? replay.index / replay.fps : replay.trace.t[replay.index];
+  $("replayTime").textContent = `${fmt(seconds)} s`;
+  $("detailImage").hidden = !replay.camera;
+  $("replayCanvas").hidden = replay.camera;
+  if (replay.camera) {
+    $("detailImage").src = `/api/runs/${replay.id}/frames/${String(replay.index).padStart(5, "0")}.jpg`;
+  } else {
+    drawObjectReplay(replay.trace, replay.index);
+  }
+}
+
+function drawObjectReplay(trace, index) {
+  const canvas = $("replayCanvas"), ctx = canvas.getContext("2d");
+  const entries = Object.entries(trace.positions || {}).filter(([, points]) => points?.length > index);
+  const all = entries.flatMap(([, points]) => points);
+  if (!all.length) return;
+  const xs = all.map(p => p[0]), ys = all.map(p => p[1]);
+  const x0 = Math.min(...xs) - .12, x1 = Math.max(...xs) + .12;
+  const y0 = Math.min(...ys) - .12, y1 = Math.max(...ys) + .12;
+  const xy = p => [36 + (p[0] - x0) / (x1 - x0) * 648, 24 + (y1 - p[1]) / (y1 - y0) * 222];
+  ctx.fillStyle = "#d8c1a2"; ctx.fillRect(0, 0, 720, 270);
+  ctx.strokeStyle = "#ae9475"; ctx.strokeRect(24, 12, 672, 246);
+  const colors = { apple: "#db3d31", orange: "#ef8b28", banana: "#e5c440", water_bottle: "#59a5c7", bowl: "#f7f5e9", plate: "#f7f5e9" };
+  for (const [name, points] of entries) {
+    const [x, y] = xy(points[index]);
+    ctx.beginPath(); ctx.arc(x, y, name === "bowl" || name === "plate" ? 17 : 9, 0, Math.PI * 2);
+    ctx.fillStyle = colors[name] || "#777"; ctx.fill();
+    ctx.strokeStyle = "#74634d"; ctx.stroke();
+    ctx.fillStyle = "#27231d"; ctx.font = "12px sans-serif"; ctx.fillText(name.replace("water_", ""), x + 12, y - 11);
+  }
+}
+
+$("replayPlay").onclick = () => {
+  if (!replay?.count) return;
+  if (replayTimer) { stopReplay(); return; }
+  if (replay.index >= replay.count - 1) showReplayFrame(0);
+  $("replayPlay").textContent = "Pause";
+  replayTimer = setInterval(() => {
+    if (!replay || replay.index >= replay.count - 1) { stopReplay(); return; }
+    showReplayFrame(replay.index + 1);
+  }, 1000 / replay.fps);
+};
+$("replaySeek").oninput = event => { stopReplay(); showReplayFrame(Number(event.target.value)); };
 
 function drawChart(v) {
   const svg = $("chart");
@@ -489,7 +574,7 @@ $("stop").onclick = async () => {
   try {
     const data = await api("/api/simulator-settings");
     settings = data.settings; catalog = data.catalog;
-    fillOptions("robotSelect", catalog.robots, value => value === "yam" ? "" : " (unavailable)");
+    fillOptions("robotSelect", catalog.robots, value => catalog.local_robots.includes(value) ? "" : " (unavailable)");
     fillOptions("roomSelect", catalog.rooms);
     fillOptions("layoutSelect", catalog.layouts);
     fillOptions("lightingSelect", catalog.lighting);

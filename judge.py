@@ -76,10 +76,21 @@ def evaluate(meta, trajectory, rules):
     except (KeyError, TypeError, ValueError, IndexError):
         return invalid("incomplete_trajectory")
 
-    z_min, z_max = HEIGHT_BANDS[target]
+    if "relative_height_bands" in meta:
+        try:
+            low, high = meta["relative_height_bands"][target]
+            if not all(math.isfinite(float(v)) for v in (low, high)) or low >= high:
+                return invalid("invalid_height_band")
+            height_bands = [(target_positions[i][2] + low, target_positions[i][2] + high)
+                            for i in range(n)]
+        except (KeyError, TypeError, ValueError):
+            return invalid("invalid_height_band")
+    else:
+        height_bands = [HEIGHT_BANDS[target]] * n
     dist = [math.hypot(p[i][0] - target_positions[i][0], p[i][1] - target_positions[i][1]) * 100
             for i in range(n)]
-    in_target = [dist[i] < rules["distance_cm"] and z_min < p[i][2] < z_max for i in range(n)]
+    in_target = [dist[i] < rules["distance_cm"] and height_bands[i][0] < p[i][2] < height_bands[i][1]
+                 for i in range(n)]
     released = [not bool(touch[i]) for i in range(n)]
     placed = [in_target[i] and (released[i] or not rules["release"]) for i in range(n)]
     speed = [math.dist(p[i], p[i - 1]) / (t[i] - t[i - 1]) for i in range(1, n)]
@@ -94,7 +105,7 @@ def evaluate(meta, trajectory, rules):
     moved = max(math.dist(pos, p[0]) for pos in p)
     if success:
         reason = "placed_and_stable"
-    elif min(pos[2] for pos in p) < OFF_TABLE_Z:
+    elif min(pos[2] for pos in p) < meta.get("off_table_z", OFF_TABLE_Z):
         reason = "object_fell_off_table"
     elif in_target[-1] and rules["release"] and not released[-1]:
         reason = "still_holding"

@@ -44,6 +44,7 @@ from PIL import Image  # noqa: E402
 
 import simulator_settings as sim_settings
 from local_rooms import desk_texture, themed_xml
+from sandbox_env import SandboxEnv
 
 HERE = Path(__file__).resolve().parent
 LIVE_FRAME = os.environ.get("LIVE_FRAME")
@@ -84,8 +85,10 @@ class Trajectory:
     def record(self, env):
         m, d = env.model, env.data
         if self.ids is None:
-            self.ids = {name: m.body(name).id for name in OBJECTS + TARGETS}
-            self.tips = {m.body(name).id for name in FINGERTIPS}
+            bodies = getattr(env, "object_bodies", {name: name for name in OBJECTS + TARGETS})
+            fingertips = getattr(env, "fingertip_bodies", FINGERTIPS)
+            self.ids = {name: m.body(bodies[name]).id for name in OBJECTS + TARGETS}
+            self.tips = {m.body(name).id for name in fingertips}
             self.object_of = {self.ids[name]: name for name in OBJECTS}
         touching = set()
         for contact in d.contact[: d.ncon]:
@@ -122,11 +125,17 @@ def step(self, left, right):
 # Render the cameras only on the steps the model sees (1 in 4); the others reuse the last images. Much faster.
 original_capture = dream_control.capture
 last_images = {}
+REPLAY_DIR = None
+FRAME_COUNT = 0
 
 
 def capture(env, windows, keep=True):
+    global FRAME_COUNT
     if keep or not last_images:
         last_images.update(original_capture(env, windows, keep))
+        if keep and REPLAY_DIR is not None:
+            save_jpeg(camera_view(last_images), REPLAY_DIR / f"{FRAME_COUNT:05d}.jpg")
+            FRAME_COUNT += 1
         if LIVE_FRAME:
             save_jpeg(camera_view(last_images), LIVE_FRAME)
     return dict(last_images)
@@ -152,6 +161,19 @@ def get_action(self, *args, **kwargs):
 yam_env.YamEnv.step = step
 dream_control.capture = capture
 dream.DreamClient.get_action = get_action
+
+original_sandbox_step = SandboxEnv.step
+
+
+def sandbox_step(self, left, right):
+    result = original_sandbox_step(self, left, right)
+    TRAJECTORY.record(self)
+    if STATS["model_responses"]:
+        STATS["model_actions"] += 1
+    return result
+
+
+SandboxEnv.step = sandbox_step
 
 
 def apply_lighting(env, lighting):
@@ -182,6 +204,7 @@ def main():
     parser.add_argument("--layout", choices=sim_settings.LAYOUTS, default="fixed")
     parser.add_argument("--lighting", choices=sim_settings.LIGHTING, default="standard")
     parser.add_argument("--room", choices=sim_settings.ROOMS, default="yam_tabletop")
+    parser.add_argument("--robot", choices=("yam", "openyam"), default="yam")
     args = parser.parse_args()
     if args.layout == "varied" and args.seed is None:
         parser.error("--layout varied requires --seed")
@@ -196,25 +219,36 @@ def main():
 
     run_dir = Path(os.environ.get("RUN_DIR") or HERE / "runs" / new_run_id())
     run_dir.mkdir(parents=True, exist_ok=True)
+    global REPLAY_DIR
+    REPLAY_DIR = run_dir / "frames"
+    REPLAY_DIR.mkdir(exist_ok=True)
     meta = {"id": run_dir.name, "task": args.task, "seconds": args.seconds, "seed": args.seed,
-            "robot": "yam", "room": args.room, "layout": args.layout, "lighting": args.lighting,
+            "robot": args.robot, "room": args.room, "layout": args.layout, "lighting": args.lighting,
             "started_at": datetime.now().isoformat(timespec="seconds"), "stopped_by_user": False,
             "error": None, "error_type": None}
 
-    if args.room != "yam_tabletop":
-        build_base_xml = yam_env.build_xml
-        try:
-            texture = desk_texture(args.room)
-        except (OSError, ValueError) as error:
-            texture = None
-            print(f"Room desk texture unavailable; using catalog color: {error}", flush=True)
-        yam_env.build_xml = lambda: themed_xml(build_base_xml(), args.room, texture)
-    env = yam_env.YamEnv()
+    if args.robot == "yam":
+        if args.room != "yam_tabletop":
+            build_base_xml = yam_env.build_xml
+            try:
+                texture = desk_texture(args.room)
+            except (OSError, ValueError) as error:
+                texture = None
+                print(f"Room desk texture unavailable; using catalog color: {error}", flush=True)
+            yam_env.build_xml = lambda: themed_xml(build_base_xml(), args.room, texture)
+        env = yam_env.YamEnv()
+    else:
+        env = SandboxEnv(args.room)
+        meta["relative_height_bands"] = {"bowl": [0.01, 0.12], "plate": [0.0, 0.09]}
+        meta["off_table_z"] = -0.1
     apply_lighting(env, args.lighting)
     if args.layout == "varied":
         rng = np.random.default_rng(args.seed)
-        for body, joint in (("apple", "apple_free"), ("orange", "orange_free"),
-                            ("banana", "banana_free"), ("water_bottle", "bottle_free")):
+        object_joints = (("apple", "apple_free"), ("orange", "orange_free"),
+                         ("banana", "banana_free"), ("water_bottle", "bottle_free"))
+        if args.robot == "openyam":
+            object_joints = tuple((body, f"{body}/free") for body, _ in object_joints)
+        for body, joint in object_joints:
             qpos = env.data.joint(joint).qpos
             qpos[:2] += rng.uniform(-0.02, 0.02, 2)
             if body != "water_bottle":
@@ -248,6 +282,8 @@ def main():
         stop.set()
         meta["ended_at"] = datetime.now().isoformat(timespec="seconds")
         meta["sim_seconds"] = TRAJECTORY.t[-1] if TRAJECTORY.t else 0
+        meta["replay_frames"] = FRAME_COUNT
+        meta["replay_fps"] = 5
         meta.update(STATS)
         (run_dir / "trajectory.json").write_text(json.dumps(TRAJECTORY.to_json(), separators=(",", ":")))
         if last_images:
