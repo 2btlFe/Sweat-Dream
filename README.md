@@ -127,10 +127,10 @@ like any other run (Stop is its normal end).
 ### Batch (many episodes in the background)
 
 **Run as original** (the baseline): pick a finished batch in the run list's filter and press **Run as original**. It
-runs that batch's episodes again with Dream-1 alone (no failure monitor, recovery script or human): the same seeds,
-so the same object layouts, with the same task, judge, scene settings, random settings and time limit (from each run's
-`meta.json`). Its runs are named "original of <batch>" (`meta.json`: `original_of`), and with either batch picked the
-summary compares the two success rates on the same seeds.
+runs as many episodes with the same task, judge and time limit, but none of our method: Dream-1 alone (no failure
+monitor, recovery script or human), and every episode from the simulator's default scene (`--default-scene`: the same
+object layout each time, no seed) with default scene settings. Its runs are named "original of <batch>"
+(`meta.json`: `original_of`), and with either batch picked the summary compares the two success rates.
 
 Switch to **Batch**. Pick what each episode does (**Data collection**: Dream-1, then the recovery script on a
 failure; or **Dream-1 only**), how many run **at once** (1 to 4), the number of episodes and the seconds per

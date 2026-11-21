@@ -555,7 +555,7 @@
       <summary>Runs</summary>
       <div class="hrow" style="justify-content: space-between">
         <select id="runFilter" aria-label="Which runs" style="width: auto; max-width: 100%"></select>
-        <span class="hrow"><button id="saveLabels" class="ghost small">Save labels</button><button id="deleteShown" class="ghost small danger" title="Delete every run shown in the list, with its recording">Delete shown</button><button id="runOriginal" class="ghost small" hidden title="Run this batch's episodes again with Dream-1 alone: same seeds (object layout), task, judge, scene settings and time limit; no failure monitor, recovery script or human">Run as original</button></span>
+        <span class="hrow"><button id="saveLabels" class="ghost small">Save labels</button><button id="deleteShown" class="ghost small danger" title="Delete every run shown in the list, with its recording">Delete shown</button><button id="runOriginal" class="ghost small" hidden title="The baseline: as many episodes with the same task, judge and time limit, but none of our method: Dream-1 alone (no failure monitor, recovery script or human), every episode from the simulator's default scene (the same object layout each time) with default scene settings">Run as original</button></span>
       </div>
       <div class="muted small" id="runSummary" style="margin-top: 8px"></div>
       <div class="dataset-bar" role="group" aria-label="Dataset">
@@ -864,7 +864,7 @@ function renderRuns() {
     const of = originalOf(runFilter), pair = of || runs.find(r => r.original_of === runFilter)?.batch_id;
     if (pair) {
       const [method, original] = of ? [of, runFilter] : [runFilter, pair];
-      $("runSummary").textContent += ` · same seeds: ours ${batchRate(method)} vs original ${batchRate(original)}`;
+      $("runSummary").textContent += ` · ours ${batchRate(method)} vs original (default scene, Dream-1 only) ${batchRate(original)}`;
     }
   }
   showPicked();
@@ -915,7 +915,7 @@ async function renderDetail() {
   const v = verdict(run);
   showDetailMedia(run);
   const extra = [run.batch_id ? batchName(run.batch_id) : "Single run",
-                 run.layout === "custom" ? "custom layout" : run.seed != null ? `seed ${run.seed}${run.split === "eval" ? " (eval)" : ""}` : "",
+                 run.layout === "custom" ? "custom layout" : run.seed != null ? `seed ${run.seed}${run.split === "eval" ? " (eval)" : ""}` : run.layout === "default" ? "default scene" : "",
                  run.robot && run.robot !== "yam" ? (simCatalog?.robots[run.robot] || run.robot) : "",
                  run.room && run.room !== "yam_tabletop" ? (simCatalog?.rooms[run.room] || run.room) : "",
                  run.ood_random?.length ? `random: ${run.ood_random.join(", ")}` : "",
@@ -1194,7 +1194,7 @@ async function deleteRuns(ids, what) {
 $("deleteRun").onclick = () => selected && deleteRuns([selected], "this run");
 $("runOriginal").onclick = async () => {
   const id = runFilter, n = runs.filter(r => r.batch_id === id && r.seed != null).length;
-  if (!(await ask(`Run the ${n} episodes of ${batchName(id)} again with Dream-1 alone (no failure monitor, recovery script or human)? Same seeds, so the same object layouts, task and settings.`, "Run original"))) return;
+  if (!(await ask(`Run ${n} original episodes for ${batchName(id)}: the same task, judge and time limit, but Dream-1 alone (no failure monitor, recovery script or human), every episode from the simulator's default scene (the same object layout each time) with default settings?`, "Run original"))) return;
   try {
     await api("/api/batch", { original_of: id, workers: Number($("batchWorkers").value) || 1 });
     setMode("batch"); followBatch = true; refresh();
@@ -1633,7 +1633,8 @@ function showBatch(b) {
   $("batchCounts").innerHTML = `${chip("success")} ${b.counts.success} ${chip("failure")} ${b.counts.failure} ${chip("invalid")} ${b.counts.invalid}`
     + (valid ? ` <span class="muted">· ${Math.round(100 * b.counts.success / valid)}% success of valid</span>` : "");
   const now = b.active?.length ? b.active : (b.current ? [b.current] : []);
-  $("batchNow").textContent = now.length ? `Now${b.workers > 1 ? ` (${now.length} at once)` : ""}: ` + now.map(e => `#${e.index} ${e.task} (seed ${e.seed})`).join(" · ")
+  $("batchNow").textContent = now.length ? `Now${b.workers > 1 ? ` (${now.length} at once)` : ""}: ` + now.map(e => `#${e.index} ${e.task} (${e.seed != null ? `seed ${e.seed}` : "default scene"})`).join(" · ")
+    : b.original_of ? `Original: default scene every episode (same object layout), default settings, Dream-1 alone · ${b.seconds} s each`
     : `${b.split === "eval" ? "Eval seeds" : `Seeds from ${b.seed}`}${b.ood_random?.length ? ` · random: ${b.ood_random.join(", ")}` : ""} · ${b.seconds} s each · labeled with the rules as at the start`;
   $("batchEnd").textContent = (b.running ? "" : b.stopped_reason || "Finished.")
     + (b.capacity_retries ? ` Dream-1 was at capacity ${b.capacity_retries} time${b.capacity_retries > 1 ? "s" : ""}: those episodes were tried again.` : "");

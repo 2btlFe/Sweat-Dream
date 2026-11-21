@@ -589,10 +589,11 @@ BATCH_ID_RE = re.compile(r"^b[0-9]{8}-[0-9]{6}$")
 
 
 def original_episodes(batch_id):
-    """The episodes of a finished batch, to run again as the baseline: one task per seed, in seed order, from each
-    run's meta.json (task, judge spec, seed), with the batch's scene settings, random settings and time limit.
-    @return (tasks, seeds, seconds, changes, random_names, split)
-    @throws ValueError When the batch is unknown or its runs disagree on the scene settings."""
+    """The baseline of a finished batch: as many episodes, with each run's task and judge spec and the batch's time
+    limit, but none of our method: every episode starts from the simulator's own default scene (the same object
+    layout each time, no seed), with default scene settings, and Dream-1 runs alone (the caller's "plain" mode).
+    @return (tasks, seeds: None per episode = the default scene, seconds, changes {}, random_names [], split)
+    @throws ValueError When the batch is unknown or has no runs."""
     if not BATCH_ID_RE.match(batch_id):
         raise ValueError("Unknown batch.")
     metas = [read_json(d / "meta.json", {}) for d in RUNS.iterdir() if run_dir(d.name)] if RUNS.is_dir() else []
@@ -600,15 +601,9 @@ def original_episodes(batch_id):
                    key=lambda m: m["seed"])
     if not metas:
         raise ValueError("That batch has no runs with a seed.")
-    first = metas[0]
-    if any(m.get("ood_random") != first.get("ood_random") for m in metas):
-        raise ValueError("The batch's runs differ in their random settings.")
-    # Each run kept the settings in effect, the seed's draws included; the same seed draws them the same again.
-    changes = ood.validate(first.get("ood") or {})
-    random_names = list(first.get("ood_random") or [])
     tasks = parse_task_list([{"prompt": m["task"], "judge": m.get("judge")} for m in metas], FULL_TABLE)
-    seconds = min(300, max(10, int(float(first.get("seconds") or 60))))
-    return tasks, [int(m["seed"]) for m in metas], seconds, changes, random_names, first.get("split") or "train"
+    seconds = min(300, max(10, int(float(metas[0].get("seconds") or 60))))
+    return tasks, [None] * len(metas), seconds, {}, [], "default"
 
 
 class Batch:
@@ -690,7 +685,8 @@ class Batch:
         if PAGE_KEY["value"]:
             env["DREAM_API_KEY"] = PAGE_KEY["value"]
         command = [sys.executable, str(HERE / "sim.py"), task["prompt"], "--seconds", str(info["seconds"]),
-                   *info["robot"], "--seed", str(seed), {"collect": "--collect", "plain": "--plain"}[info["mode"]]]
+                   *info["robot"], *(["--seed", str(seed)] if seed is not None else ["--default-scene"]),
+                   {"collect": "--collect", "plain": "--plain"}[info["mode"]]]
         if info["mode"] == "collect":
             command += collection_args(info["collection"])[1]
         if info["ood"]:
