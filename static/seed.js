@@ -11,13 +11,36 @@ const CAMERA_FIELDS = new Set(["camera_x_cm", "camera_y_cm", "camera_z_cm", "cam
 const STYLE = `
   .seed-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; margin-top: 12px; }
   .seed-note { font-size: 11px; margin: 6px 0 0; }
+  .seed-advance { display: flex; gap: 6px; align-items: flex-start; font-size: 11px; color: var(--muted); margin: 6px 0 0; }
+  .seed-advance input { width: auto; margin: 1px 0 0; accent-color: var(--accent); }
   .ood-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .ood-random { display: inline-flex; align-items: center; gap: 4px; margin: 0; font-size: 11px; font-weight: 500;
     white-space: nowrap; cursor: pointer; }
-  .ood-random input { width: auto; margin: 0; accent-color: var(--accent); }`;
+  .ood-random input { width: auto; margin: 0; accent-color: var(--accent); }
+  .random-all { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; margin: 0 0 10px; }
+  .random-all button { padding: 3px 10px; font-size: 12px; }
+  legend .ood-random { margin-left: 8px; font-weight: 400; }`;
 
 export function newSeed() {
   $("seed").value = Math.floor(Math.random() * 1000000);  // a train seed: 0..999999
+}
+
+/** After a run (or a batch of n episodes, seeds seed … seed + n - 1) the Seed field moves on to the next unused
+ *  seed, when "Next seed after each run" is ticked. @return Whether it moved. */
+export function advanceSeed(n = 1) {
+  if (!$("seedAdvance")?.checked || !$("seed").value.trim()) return false;
+  $("seed").value = (Number($("seed").value) + n) % 1000000;  // train seeds are 0..999999
+  return true;
+}
+
+/** Bring back a run's start: its seed and the settings it drew from the seed (the others are the page's). */
+export function useSeed(seed, randomNames = []) {
+  $("seed").value = seed;
+  for (const box of document.querySelectorAll("#ood [data-random]")) {
+    box.checked = randomNames.includes(box.dataset.random);
+    lock(box.closest(".ood-field"));
+  }
+  syncGroups();
 }
 
 /** The seed and the ticked settings, for /api/preview and /api/run. An empty seed gets a new one first. */
@@ -43,7 +66,10 @@ export function initSeed(onChange) {
       <button id="newSeed" type="button" title="New random seed" aria-label="New random seed">↻</button>
     </div>
     <p class="muted seed-note">Same seed, same start: the object layout and every setting marked <em>random</em>
-      come from it (random camera settings apply to the workspace camera).</p>`;
+      come from it (random camera settings apply to the workspace camera). In a batch the seed is the whole batch:
+      every episode gets its own layout from it.</p>
+    <label class="seed-advance"><input type="checkbox" id="seedAdvance" checked> Next seed after each run or batch,
+      so every start differs (each run keeps its seed: <em>Same start</em> in its detail brings it back)</label>`;
   $("examples").before(...row.children);
   newSeed();
   $("seed").addEventListener("input", onChange);
@@ -65,7 +91,44 @@ export function initSeed(onChange) {
     head.append(label, dice);
     box.addEventListener("change", () => { lock(fieldRow); onChange(); });
   }
-  form.addEventListener("reset", () => setTimeout(() => form.querySelectorAll(".ood-field").forEach(lock)));
+  form.addEventListener("reset", () => setTimeout(() => { form.querySelectorAll(".ood-field").forEach(lock); syncGroups(); }));
+
+  // Tick many at once: every setting (All / None), or every setting of one group (the box in its title).
+  const setBoxes = (boxes, on) => {
+    boxes.forEach(box => { box.checked = on; lock(box.closest(".ood-field")); });
+    syncGroups();
+    onChange();
+  };
+  const bar = document.createElement("div");
+  bar.className = "random-all";
+  bar.innerHTML = `<span class="muted">Random from the seed:</span>
+    <button type="button" class="ghost" id="randomAll">All</button><button type="button" class="ghost" id="randomNone">None</button>`;
+  form.before(bar);
+  $("randomAll").onclick = () => setBoxes(form.querySelectorAll("[data-random]"), true);
+  $("randomNone").onclick = () => setBoxes(form.querySelectorAll("[data-random]"), false);
+  for (const group of form.querySelectorAll("fieldset")) {
+    const boxes = group.querySelectorAll("[data-random]");
+    if (!boxes.length) continue;
+    const dice = document.createElement("label");
+    dice.className = "ood-random";
+    const all = Object.assign(document.createElement("input"), { type: "checkbox", title: "Draw every setting of this group from the seed" });
+    all.dataset.randomGroup = "";
+    dice.append(all, " all random");
+    group.querySelector("legend").append(dice);
+    all.addEventListener("change", () => setBoxes(boxes, all.checked));
+    boxes.forEach(box => box.addEventListener("change", syncGroups));
+  }
+  syncGroups();
+}
+
+// A group's "all random" box: ticked when all its settings are, half-ticked when some are.
+function syncGroups() {
+  for (const all of document.querySelectorAll("#ood [data-random-group]")) {
+    const boxes = [...all.closest("fieldset").querySelectorAll("[data-random]")];
+    const on = boxes.filter(box => box.checked).length;
+    all.checked = on === boxes.length;
+    all.indeterminate = on > 0 && on < boxes.length;
+  }
 }
 
 // A ticked setting is drawn by the server: its own inputs are locked and show the drawn value.

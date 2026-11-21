@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 import judge
+from seed_web import episode_seed
 
 HERE = Path(__file__).resolve().parent
 RUNS = HERE / "runs"
@@ -45,7 +46,8 @@ def main():
     total = args.repeats * len(args.tasks)
     started = time.monotonic()
     RUNS.mkdir(exist_ok=True)
-    for n, (seed, task) in enumerate(((args.seed + i, task) for i in range(args.repeats)
+    # --seed is the batch's seed: repeat i of every task starts from the same derived layout (seed_web.episode_seed).
+    for n, (seed, task) in enumerate(((episode_seed(args.seed, i), task) for i in range(args.repeats)
                                       for task in args.tasks), 1):
         if time.monotonic() - started >= args.budget_minutes * 60:
             print("Wall-time budget reached; remaining episodes were not started.")

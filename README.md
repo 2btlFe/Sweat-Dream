@@ -21,19 +21,28 @@ python app.py
 Open http://localhost:8000.
 
 1. Paste your API key → **Use key**. It is kept in memory only; **Clear** removes it.
-2. **Robot** and **Room**: YAM (with the seed scenes and scene settings below) or OpenYAM (on the Dream Labs Sandbox
+2. **Robot** and **Room**: the list offers the team's target robot, YAM (`simulator_settings.TARGET_ROBOTS`; add
+   `"openyam"` there to offer it again). YAM (with the seed scenes and scene settings below) or OpenYAM (on the Dream Labs Sandbox
    table; needs [Node.js](https://nodejs.org) to fetch it, and a seed only shifts its objects by up to 2 cm). The other
    robots in the list run only in the [Dream Labs Sandbox](https://platform.dreamlabs.ai/sandbox). A room styles the
    table and background (kitchen, cottage, ...). The choice is kept in `runs/simulator_settings.json`.
-3. **Seed**: the start scene comes from it (objects placed around their usual spots, within reach of both arms; see
+3. **Seed**: with **Next seed after each run or batch** (ticked by default) every single run, and every batch, starts
+   from a new seed, so the start layouts keep changing; each run keeps its seed in
+   `meta.json`, and **Same start (seed N)** in a run's detail puts that seed and its random settings back. The start scene comes from it (objects placed around their usual spots, within reach of both arms; see
    [SCENE_SEED.md](SCENE_SEED.md)). **↻** draws a new one; the same seed always gives the same start.
 4. **Camera, robot & environment settings**: workspace viewpoint and camera offsets, the arms' initial angles, blur,
-   light and table. Tick **random** on a setting to draw it from the seed instead. The camera view shows the start
-   scene as you change these (no Dream API call).
+   light and table. Tick **random** on a setting to draw it from the seed instead (**All** / **None** above the
+   settings, or **all random** in a group's title, tick many at once). The camera view shows the start scene as you
+   change these (no Dream API call). If the start cannot be built (the arms' start pose collides with something, a
+   random pose or camera hides an object, a seed has no layout), the error banner says why, **Run** waits, and the
+   banner offers **Draw again (new seed)** and **Default settings**.
+   **Default** (top of Run setup) goes back to the default start: YAM tabletop, every setting at its default, nothing
+   random, no custom layout; the seed stays.
 5. Type a task such as `put apple into the bowl` → **Run**. The note under the task says what the run is judged on;
    open-ended tasks (such as "Move an object to the center of the workspace") run but are not judged.
 6. Set the distance, release, and still-time rules. Existing runs are re-evaluated immediately.
-7. Select a run to inspect its final frame, checks, and distance chart. **Save labels** writes the current
+7. Select a run to inspect it: a recorded run plays its camera video (**Top / Left wrist / Right wrist**,
+   or **Last frame**), with its checks and distance chart. **Save labels** writes the current
    server-side verdicts to `label.json`.
 8. **Your label**: decide a run yourself with **Success / Failure / Invalid** (keys **1 / 2 / 3**; **0** goes back to
    the rules), with an optional note. **J / K** move to the next / previous run. A label set by hand wins over the
@@ -58,10 +67,12 @@ Open http://localhost:8000.
    Runs without a recording (Plain mode) and recordings shorter than 1.6 s are left out (`lerobot_export.py`).
 10. **Delete**: **Delete this run** (in a run's detail), **Delete shown** (every run the list shows, e.g. one batch) or
    **Delete** in Recordings removes a finished run for good: `runs/<id>` and its recording `episodes/<id>`. The page
-   asks first; the run going now is never deleted.
+   asks first; the run going now is never deleted. **Delete picked** (next to Save dataset) removes the runs picked
+   with **+**, so several unwanted episodes go at once.
 
 **Custom layout** (optional, single runs): tick *Use my own layout*, pick the objects and targets on the table and
-drag them on the map (the robot is YAM, the only one in this simulator). It replaces the seed's layout; settings
+drag them on the map (the robot is YAM, the only one in this simulator). The map starts from the seed's scene (as
+the preview shows it), with items kept inside the layout area. It replaces the seed's layout; settings
 marked random are then not drawn (they need the seed).
 
 ### Run modes, human control and recovery (single runs)
@@ -116,13 +127,25 @@ like any other run (Stop is its normal end).
 
 ### Batch (many episodes in the background)
 
+**Original** (the baseline, in **Each episode**: Data collection / Dream-1 only / **Original**): none of our method.
+Dream-1 runs alone (no failure monitor, recovery script or human), every episode starts from the simulator's default
+scene (the same object layout each time, no seed) with default scene settings; the task, its judge, the episode count
+and the seconds are the ones set above. The seed choice does not apply.
+
+**Run as original**: pick a finished batch in the run list's filter and press **Run as original**. It
+runs as many episodes with the same task, judge and time limit, but none of our method: Dream-1 alone (no failure
+monitor, recovery script or human), and every episode from the simulator's default scene (`--default-scene`: the same
+object layout each time, no seed) with default scene settings. Its runs are named "original of <batch>"
+(`meta.json`: `original_of`), and with either batch picked the summary compares the two success rates.
+
 Switch to **Batch**. Pick what each episode does (**Data collection**: Dream-1, then the recovery script on a
 failure; **Rule-based only**: the script from the start, no API key needed; or **Dream-1 only**), how many run **at once** (1 to 4), the number of episodes and the seconds per
-episode, and the seeds: **Seed, Seed + 1, …**
-(train seeds, from the Seed field) or **Eval set (50)** (the fixed evaluation seeds, easy / medium / hard). Each
+episode, and the seeds: **From the seed**
+(one train seed is the whole batch: each episode's own seed is derived from it, `seed_web.episode_seed`, so the
+same seed gives the same episodes again and other seeds share none) or **Eval set (50)** (the fixed evaluation seeds, easy / medium / hard). Each
 episode starts from its seed's scene, with the scene settings above; the ones marked random are drawn from each
-episode's seed. The cameras are not shown; the page shows progress, success / failure / invalid counts and the time
-left instead.
+episode's seed. The page shows progress, success / failure / invalid counts, the time left, and the camera view of
+each episode going now (one tile per episode).
 
 Tasks: pick the example prompts, or type your own prompt and **Add** it. Dream-1 gets your prompt as written. The
 judge only parses fixed sentences, so each own prompt is judged on the **judge as** pairs below it: object → target,
@@ -154,6 +177,9 @@ python batch.py --repeats 10 --seconds 60 --budget-minutes 60
 ```
 
 The batch uses the default scene, the key in `~/.dreamlabs/credentials` (`DREAM_API_KEY=...`), and a snapshot of the rules saved in the UI. It writes each episode to `runs/<id>/` and stops on an invalid run, such as an API authentication error. Check the API key and endpoint before starting a large batch. `--tasks`, `--seed`, `--repeats`, and `--seconds` are adjustable.
+
+Errors (preview, run, batch, API key, ...) appear in one banner at the top of the page, in plain words with a fix where
+one is known; **Details** shows the original message or the run's log.
 
 ## Rules, by task type
 

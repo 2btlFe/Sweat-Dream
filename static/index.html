@@ -112,6 +112,24 @@
   .keyrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: end; }
   .keystate { font-size: 12px; margin: 6px 0 14px; color: var(--ok); }
   .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  /* error banner: every error the page shows, in one place */
+  .errbar { border: 1px solid var(--danger); background: color-mix(in srgb, var(--danger) 10%, var(--panel)); border-radius: 10px;
+            padding: 10px 14px; margin: 0 0 16px; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; }
+  .errbar[hidden] { display: none; }
+  .errbar strong { color: var(--danger); font-size: 14px; }
+  .errbar .hint { font-size: 13px; grid-column: 1; }
+  .errbar .acts { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; }
+  .errbar .acts:empty { display: none; }
+  .errbar details { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+  .errbar pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 0; }
+  .errbar .close { grid-column: 2; grid-row: 1; align-self: start; }
+  fieldset.bad { border-color: var(--danger) !important; }
+  /* in-page confirm / notice (window.confirm and alert do nothing in some embedded browsers) */
+  dialog.ask { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); padding: 18px 20px; max-width: 440px; }
+  dialog.ask::backdrop { background: #0008; }
+  dialog.ask p { margin: 0 0 14px; font-size: 14px; line-height: 1.5; white-space: pre-line; }
+  dialog.ask .acts { display: flex; justify-content: flex-end; gap: 8px; }
+  .setup-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .robot-note { font-size: 12px; color: var(--muted); margin: -6px 0 14px; min-height: 0; }
   .robot-note:empty { display: none; }
   .robot-note.bad { color: var(--warn); }
@@ -197,6 +215,15 @@
   .bar { height: 10px; background: var(--line); border-radius: 999px; overflow: hidden; }
   .bar div { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
   .counts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 13px; }
+  video.view { background: #080c10; object-fit: contain; }
+  .cam-tabs { display: inline-flex; gap: 4px; }
+  .cam-tabs button { padding: 2px 8px; font-size: 11px; background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; }
+  .cam-tabs button.on { color: var(--accent); border-color: var(--accent); }
+  .batch-live { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+  .batch-live:empty { display: none; }
+  .batch-live figure { margin: 0; }
+  .batch-live img { width: 100%; aspect-ratio: 16 / 6; object-fit: contain; background: #080c10; border-radius: 8px; display: block; }
+  .batch-live figcaption { font-size: 11px; color: var(--muted); margin-top: 3px; overflow-wrap: anywhere; }
 
   /* success rules */
   .banners { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
@@ -303,11 +330,23 @@
     <h1>Dream-1 Simulator</h1>
     <p class="sub">Set up a start scene, run Dream-1 once or in a batch, and label the runs with your own success rules.</p>
   </header>
+  <dialog class="ask" id="askDialog" aria-labelledby="askText">
+    <p id="askText"></p>
+    <div class="acts"><button class="ghost" id="askNo">Cancel</button><button id="askYes">OK</button></div>
+  </dialog>
+  <div class="errbar" id="errBar" role="alert" hidden>
+    <strong id="errTitle"></strong>
+    <button class="ghost small close" id="errClose" aria-label="Dismiss the error">✕</button>
+    <div class="hint" id="errHint"></div>
+    <div class="acts" id="errActs"></div>
+    <details id="errMore"><summary>Details</summary><pre id="errRaw"></pre></details>
+  </div>
 
   <div class="workspace">
   <div class="col">
   <section class="panel setup" aria-labelledby="setupTitle">
-    <h2 id="setupTitle">Run setup</h2>
+    <div class="setup-head"><h2 id="setupTitle">Run setup</h2>
+      <button class="ghost small" id="defaults" title="Back to the default start: YAM tabletop, every scene setting at its default, nothing random, no custom layout (the seed is kept)">Default</button></div>
     <form class="keyrow" id="keyForm" autocomplete="off">
       <div><label for="apiKey">API key</label><input id="apiKey" type="password" placeholder="Paste your Dream API key" spellcheck="false"></div>
       <button type="submit" id="useKey">Use key</button>
@@ -377,23 +416,25 @@
         <div><label for="batchSeconds">Seconds each</label><input id="batchSeconds" type="number" min="10" max="300" value="60"></div>
         <div><label>Seeds</label>
           <div class="toggle" role="group" aria-label="Seeds">
-            <button id="splitTrain" class="on" aria-pressed="true" title="Seed, Seed + 1, Seed + 2, …">Seed + i</button>
+            <button id="splitTrain" class="on" aria-pressed="true" title="One seed is the whole batch: it gives every episode its own layout, and the same seed gives the same episodes again">From the seed</button>
             <button id="splitEval" aria-pressed="false" title="The 50 fixed evaluation seeds">Eval set (50)</button>
           </div>
         </div>
       </div>
       <div class="grid2" style="margin: 12px 0 0; grid-template-columns: minmax(0, 2fr) minmax(90px, 1fr)">
         <div><label>Each episode</label>
-          <div class="toggle" role="group" aria-label="Batch mode">
+          <div class="toggle" role="group" aria-label="Batch mode" style="grid-template-columns: repeat(3, 1fr)">
             <button id="batchCollect" class="on" aria-pressed="true" title="Dream-1; when it fails, the recovery script takes over">Data collection</button>
             <button id="batchScript" aria-pressed="false" title="The rule-based script does the whole task; no Dream-1, no credits">Rule-based only</button>
             <button id="batchPlain" aria-pressed="false" title="Dream-1 only">Dream-1 only</button>
+            <button id="batchOriginal" aria-pressed="false" title="None of our method: Dream-1 alone, every episode from the simulator's default scene (the same object layout each time), default scene settings, no seed">Original</button>
           </div>
         </div>
         <div><label for="batchWorkers">At once</label><input id="batchWorkers" type="number" min="1" max="4" value="2" title="Episodes run at the same time (1 to 4)"></div>
       </div>
       <div id="batchCollectSlot"></div>
-      <p class="muted small" style="margin: 8px 0 12px">Each episode starts from its own seed. The scene settings below apply to every episode; the ones marked <em>random</em> are drawn from each episode's seed. Runs in the background, without the cameras.</p>
+      <p class="muted small" style="margin: 8px 0 12px" id="batchHow">The seed is the whole batch: it gives each episode its own layout (the same episodes again with the same seed; other seeds share none). The scene settings below apply to every episode; the ones marked <em>random</em> are drawn from each episode's seed. Runs in the background.</p>
+      <p class="muted small" style="margin: 8px 0 12px" id="batchHowOriginal" hidden>Original: every episode starts from the simulator's default scene (the same object layout each time) with default scene settings; the seed and the scene settings below are not used. Dream-1 runs alone. Runs in the background.</p>
       <p class="small" style="margin: 0 0 4px">Every episode runs <b>the task above</b> (<span id="batchTaskName"></span>).</p>
       <div id="batchTaskList" hidden>
       <label>Tasks <span class="muted">(taken in turn)</span></label>
@@ -460,6 +501,7 @@
       <div class="bar"><div id="batchBar"></div></div>
       <div class="counts" id="batchCounts"></div>
       <div class="muted small" id="batchNow"></div>
+      <div class="batch-live" id="batchLive" aria-label="Camera view of each episode going now"></div>
       <div class="batch-end small" id="batchEnd"></div>
       <div><button class="ghost small" id="batchShow">Show these runs</button></div>
     </div>
@@ -517,13 +559,14 @@
       <summary>Runs</summary>
       <div class="hrow" style="justify-content: space-between">
         <select id="runFilter" aria-label="Which runs" style="width: auto; max-width: 100%"></select>
-        <span class="hrow"><button id="saveLabels" class="ghost small">Save labels</button><button id="deleteShown" class="ghost small danger" title="Delete every run shown in the list, with its recording">Delete shown</button></span>
+        <span class="hrow"><button id="saveLabels" class="ghost small">Save labels</button><button id="deleteShown" class="ghost small danger" title="Delete every run shown in the list, with its recording">Delete shown</button><button id="runOriginal" class="ghost small" hidden title="The baseline: as many episodes with the same task, judge and time limit, but none of our method: Dream-1 alone (no failure monitor, recovery script or human), every episode from the simulator's default scene (the same object layout each time) with default scene settings">Run as original</button></span>
       </div>
       <div class="muted small" id="runSummary" style="margin-top: 8px"></div>
       <div class="dataset-bar" role="group" aria-label="Dataset">
         <span class="small"><b id="pickedCount">0</b> picked for a dataset</span>
         <button class="ghost small" id="pickSuccesses" title="Pick every success the list shows">+ Add successes</button>
         <button class="ghost small" id="pickClear">Clear</button>
+        <button class="ghost small danger" id="deletePicked" title="Delete the picked runs, with their recordings">Delete picked</button>
         <button class="small" id="saveDataset" style="margin-left: auto" title="Choose a folder on this computer and save the picked runs there">Save dataset…</button>
       </div>
       <div class="dataset-note" id="datasetNote"></div>
@@ -533,8 +576,12 @@
       </table>
       <div id="detail" class="detail" hidden>
         <div>
+          <video id="detailVideo" class="view" controls muted playsinline preload="metadata" hidden></video>
           <img id="detailImage" class="view" alt="Last frame">
-          <div class="legend"><span>Last frame</span></div>
+          <div class="legend"><span id="detailMedia">Last frame</span>
+            <span class="cam-tabs" id="detailCams" hidden role="group" aria-label="Recording camera">
+              <button data-cam="top" class="on">Top</button><button data-cam="left">Left wrist</button><button data-cam="right">Right wrist</button><button data-cam="last">Last frame</button>
+            </span></div>
         </div>
         <div>
           <div id="detailHead"></div>
@@ -669,7 +716,7 @@
 </dialog>
 <script type="module">
 import { loadOOD, readOOD } from "/ood.js";
-import { initSeed, seeding, afterPreview } from "/seed.js";
+import { initSeed, seeding, afterPreview, newSeed, advanceSeed, useSeed } from "/seed.js";
 
 const $ = id => document.getElementById(id);
 let rules = { distance_cm: 6.5, release: true, still_seconds: 1.0 };
@@ -768,8 +815,19 @@ async function loadRuns() {
 
 const batchName = id => {
   const m = /^b(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/.exec(id || "");
-  return m ? `Batch ${when(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`)}` : `Batch ${id}`;
+  const name = m ? `Batch ${when(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`)}` : `Batch ${id}`;
+  const of = originalOf(id);  // an "original" batch: none of our method (default scene, Dream-1 alone)
+  return of ? `${name} · original of ${batchName(of)}` : isOriginal(id) ? `${name} · original` : name;
 };
+const originalOf = id => (batchState?.id === id && batchState.original_of)
+  || runs.find(r => r.batch_id === id && r.original_of)?.original_of || null;
+const isOriginal = id => (batchState?.id === id && batchState.original) || runs.some(r => r.batch_id === id && (r.original || r.original_of));
+/** Success over valid runs of a batch, as "62% (5/8)". */
+function batchRate(id) {
+  const list = runs.filter(r => r.batch_id === id), ok = list.filter(r => finalLabel(r) === "success").length;
+  const valid = ok + list.filter(r => finalLabel(r) === "failure").length;
+  return valid ? `${Math.round(100 * ok / valid)}% (${ok}/${valid})` : "no valid runs";
+}
 // A person's label wins over the rules' verdict; the rules' verdict stays visible next to it.
 const handLabel = run => run.label?.source === "human" ? run.label : null;
 const finalLabel = run => handLabel(run)?.label || verdict(run).label;
@@ -804,6 +862,16 @@ function renderRuns() {
       + (byHand ? ` · ${byHand} by hand (${list.filter(disagrees).length} differ from the rules)` : "")
     : "";
   $("deleteShown").disabled = !list.length;
+  // A batch picked in the filter: run its episodes again as the original (Dream-1 alone); with its pair, compare them.
+  const isBatch = /^b\d{8}-\d{6}$/.test(runFilter);
+  $("runOriginal").hidden = !isBatch || isOriginal(runFilter);
+  if (isBatch) {
+    const of = originalOf(runFilter), pair = of || runs.find(r => r.original_of === runFilter)?.batch_id;
+    if (pair) {
+      const [method, original] = of ? [of, runFilter] : [runFilter, pair];
+      $("runSummary").textContent += ` · ours ${batchRate(method)} vs original (default scene, Dream-1 only) ${batchRate(original)}`;
+    }
+  }
   showPicked();
   if (!list.length) { $("runs").innerHTML = '<tr><td colspan="6" class="muted">No runs yet.</td></tr>'; $("detail").hidden = true; return; }
   $("runs").innerHTML = list.map(run => {
@@ -828,20 +896,45 @@ function renderRuns() {
   renderDetail();
 }
 
+/** A recorded run plays its camera video (top / left / right wrist); otherwise, or on "Last frame", its last frame. */
+let detailCam = "top";
+function showDetailMedia(run) {
+  const video = $("detailVideo"), img = $("detailImage"), recorded = !!run.episode;
+  const useVideo = recorded && detailCam !== "last";
+  $("detailCams").hidden = !recorded;
+  document.querySelectorAll("#detailCams [data-cam]").forEach(b => b.classList.toggle("on", b.dataset.cam === (recorded ? detailCam : "last")));
+  $("detailMedia").textContent = useVideo ? "Recording" : "Last frame";
+  const src = useVideo ? `/api/episodes/${run.episode}/${detailCam}.mp4` : "";
+  if (video.dataset.src !== src) { video.dataset.src = src; if (src) video.src = src; else video.removeAttribute("src"); video.load(); }
+  const last = `/api/runs/${run.id}/last.jpg`;
+  if (img.dataset.src !== last) { img.dataset.src = last; img.src = last; }
+  video.hidden = !useVideo;
+  img.hidden = useVideo;
+}
+document.querySelectorAll("#detailCams [data-cam]").forEach(b => b.onclick = () => { detailCam = b.dataset.cam; renderDetail(); });
+
 async function renderDetail() {
   const run = shownRuns().find(r => r.id === selected);
   $("detail").hidden = !run;
   if (!run) return;
   const v = verdict(run);
-  $("detailImage").src = `/api/runs/${run.id}/last.jpg`;
+  showDetailMedia(run);
   const extra = [run.batch_id ? batchName(run.batch_id) : "Single run",
-                 run.layout === "custom" ? "custom layout" : run.seed != null ? `seed ${run.seed}${run.split === "eval" ? " (eval)" : ""}` : "",
+                 run.layout === "custom" ? "custom layout" : run.seed != null ? `seed ${run.seed}${run.split === "eval" ? " (eval)" : ""}${run.batch_seed != null ? ` (batch seed ${run.batch_seed})` : ""}` : run.layout === "default" ? "default scene" : "",
                  run.robot && run.robot !== "yam" ? (simCatalog?.robots[run.robot] || run.robot) : "",
                  run.room && run.room !== "yam_tabletop" ? (simCatalog?.rooms[run.room] || run.room) : "",
                  run.ood_random?.length ? `random: ${run.ood_random.join(", ")}` : "",
                  (run.judge || v.spec) ? `${TYPE_UI[(run.judge || v.spec).type || "pick_place"]?.label || ""}: ${specText(run.judge || v.spec)}` : "not judged"].filter(Boolean).join(" · ");
   const hand = handLabel(run);
-  $("detailHead").innerHTML = `${chip(finalLabel(run))}${hand ? '<span class="by-hand">✋ by hand</span>' : ""} <strong>${esc(run.task)}</strong><div class="muted" style="font-size:13px">${when(run.started_at)} · ${fmt(run.sim_seconds || 0)} s · ${esc(extra)}</div>`;
+  $("detailHead").innerHTML = `${chip(finalLabel(run))}${hand ? '<span class="by-hand">✋ by hand</span>' : ""} <strong>${esc(run.task)}</strong><div class="muted" style="font-size:13px">${when(run.started_at)} · ${fmt(run.sim_seconds || 0)} s · ${esc(extra)}</div>`
+    + (run.seed != null && run.layout !== "custom" ? `<button class="ghost small" id="sameStart" title="Put seed ${run.seed} and its random settings back on the page (the settings not marked random are the page's)">Same start (seed ${run.seed})</button>` : "");
+  if ($("sameStart")) $("sameStart").onclick = () => {
+    if (customOn()) { $("customOn").checked = false; $("layoutBody").classList.add("off"); drawScene(); }
+    if (mode !== "single") setMode("single");
+    useSeed(run.seed, run.ood_random || []);
+    $("task").value = run.task; checkTask();
+    schedulePreview();
+  };
   for (const b of document.querySelectorAll("[data-hand]")) b.classList.toggle("on", !!hand && b.dataset.hand === hand.label);
   $("detailSettings").innerHTML = settingsRows(run, v).map(([k, val]) => `<dt>${esc(k)}</dt><dd>${esc(val)}</dd>`).join("");
   if ($("handNote").dataset.run !== run.id) { $("handNote").value = hand && hand.reason !== "set by hand" ? hand.reason : ""; $("handNote").dataset.run = run.id; }
@@ -954,6 +1047,7 @@ function showPicked() {
   $("pickedCount").title = `success ${n("success")} · failure ${n("failure")} · invalid ${n("invalid")}`;
   $("saveDataset").disabled = !chosen.length;
   $("pickClear").disabled = !chosen.length;
+  $("deletePicked").disabled = !chosen.length;
 }
 $("pickSuccesses").onclick = () => {
   for (const run of shownRuns()) if (finalLabel(run) === "success") picked.add(run.id);
@@ -1064,7 +1158,7 @@ async function setHand(label) {
     run.label = saved;
     drawFilter();
     renderRuns();
-  } catch (err) { alert(err.message); }
+  } catch (err) { showError(err); }
 }
 for (const b of document.querySelectorAll("[data-hand]")) b.onclick = () => setHand(b.dataset.hand);
 $("handNote").addEventListener("keydown", e => {  // Enter keeps the label, with the note
@@ -1092,22 +1186,34 @@ document.addEventListener("keydown", e => {
 async function deleteRuns(ids, what) {
   ids = ids.filter(id => !(running && id === lastRunId));
   if (!ids.length) return;
-  if (!confirm(`Delete ${what}? Its trajectory, labels and recording are removed for good.`)) return;
+  if (!(await ask(`Delete ${what}? Its trajectory, labels and recording are removed for good.`, "Delete"))) return;
   try {
     const { deleted, skipped } = await api("/api/runs/delete", { run_ids: ids });
-    if (skipped.length) alert(`${skipped.length} not deleted (still going, or already gone).`);
+    if (skipped.length) notify(`${skipped.length} not deleted (still going, or already gone).`);
     if (deleted.includes(selected)) selected = null;
     if (chosen && deleted.includes(chosen.id)) { chosen = null; $("resumeBox").hidden = true; }
     await loadRuns();
     loadEpisodes();
-  } catch (err) { alert(err.message); }
+  } catch (err) { showError(err); }
 }
 $("deleteRun").onclick = () => selected && deleteRuns([selected], "this run");
+$("runOriginal").onclick = async () => {
+  const id = runFilter, n = runs.filter(r => r.batch_id === id && r.seed != null).length;
+  if (!(await ask(`Run ${n} original episodes for ${batchName(id)}: the same task, judge and time limit, but Dream-1 alone (no failure monitor, recovery script or human), every episode from the simulator's default scene (the same object layout each time) with default settings?`, "Run original"))) return;
+  try {
+    await api("/api/batch", { original_of: id, workers: Number($("batchWorkers").value) || 1 });
+    setMode("batch"); followBatch = true; refresh();
+  } catch (err) { showError(err, "Original"); }
+};
 $("deleteShown").onclick = () => {
   const ids = shownRuns().map(r => r.id);
   deleteRuns(ids, `the ${ids.length} run${ids.length > 1 ? "s" : ""} shown ("${$("runFilter").selectedOptions[0]?.text || "All runs"}")`);
 };
 $("deleteRec").onclick = () => chosen && deleteRuns([chosen.id], "this recording and its run");
+$("deletePicked").onclick = () => {
+  const ids = runs.filter(r => picked.has(r.id)).map(r => r.id);
+  deleteRuns(ids, `the ${ids.length} picked run${ids.length > 1 ? "s" : ""}`);
+};
 
 $("saveLabels").onclick = async () => {
   try {
@@ -1117,7 +1223,7 @@ $("saveLabels").onclick = async () => {
     $("saveLabels").textContent = `Saved ${saved}` + (kept ? ` · kept ${kept} by hand` : "");
     setTimeout(() => { $("saveLabels").textContent = "Save labels"; }, 2500);
     await loadRuns();
-  } catch (err) { alert(err.message); }
+  } catch (err) { showError(err); }
 };
 
 /* ---------- scene ---------- */
@@ -1146,8 +1252,11 @@ const fromMap = (px, py) => [VIEW.x0 - px / VIEW.scale, py / VIEW.scale + VIEW.y
 const clampArea = ([x, y]) => [Math.min(Math.max(x, AREA.x[0]), AREA.x[1]), Math.min(Math.max(y, AREA.y[0]), AREA.y[1])];
 
 let sceneOn = {}, scenePos = {}, dragging = null;
+let seedLayout = {};  // where the seed's scene puts each item (the last preview's X-Scene-Layout)
+/** Every item on the table where the seed's scene has it (its usual spot before the first preview), kept inside
+ *  the layout area as app.py keeps it: a seed may place an item a little beyond it. */
 function resetScene() {
-  for (const [name, item] of Object.entries(ITEMS)) { sceneOn[name] = true; scenePos[name] = [...item.home]; }
+  for (const [name, item] of Object.entries(ITEMS)) { sceneOn[name] = true; scenePos[name] = clampArea(seedLayout[name] || item.home); }
   drawScene();
 }
 
@@ -1315,8 +1424,8 @@ function showKey(key) {
 $("keyForm").onsubmit = async e => {
   e.preventDefault();
   if (!$("apiKey").value.trim()) return;
-  try { showKey(await api("/api/key", { key: $("apiKey").value })); $("apiKey").value = ""; refresh(); }
-  catch (err) { alert(err.message); }
+  try { showKey(await api("/api/key", { key: $("apiKey").value })); $("apiKey").value = ""; clearError(); refresh(); }
+  catch (err) { showError(err); }
 };
 $("clearKey").onclick = async () => { $("apiKey").value = ""; showKey(await api("/api/key", { key: "" })); refresh(); };
 
@@ -1348,14 +1457,15 @@ function setSplit(next) {
   estimate();
 }
 let batchMode = "collect";
-const BATCH_MODES = [["batchCollect", "collect"], ["batchScript", "script"], ["batchPlain", "plain"]];
+const BATCH_MODES = [["batchCollect", "collect"], ["batchScript", "script"], ["batchPlain", "plain"], ["batchOriginal", "original"]];
 for (const [id, m] of BATCH_MODES) $(id).onclick = () => {
   batchMode = m;
-  for (const [other, om] of BATCH_MODES) {
-    $(other).classList.toggle("on", om === m); $(other).setAttribute("aria-pressed", om === m);
-  }
+  for (const [other, om] of BATCH_MODES) { $(other).classList.toggle("on", om === m); $(other).setAttribute("aria-pressed", om === m); }
+  // Original uses no seed and no scene settings: the seed choice does not apply.
+  $("splitTrain").disabled = $("splitEval").disabled = m === "original";
+  $("batchHow").hidden = m === "original"; $("batchHowOriginal").hidden = m !== "original";
   estimate();
-  refresh();
+  refresh();  // a rule-based batch needs no key: the Start button follows the mode
 };
 $("splitTrain").onclick = () => setSplit("train");
 $("splitEval").onclick = () => setSplit("eval");
@@ -1461,8 +1571,8 @@ function addCustomTask() {
   let judge;
   if (draft.type === "pick_place") {
     const pairs = draft.pairs.filter(p => p.object && p.target);
-    if (!pairs.length) { alert("Pick an object and a bowl or plate to judge it on."); return; }
-    if (new Set(pairs.map(p => p.object)).size !== pairs.length) { alert("Each object can be judged only once."); return; }
+    if (!pairs.length) { notify("Pick an object and a bowl or plate to judge it on."); return; }
+    if (new Set(pairs.map(p => p.object)).size !== pairs.length) { notify("Each object can be judged only once."); return; }
     judge = { type: "pick_place", pairs: pairs.map(p => ({ ...p })) };
   } else {
     judge = { type: draft.type, object: draft.object, ...(draft.type === "move_to_area" ? { area: draft.area } : {}) };
@@ -1481,7 +1591,8 @@ function estimate() {
   // Rule-based runs go faster than real time (about 2.5x on an M3) and end once the task is done.
   const each = batchMode === "script" ? secs / 2.5 + 10 : secs + 20;
   const minutes = Math.round(Math.ceil(count / workers) * each / 60);
-  const seeds = split === "eval" ? `eval seeds 1-${Math.min(count, 50)}` : `seeds ${$("seed")?.value || "?"}…${(Number($("seed")?.value) || 0) + count - 1}`;
+  const seeds = batchMode === "original" ? "original: default scene each episode, default settings, Dream-1 only"
+    : split === "eval" ? `eval seeds 1-${Math.min(count, 50)}` : `batch seed ${$("seed")?.value || "?"} (${count} different layouts, the same again with this seed)`;
   $("batchEstimate").textContent = count && secs ? `${count} episodes · ${workers} at once · ${seeds} · about ${minutes} min · ${batchTasks.size} task${batchTasks.size > 1 ? "s" : ""}` : "";
   return minutes;
 }
@@ -1493,19 +1604,22 @@ $("startBatch").onclick = async () => {
   const ood = isOpenYAM() ? {} : readOOD();
   if (ood === null) return;
   const count = Number($("batchCount").value);
-  if (!confirm(batchMode === "script" ? `Run ${count} rule-based episodes in the background (about ${estimate()} min, no Dream-1 use)?`
-                                       : `Run ${count} episodes in the background (about ${estimate()} min of Dream-1 use)?`)) return;
+  // Every episode runs the task set above (its words, and its goal scene when it has one).
+  if (goalSpec && !goalRelational()) { notify("The task's goal scene has a fixed table spot, which only fits one seed: for batches, tie every object to an item (in the bowl, beside the plate, ...)."); return; }
+  const how = batchMode === "original" ? " as the original (Dream-1 alone, the default scene every episode, default settings)"
+    : batchMode === "script" ? " rule-based (the script alone, no Dream-1 use)" : "";
+  const use = batchMode === "script" ? "" : " of Dream-1 use";
+  if (!(await ask(`Run ${count} episodes${how} in the background (about ${estimate()} min${use})?`, "Start batch"))) return;
   try {
-    // Every episode runs the task set above (its words, and its goal scene when it has one).
-    if (goalSpec && !goalRelational()) { alert("The task's goal scene has a fixed table spot, which only fits one seed: for batches, tie every object to an item (in the bowl, beside the plate, ...)."); return; }
     const tasks = [{ prompt: $("task").value.trim(), ...(goalSpec ? { judge: goalSpec } : {}) }];
     const { seed, ood_random } = seeding();
     await api("/api/batch", { tasks, count, seconds: $("batchSeconds").value, split, seed, ood, mode: batchMode,
                               workers: Number($("batchWorkers").value) || 1, collection: collectionSettings(),
                               ood_random: isOpenYAM() ? [] : ood_random });
+    if (split !== "eval" && batchMode !== "original") advanceSeed(1);  // the seed was the whole batch: the next batch gets the next one
     followBatch = true;
     refresh();
-  } catch (err) { alert(err.message); }
+  } catch (err) { showError(err); }
 };
 $("stopBatch").onclick = async () => {
   $("stopBatch").disabled = true;
@@ -1534,13 +1648,124 @@ function showBatch(b) {
   $("batchCounts").innerHTML = `${chip("success")} ${b.counts.success} ${chip("failure")} ${b.counts.failure} ${chip("invalid")} ${b.counts.invalid}`
     + (valid ? ` <span class="muted">· ${Math.round(100 * b.counts.success / valid)}% success of valid</span>` : "");
   const now = b.active?.length ? b.active : (b.current ? [b.current] : []);
-  $("batchNow").textContent = now.length ? `Now${b.workers > 1 ? ` (${now.length} at once)` : ""}: ` + now.map(e => `#${e.index} ${e.task} (seed ${e.seed})`).join(" · ")
-    : `${b.split === "eval" ? "Eval seeds" : `Seeds from ${b.seed}`}${b.ood_random?.length ? ` · random: ${b.ood_random.join(", ")}` : ""} · ${b.seconds} s each · labeled with the rules as at the start`;
+  $("batchNow").textContent = now.length ? `Now${b.workers > 1 ? ` (${now.length} at once)` : ""}: ` + now.map(e => `#${e.index} ${e.task} (${e.seed != null ? `seed ${e.seed}` : "default scene"})`).join(" · ")
+    : b.original ? `Original: default scene every episode (same object layout), default settings, Dream-1 alone · ${b.seconds} s each`
+    : `${b.split === "eval" ? "Eval seeds" : `Batch seed ${b.batch_seed ?? b.seed}`}${b.ood_random?.length ? ` · random: ${b.ood_random.join(", ")}` : ""} · ${b.seconds} s each · labeled with the rules as at the start`;
   $("batchEnd").textContent = (b.running ? "" : b.stopped_reason || "Finished.")
     + (b.capacity_retries ? ` Dream-1 was at capacity ${b.capacity_retries} time${b.capacity_retries > 1 ? "s" : ""}: those episodes were tried again.` : "");
   $("batchEnd").classList.toggle("bad", !b.running && !!b.stopped_reason && b.stopped_reason !== "Stopped by you.");
+  showBatchLive(b.running ? (b.active || []).filter(e => e.run) : []);
 }
 
+/** One camera view per episode going now (each writes its own, /api/live.jpg?run=...), refreshed twice a second. */
+let batchLiveTimer = null;
+function showBatchLive(episodes) {
+  const box = $("batchLive"), want = new Set(episodes.map(e => e.run));
+  for (const fig of [...box.children]) if (!want.has(fig.dataset.run)) fig.remove();
+  for (const e of episodes) {
+    let fig = box.querySelector(`[data-run="${e.run}"]`);
+    if (!fig) {
+      fig = document.createElement("figure");
+      fig.dataset.run = e.run;
+      fig.innerHTML = `<img alt="Episode ${e.index} camera view"><figcaption></figcaption>`;
+      box.append(fig);
+    }
+    fig.querySelector("figcaption").textContent = `#${e.index} · seed ${e.seed} · ${e.task}`;
+  }
+  if (episodes.length && !batchLiveTimer) batchLiveTimer = setInterval(refreshBatchLive, 500);
+  if (!episodes.length && batchLiveTimer) { clearInterval(batchLiveTimer); batchLiveTimer = null; }
+}
+function refreshBatchLive() {
+  for (const fig of $("batchLive").children) {
+    const next = new Image();  // swap only when the new frame has loaded (no flicker, no broken image before the first)
+    next.onload = () => { const img = fig.querySelector("img"); if (img) img.src = next.src; };
+    next.src = `/api/live.jpg?run=${fig.dataset.run}&t=${Date.now()}`;
+  }
+}
+
+
+/* ---------- errors ---------- */
+
+// Known errors in plain words: [pattern, title, hint, setup problem?]. Anything else shows its own message.
+const ERRORS = [
+  [/not a Dream API key/i, "That is not a Dream API key", "Paste the key from platform.dreamlabs.ai (it starts with dl_), then press Use key. The key in use did not change.", false],
+  [/UNAUTHORIZED|api key|401|403/i, "The Dream API rejected the key", "Paste a valid key and press Use key.", false],
+  [/busy/i, "The simulator is busy", "A run, batch or preview is going. Wait for it to finish, then try again.", false],
+  [/Initial arm pose overlaps/i, "The arms' start pose collides with the scene", "The joint angles put an arm into the table, an object or the other arm. Change them, or draw again / go back to the defaults.", true],
+  [/Random arm pose rejected/i, "The random arm pose does not work", "Its wrist camera would not see the table. Draw again with a new seed, or untick random on the arm angles.", true],
+  [/Random camera\/arm settings rejected/i, "The random camera or arm values hide an object", "The workspace camera would not see every object. Draw again with a new seed.", true],
+  [/no layout found/i, "This seed has no possible object layout", "Draw a new seed.", true],
+  [/outside the simulator joint limits|Invalid value for/i, "A scene setting is out of range", "Bring it back inside its range, or go back to the defaults.", true],
+  [/Cannot reach app\.py|Failed to fetch|NetworkError/i, "The page cannot reach app.py", "Start python app.py again and reload the page.", false],
+];
+/** An in-page confirm: resolves true on OK, false on Cancel / Esc. window.confirm returns false at once, without
+ *  asking, in some embedded browsers (the app's preview pane), which silently cancelled batches and deletes. */
+function ask(message, ok = "OK") {
+  const box = $("askDialog");
+  $("askText").textContent = message;
+  $("askYes").textContent = ok;
+  $("askNo").hidden = false;
+  return new Promise(resolve => {
+    const done = answer => { box.onclose = null; if (box.open) box.close(); resolve(answer); };
+    $("askYes").onclick = () => done(true);
+    $("askNo").onclick = () => done(false);
+    box.onclose = () => done(false);  // Esc
+    box.showModal();
+    $("askYes").focus();
+  });
+}
+/** An in-page notice with one OK button (instead of window.alert, for the same reason). */
+function notify(message) {
+  ask(message).then(() => {});
+  $("askNo").hidden = true;
+}
+
+let setupProblem = null;  // why the start scene cannot be built (blocks Run until a preview works)
+let setupShown = false;   // the banner shows that problem (a working preview then clears it)
+
+function clearError() { $("errBar").hidden = true; setupShown = false; }
+$("errClose").onclick = clearError;
+
+/** Show an error in the banner: where it happened, in plain words, with fixes, and the raw text under Details. */
+function showError(err, where = "", raw = "") {
+  const message = String(err?.message ?? err ?? "Something went wrong.");
+  const [, title, hint, setup] = ERRORS.find(([pattern]) => pattern.test(message)) || [null, message, "", false];
+  $("errTitle").textContent = (where ? where + ": " : "") + title;
+  $("errHint").textContent = hint;
+  $("errRaw").textContent = raw || message;
+  $("errMore").hidden = !raw && title === message;
+  $("errActs").innerHTML = "";
+  setupShown = setup;
+  if (setup) {
+    setSetupProblem(message);
+    const action = (text, fn) => { const b = Object.assign(document.createElement("button"), { className: "small", textContent: text }); b.onclick = fn; $("errActs").append(b); };
+    action("Draw again (new seed)", () => { newSeed(); clearError(); schedulePreview(); });
+    action("Default settings", () => { defaults(); clearError(); });
+  }
+  $("errBar").hidden = false;
+}
+
+/** Mark (or clear) a start scene that cannot be built: Run waits, and the arm groups are outlined when it is the arms. */
+function setSetupProblem(message) {
+  setupProblem = message;
+  const arms = !!message && /arm/i.test(message);
+  document.querySelectorAll("#ood fieldset").forEach(f => f.classList.toggle("bad", arms && /arm/i.test(f.querySelector("legend")?.textContent || "")));
+  if (!message && setupShown) clearError();
+  if (message) $("run").disabled = true;
+}
+
+/** Back to the default start: YAM tabletop, every scene setting at its default, nothing random, no custom layout.
+ *  The seed stays (it is the object layout). */
+async function defaults() {
+  $("ood").reset();  // also unticks the random boxes; seed.js unlocks their fields
+  if (customOn()) { $("customOn").checked = false; $("layoutBody").classList.add("off"); drawScene(); }
+  const robot = simCatalog?.target_robots?.[0] || "yam";
+  if ($("robot").value !== robot || $("room").value !== "yam_tabletop") {
+    $("robot").value = robot; $("room").value = "yam_tabletop";
+    await saveSimulator();
+  } else schedulePreview();
+}
+$("defaults").onclick = () => { clearError(); defaults(); };
 
 /* ---------- robot and room ---------- */
 
@@ -1552,8 +1777,9 @@ async function loadSimulator() {
   const { settings, catalog } = await api("/api/simulator-settings");
   simSettings = settings;
   simCatalog = catalog;
-  $("robot").innerHTML = Object.entries(catalog.robots).map(([key, label]) =>
-    `<option value="${key}">${esc(label)}${catalog.local_robots.includes(key) ? "" : " · Sandbox only"}</option>`).join("");
+  const offered = catalog.target_robots || catalog.local_robots;  // the team's target robot (simulator_settings.py)
+  $("robot").innerHTML = offered.map(key => `<option value="${key}">${esc(catalog.robots[key])}</option>`).join("");
+  if (!offered.includes(settings.robot)) settings.robot = offered[0];  // a robot saved before it was hidden
   $("room").innerHTML = Object.entries(catalog.rooms).map(([key, label]) => `<option value="${key}">${esc(label)}</option>`).join("");
   $("robot").value = settings.robot;
   $("room").value = settings.room;
@@ -1578,7 +1804,7 @@ function showRobot() {
 async function saveSimulator() {
   try {
     ({ settings: simSettings } = await api("/api/simulator-settings", { ...simSettings, robot: $("robot").value, room: $("room").value }));
-  } catch (err) { alert(err.message); }
+  } catch (err) { showError(err); }
   showRobot();
   checkTask();
   schedulePreview();
@@ -1596,6 +1822,7 @@ function startScene(ood) {
 
 const customOn = () => !!$("customOn")?.checked;
 $("customOn").addEventListener("change", () => {
+  if (customOn()) resetScene();  // start from the scene the preview shows, not from fixed spots
   $("layoutBody").classList.toggle("off", !customOn());
   drawScene();
   schedulePreview();
@@ -1633,6 +1860,7 @@ async function renderPreview() {
       throw new Error(response.status === 404 ? "Restart app.py and reload the page." : error.error || "Rendering failed.");
     }
     if (!customOn() && !isOpenYAM()) afterPreview(response);
+    if (!customOn()) seedLayout = JSON.parse(response.headers.get("X-Scene-Layout") || "{}");
     const frame = await response.blob();
     if (revision !== previewRevision || running || starting) return;
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -1640,9 +1868,11 @@ async function renderPreview() {
     $("live").src = previewUrl;
     if (!(mode === "batch" && batchState)) { $("live").hidden = false; $("placeholder").hidden = true; }
     note.textContent = customOn() ? "Initial scene · custom layout · settings apply on Run" : "Initial scene · settings apply on Run";
+    setSetupProblem(null);
   } catch (error) {
     if (revision === previewRevision && !running && !starting) {
       note.textContent = "Preview unavailable: " + error.message;
+      showError(error, "Start scene");
       if (!$("placeholder").hidden) $("placeholder").textContent = "No initial camera image available.";
     }
   } finally {
@@ -1673,7 +1903,7 @@ async function refresh() {
   if (batchRunning && mode !== "batch") setMode("batch");
   $("modeSingle").disabled = $("modeBatch").disabled = running;
   // Human-only and rule-based runs need no key (no Dream-1; a human-only run asks it only after T).
-  $("run").disabled = running || (!s.key.source && !["human", "script"].includes(runMode())) || !robotRunsHere();
+  $("run").disabled = running || (!s.key.source && !["human", "script"].includes(runMode())) || !robotRunsHere() || !!setupProblem;
   $("startBatch").disabled = running || (!s.key.source && batchMode !== "script") || !robotRunsHere();
   $("robot").disabled = $("room").disabled = running;
   $("stop").hidden = !s.running || batchRunning;
@@ -1700,7 +1930,11 @@ async function refresh() {
   } else if (s.task) {
     const rejected = s.log.some(line => line.includes("UNAUTHORIZED"));
     $("statusText").textContent = s.exit_code === 0 ? "Finished" : rejected ? "Error: API key rejected" : "Stopped with an error";
-    if (s.exit_code !== 0 && wasRunning) $("logBox").open = true;
+    if (s.exit_code !== 0 && wasRunning) {
+      $("logBox").open = true;
+      const why = [...s.log].reverse().find(line => /^Stopped|Error|rejected|UNAUTHORIZED/i.test(line)) || "The run stopped with an error.";
+      showError(new Error(why.replace(/^Stopped:\s*/, "")), "Run", s.log.join("\n"));
+    }
     $("statusMore").textContent = `${s.task} · ${s.elapsed_s} s`;
   }
   $("logBox").hidden = !s.log.length;
@@ -1724,7 +1958,9 @@ $("run").onclick = async () => {
   try {
     const ood = isOpenYAM() ? {} : readOOD();
     if (ood === null) return;
-    if (customOn()) { const problem = sceneProblem(); if (problem) { alert(problem); return; } }
+    if (customOn()) { const problem = sceneProblem(); if (problem) { showError(new Error(problem), "Custom layout"); return; } }
+    if (setupProblem) { showError(new Error(setupProblem), "Start scene"); return; }
+    clearError();
     starting = true;
     previewRevision++;
     clearTimeout(previewTimer);
@@ -1732,18 +1968,20 @@ $("run").onclick = async () => {
     document.activeElement.blur();  // so the keys go to the robot, not to the box last clicked
     const start = startScene(ood);
     if (goalSpec && !goalRelational() && JSON.stringify(start) !== goalStart) {
-      if (!confirm("The start scene changed since the goal was set (seed, settings or layout). Run without the goal?")) return;
+      if (!(await ask("The start scene changed since the goal was set (seed, settings or layout). Run without the goal?", "Run without goal"))) return;
       clearGoal();
     }
     await api("/api/run", { task: $("task").value, seconds: $("seconds").value, ...start,
                             mode: runMode(), record: $("record").checked, collection: collectionSettings(),
                             ...(goalSpec ? { judge: goalSpec } : {}) });
+    // The next run starts from the next seed's scene, unless a goal is tied to this start (it would no longer fit).
+    if (!customOn() && !isOpenYAM() && !(goalSpec && !goalRelational())) advanceSeed(1);
     $("live").hidden = true;
     $("placeholder").hidden = false;
     $("placeholder").textContent = "Starting the simulator… (the first picture takes a few seconds)";
     running = true;
     await refresh();
-  } catch (err) { alert(err.message); }
+  } catch (err) { showError(err); }
   finally { starting = false; }
 };
 $("stop").onclick = async () => {
@@ -1760,7 +1998,7 @@ $("reset").onclick = async () => {
     await api("/api/reset", {});
     $("live").hidden = true; $("placeholder").hidden = false;
     $("placeholder").textContent = "Starting again from the beginning…";
-  } catch (err) { alert(err.message); }
+  } catch (err) { showError(err); }
   $("reset").disabled = false;
   refresh();
 };
@@ -1886,7 +2124,7 @@ async function renderGoal(goal) {
     $("goalImg").src = view.image;
     goalPending = {};
     drawGoal();
-  } catch (err) { alert(err.message); }
+  } catch (err) { notify(err.message); }
   finally { $("goalBusy").hidden = true; }
 }
 $("goalSvg").addEventListener("pointerdown", e => {
@@ -1972,7 +2210,7 @@ $("setTask").onclick = async () => {
 $("goalReset").onclick = () => { goalChoice = {}; renderGoal({}); };
 $("goalCancel").onclick = () => { $("task").value = taskBefore; $("goalDialog").close(); checkTask(); };
 $("goalUse").onclick = () => {
-  if (!$("task").value.trim()) { alert("Write what Dream-1 should do."); return; }
+  if (!$("task").value.trim()) { notify("Write what Dream-1 should do."); return; }
   const moved = Object.keys(goalView?.goal || {});
   if (!moved.length) { goalSpec = null; showTask(); $("goalDialog").close(); return; }  // judged by the words
   goalSpec = { type: "goal", objects: Object.fromEntries(moved.map(n => {
@@ -2011,7 +2249,7 @@ function placeCollectBox() {
   if (single) $("singleCollectSlot").append($("collectBox"));
   if (batch) $("batchCollectSlot").append($("collectBox"));
 }
-for (const id of ["modeSingle", "modeBatch", "batchCollect", "batchScript", "batchPlain"]) $(id).addEventListener("click", placeCollectBox);
+for (const id of ["modeSingle", "modeBatch", "batchCollect", "batchScript", "batchPlain", "batchOriginal"]) $(id).addEventListener("click", placeCollectBox);
 for (const radio of document.querySelectorAll("input[name=runMode]")) radio.addEventListener("change", placeCollectBox);
 
 /* ---------- human control (KSY: teleop.py, monitor.py, recovery.py) ---------- */
@@ -2171,7 +2409,7 @@ $("fwd1s").onclick = () => setStep(+$("resumeStep").value + 20);
 $("failuresOnly").onchange = loadEpisodes;
 $("reloadEps").onclick = loadEpisodes;
 $("resumeBtn").onclick = async () => {
-  if (running && !confirm("A run is going. Stop it (its recording is saved) and resume this one?")) return;
+  if (running && !(await ask("A run is going. Stop it (its recording is saved) and resume this one?", "Stop and resume"))) return;
   $("resumeBtn").disabled = true;
   $("resumeBtn").textContent = running ? "Stopping the current run…" : "Restoring…";
   try {
@@ -2181,7 +2419,7 @@ $("resumeBtn").onclick = async () => {
     $("placeholder").textContent = "Restoring the recorded moment…";
     $("placeholder").scrollIntoView({ behavior: "smooth", block: "center" });
     refresh();
-  } catch (err) { alert(err.message); }
+  } catch (err) { showError(err); }
   $("resumeBtn").disabled = false;
   $("resumeBtn").textContent = "Resume here (you control)";
 };

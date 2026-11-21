@@ -4,6 +4,7 @@ app.py passes seeding_args(body, ood.FIELDS) to sim.py for /api/run and /api/pre
 and returns drawn_header(stdout) with the preview so the page can show what the seed drew.
 """
 
+import hashlib
 import json
 import re
 
@@ -24,11 +25,21 @@ def seeding_args(body, fields):
     return (["--seed", seed] if seed else []) + (["--ood-random", ",".join(names)] if names else [])
 
 
+def episode_seed(batch_seed, index):
+    """The start-scene seed of episode `index` (0, 1, ...) in a batch with seed `batch_seed`: one seed is the whole
+    batch. Every episode gets its own layout, the same batch seed gives the same episodes again, and batches with
+    other seeds share none of them (two of the 10^6 train seeds can coincide by chance, rarely). A train seed."""
+    digest = hashlib.sha256(f"sweat-dream batch {int(batch_seed)} episode {int(index)}".encode()).digest()
+    return int.from_bytes(digest[:8], "big") % 1_000_000
+
+
 def drawn_header(stdout):
-    """@return The X-Scene-Controls header: the scene-control values sim.py printed ("{}" when none)."""
+    """@return The X-Scene-Controls header (the scene-control values sim.py printed) and X-Scene-Layout (where each
+    item starts, so the page's custom layout can start from the seed's); "{}" when sim.py printed none."""
+    headers = {"X-Scene-Controls": "{}", "X-Scene-Layout": "{}"}
     for line in stdout.splitlines():
-        match = re.match(r"Scene controls: (\{.*\})", line)
+        match = re.match(r"Scene (controls|layout): (\{.*\})", line)
         if match:
-            json.loads(match.group(1))  # only ever pass on valid JSON
-            return {"X-Scene-Controls": match.group(1)}
-    return {"X-Scene-Controls": "{}"}
+            json.loads(match.group(2))  # only ever pass on valid JSON
+            headers["X-Scene-" + match.group(1).title()] = match.group(2)
+    return headers
