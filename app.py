@@ -23,11 +23,13 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import judge
+
 HERE = Path(__file__).resolve().parent
 PAGE = HERE / "static" / "index.html"
 RUNS = HERE / "runs"
 RULES = RUNS / "rules.json"
-DEFAULT_RULES = {"distance_cm": 6.5, "release": True, "still_seconds": 1.0}
+DEFAULT_RULES = judge.DEFAULT_RULES
 ## What can be on the table, and the area objects may be placed in (metres, world frame; reachable by both arms).
 OBJECTS = ["apple", "orange", "banana", "water_bottle"]
 TARGETS = ["bowl", "plate"]
@@ -50,6 +52,14 @@ def write_json(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.with_suffix(".tmp").write_text(json.dumps(data, indent=2), encoding="utf-8")
     os.replace(path.with_suffix(".tmp"), path)
+
+
+def current_rules():
+    saved = read_json(RULES, {})
+    try:
+        return judge.normalize_rules({**DEFAULT_RULES, **saved})
+    except (TypeError, ValueError):
+        return dict(DEFAULT_RULES)
 
 
 def run_dir(run_id):
@@ -107,7 +117,8 @@ class Runner:
             if scene:
                 env["SCENE_JSON"] = json.dumps(scene)
             self.process = subprocess.Popen(
-                [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds)], cwd=str(HERE), env=env,
+                [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds),
+                 "--seed", str(secrets.randbelow(1_000_000_000))], cwd=str(HERE), env=env,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
             self.task, self.started, self.ended, self.run_id = task, time.time(), None, run_id
             self.log.clear()
@@ -189,13 +200,17 @@ class Handler(BaseHTTPRequestHandler):
             except OSError:
                 return self.send_json({"error": "no frame yet"}, 404)
         if path == "/api/rules":
-            return self.send_json({**DEFAULT_RULES, **read_json(RULES, {})})
+            return self.send_json(current_rules())
         if path == "/api/runs":
             runs = []
+            rules = current_rules()
             if RUNS.is_dir():
                 for d in sorted(RUNS.iterdir(), reverse=True):
                     if run_dir(d.name):
-                        runs.append({**read_json(d / "meta.json", {}), "id": d.name, "label": read_json(d / "label.json")})
+                        meta = read_json(d / "meta.json", {})
+                        trajectory = read_json(d / "trajectory.json", {})
+                        runs.append({**meta, "id": d.name, "label": read_json(d / "label.json"),
+                                     "verdict": judge.evaluate(meta, trajectory, rules)})
             return self.send_json({"runs": runs})
         m = re.match(r"^/api/runs/([^/]+)/(trajectory\.json|last\.jpg)$", path)
         if m and run_dir(m.group(1)) and (RUNS / m.group(1) / m.group(2)).exists():
@@ -212,10 +227,15 @@ class Handler(BaseHTTPRequestHandler):
             task = re.sub(r"\s+", " ", str(body.get("task") or "")).strip()
             if not task:
                 return self.send_json({"error": "Type a task, such as: put apple into the bowl"}, 400)
+            if judge.parse_task(task) is None:
+                return self.send_json({"error": "Automatic judging supports putting apple, orange, banana, or bottle in a bowl or on a plate."}, 400)
             try:
                 scene = parse_scene(body.get("scene"))
             except (ValueError, TypeError, AttributeError) as error:
                 return self.send_json({"error": f"Scene: {error}"}, 400)
+            missing = [name for name in judge.parse_task(task) if scene and name not in scene["items"]]
+            if missing:
+                return self.send_json({"error": f"Not on the table: {', '.join(missing)}"}, 400)
             try:
                 seconds = min(300, max(10, int(float(body.get("seconds") or 60))))
                 RUNNER.start(task, seconds, scene)
@@ -226,20 +246,25 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(RUNNER.status())
         if self.path == "/api/rules":
             try:
-                rules = {"distance_cm": min(30.0, max(0.5, float(body["distance_cm"]))),
-                         "release": bool(body["release"]),
-                         "still_seconds": min(10.0, max(0.0, float(body["still_seconds"])))}
-            except (KeyError, ValueError, TypeError):
-                return self.send_json({"error": "Rules need distance_cm, release and still_seconds."}, 400)
+                rules = judge.normalize_rules(body)
+            except ValueError as error:
+                return self.send_json({"error": str(error)}, 400)
             write_json(RULES, rules)
             return self.send_json(rules)
         if self.path == "/api/labels":
             saved = 0
-            for run_id, label in (body.get("labels") or {}).items():
+            rules = current_rules()
+            run_ids = body.get("run_ids")
+            if not isinstance(run_ids, list) or any(not isinstance(run_id, str) for run_id in run_ids):
+                return self.send_json({"error": "run_ids must be a list of run IDs."}, 400)
+            for run_id in run_ids:
                 d = run_dir(run_id)
-                if d and isinstance(label, dict):
-                    write_json(d / "label.json", {**label, "rules": body.get("rules"),
-                                                  "saved_at": datetime.now().isoformat(timespec="seconds")})
+                if d:
+                    verdict = judge.evaluate(read_json(d / "meta.json", {}),
+                                             read_json(d / "trajectory.json", {}), rules)
+                    write_json(d / "label.json", {"label": verdict["label"], "reason": verdict["reason"],
+                        "success_time_s": verdict.get("success_time_s"), "rules": rules,
+                        "saved_at": datetime.now().isoformat(timespec="seconds")})
                     saved += 1
             return self.send_json({"saved": saved})
         if self.path == "/api/key":

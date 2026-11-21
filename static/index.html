@@ -20,7 +20,51 @@
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width: 1000px; margin: 0 auto; padding: 24px 16px 48px; }
+  main { width: 100%; margin: 0; }
+  .workspace { display: grid; grid-template-columns: minmax(0, 7fr) minmax(340px, 3fr); height: 100dvh; min-height: 620px; }
+  .operator { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 20px; overflow-y: auto; }
+  .operator-header { flex: none; }
+  .operator-header .sub { margin-bottom: 12px; }
+  .controls { flex: none; }
+  .camera-panel { display: flex; flex-direction: column; flex: 1; min-height: 260px; margin-bottom: 0; }
+  .camera-panel > .view { flex: 1; height: 0; min-height: 200px; aspect-ratio: auto; background: #0d1117; object-fit: contain; }
+  .sidebar { min-width: 0; min-height: 0; padding: 20px; overflow-y: auto; border-left: 1px solid var(--line); background: var(--panel); }
+  .sidebar .panel { padding: 16px; }
+  .sidebar details.panel { padding: 0; }
+  .sidebar details.panel > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 16px; cursor: pointer; font-size: 17px; font-weight: 700; list-style: none; user-select: none; }
+  .sidebar details.panel > summary::-webkit-details-marker { display: none; }
+  .sidebar details.panel > summary::after { content: "⌄"; font-size: 20px; line-height: 1; color: var(--muted); transform: rotate(-90deg); transition: transform .18s ease; }
+  .sidebar details.panel[open] > summary::after { transform: rotate(0deg); }
+  .sidebar details.panel > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; border-radius: 10px; }
+  .sidebar details.panel[open] > summary { border-bottom: 1px solid var(--line); }
+  .sidebar .panel-content { padding: 16px; }
+  .sidebar .banners, .sidebar .detail { grid-template-columns: minmax(0, 1fr); }
+  .sidebar .banner { padding: 12px; }
+  .sidebar .banner .value { font-size: 22px; }
+  .sidebar .hint { line-height: 1.4; }
+  .sidebar table { table-layout: fixed; }
+  .sidebar th, .sidebar td { overflow-wrap: anywhere; }
+  .sidebar th:nth-child(1), .sidebar td:nth-child(1) { width: 26%; }
+  .sidebar th:nth-child(2), .sidebar td:nth-child(2) { width: 47%; }
+  .sidebar th:nth-child(3), .sidebar td:nth-child(3) { width: 27%; }
+  .sidebar .hide-sm { display: none; }
+  .sidebar .detail { gap: 12px; }
+  .sidebar .detail > div:last-child { grid-column: auto !important; }
+  .sidebar .detail .view { height: auto; aspect-ratio: 720 / 270; }
+  .sidebar .row { align-items: center; }
+  .sidebar .row h2 { margin: 0; }
+  @media (max-width: 960px) {
+    .workspace { display: block; height: auto; min-height: 0; }
+    .operator { min-height: min(680px, 100dvh); overflow: visible; }
+    .camera-panel { min-height: 360px; }
+    .sidebar { height: auto; overflow: visible; border-left: 0; border-top: 1px solid var(--line); }
+  }
+  @media (max-width: 600px) {
+    .operator, .sidebar { padding: 14px; }
+    .operator { min-height: 0; }
+    .camera-panel { min-height: 280px; }
+    .camera-panel > .view { min-height: 220px; }
+  }
   h1 { font-size: 22px; margin: 0 0 4px; }
   h2 { font-size: 17px; margin: 0 0 4px; }
   .sub { color: var(--muted); margin: 0 0 20px; }
@@ -39,6 +83,24 @@
   .examples button { padding: 4px 10px; font-size: 13px; }
   .keystate { font-size: 13px; margin-top: 8px; color: var(--ok); }
   .keystate.none { color: var(--warn); }
+  .task-note { font-size: 13px; margin-top: 6px; }
+  .task-note.bad, .scene-note.bad { color: var(--bad); }
+
+  /* Scene setup (sidebar) */
+  .scene { display: flex; flex-direction: column; gap: 12px; }
+  .robot { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: var(--bg); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .robot strong { font-size: 14px; }
+  .robot span { font-size: 12px; color: var(--muted); }
+  .items { display: flex; flex-wrap: wrap; gap: 6px; }
+  .item { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--text); font-weight: 500; font-size: 13px; }
+  .item i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .item.off { opacity: .45; text-decoration: line-through; }
+  .scene-buttons { display: flex; gap: 6px; }
+  .scene-buttons button { padding: 6px 12px; font-size: 13px; }
+  svg.map { width: 100%; height: auto; display: block; border-radius: 8px; touch-action: none; user-select: none; }
+  svg.map text { font-size: 28px; font-weight: 600; fill: #3b3326; pointer-events: none; }
+  svg.map [data-item] { cursor: grab; }
+  .scene-note { font-size: 13px; color: var(--muted); min-height: 20px; }
   .status { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
   .dot.on { background: var(--ok); animation: pulse 1.2s infinite; }
@@ -69,7 +131,7 @@
   .chip { display: inline-block; padding: 1px 9px; border-radius: 999px; font-weight: 700; font-size: 12px; white-space: nowrap; }
   .chip.success { background: var(--ok-bg); color: var(--ok); }
   .chip.failure { background: var(--bad-bg); color: var(--bad); }
-  .chip.unknown { background: var(--line); color: var(--text); }
+  .chip.invalid { background: var(--warn-bg); color: var(--warn); }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { color: var(--muted); font-weight: 500; font-size: 13px; }
@@ -84,36 +146,22 @@
   svg.chart text { fill: var(--muted); font-size: 11px; }
   .chart-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--muted); margin-top: 4px; }
   .sw { display: inline-block; width: 12px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
-  /* Scene setup */
-  .scene { display: grid; grid-template-columns: 230px 1fr; gap: 16px; align-items: start; }
-  .side { display: flex; flex-direction: column; gap: 12px; }
-  .robot { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--bg); }
-  .robot strong { display: block; font-size: 15px; }
-  .robot span { font-size: 12px; color: var(--muted); }
-  .items { display: flex; flex-wrap: wrap; gap: 6px; }
-  .item { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--text); font-weight: 500; font-size: 13px; }
-  .item i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-  .item.off { opacity: .45; text-decoration: line-through; }
-  .scene-buttons { display: flex; gap: 6px; }
-  .scene-buttons button { padding: 6px 12px; font-size: 13px; }
-  svg.map { width: 100%; max-width: 560px; height: auto; display: block; border-radius: 8px; touch-action: none; user-select: none; }
-  svg.map text { font-size: 13px; fill: #3b3326; pointer-events: none; }
-  svg.map [data-item] { cursor: grab; }
-  .scene-note { font-size: 13px; color: var(--muted); margin-top: 6px; min-height: 20px; }
-  .scene-note.bad, .task-note.bad { color: var(--bad); }
-  .task-note { font-size: 13px; margin-top: 6px; min-height: 0; }
   @media (max-width: 760px) {
-    .banners, .detail, .scene { grid-template-columns: 1fr; }
+    .banners, .detail { grid-template-columns: 1fr; }
     .hide-sm { display: none; }
   }
 </style>
 </head>
 <body>
 <main>
-  <h1>Dream-1 Simulator</h1>
-  <p class="sub">Run a task → set the rules → save labels.</p>
+  <div class="workspace">
+  <div class="operator">
+  <header class="operator-header">
+    <h1>Dream-1 Simulator</h1>
+    <p class="sub">Run a task and watch the robot. Set the scene, rules and results on the right.</p>
+  </header>
 
-  <section class="panel">
+  <section class="panel controls">
     <form class="row" id="keyForm" autocomplete="off">
       <div class="grow"><label for="apiKey">API key</label><input id="apiKey" type="password" placeholder="Paste your Dream API key" spellcheck="false"></div>
       <button type="submit" id="useKey">Use key</button>
@@ -122,36 +170,7 @@
     <div class="keystate" id="keyState"></div>
   </section>
 
-  <section class="panel">
-    <h2>Scene</h2>
-    <p class="hint">Pick what is on the table. Drag to move.</p>
-    <div class="scene">
-      <div class="side">
-        <div>
-          <label>Robot</label>
-          <div class="robot"><strong>YAM · 2 arms</strong><span>The only robot in this simulator</span></div>
-        </div>
-        <div>
-          <label>Objects</label>
-          <div class="items" id="objectToggles"></div>
-        </div>
-        <div>
-          <label>Targets</label>
-          <div class="items" id="targetToggles"></div>
-        </div>
-        <div class="scene-buttons">
-          <button id="shuffle" class="ghost">Shuffle</button>
-          <button id="resetScene" class="ghost">Reset</button>
-        </div>
-      </div>
-      <div>
-        <svg class="map" id="map" viewBox="0 0 720 540" role="img" aria-label="Top view of the table. Drag objects to move them."></svg>
-        <div class="scene-note" id="sceneNote"></div>
-      </div>
-    </div>
-  </section>
-
-  <section class="panel">
+  <section class="panel controls">
     <div class="row">
       <div class="grow"><label for="task">Task</label><input id="task" value="put apple into the bowl"></div>
       <div><label for="seconds">Seconds</label><input id="seconds" type="number" min="10" max="300" value="60"></div>
@@ -162,16 +181,35 @@
     <div class="examples" id="examples"></div>
   </section>
 
-  <section class="panel">
+  <section class="panel camera-panel">
     <div class="status"><span class="dot" id="dot"></span><strong id="statusText">Ready</strong><span class="muted" id="statusMore"></span></div>
     <img id="live" class="view" alt="Live camera view" hidden>
     <div id="placeholder" class="view placeholder">Press Run to start.</div>
     <details id="logBox" hidden><summary class="legend">Log</summary><pre id="log"></pre></details>
   </section>
+  </div>
 
-  <section class="panel">
-    <h2>Success rules</h2>
-    <p class="hint">All 3 must pass.</p>
+  <aside class="sidebar" aria-label="Scene, success rules and runs">
+  <details class="panel" id="scenePanel" open>
+    <summary>Scene</summary>
+    <div class="panel-content scene">
+      <div class="robot"><strong>Robot: YAM · 2 arms</strong><span>The only robot in this simulator</span></div>
+      <div><label>Objects</label><div class="items" id="objectToggles"></div></div>
+      <div><label>Targets</label><div class="items" id="targetToggles"></div></div>
+      <div>
+        <svg class="map" id="map" viewBox="0 0 720 540" role="img" aria-label="Top view of the table. Drag objects to move them."></svg>
+        <div class="row" style="justify-content: space-between; align-items: center; margin-top: 8px;">
+          <div class="scene-note" id="sceneNote"></div>
+          <div class="scene-buttons"><button id="shuffle" class="ghost">Shuffle</button><button id="resetScene" class="ghost">Reset</button></div>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <details class="panel" id="rulesPanel" open>
+    <summary>Success rules</summary>
+    <div class="panel-content">
+    <p class="hint">At the end, the object must be in the target, released if required, and stable for the selected time. Stable means under 0.05 m/s.</p>
     <div class="banners">
       <div class="banner">
         <div class="head"><span class="num">1</span>Distance</div>
@@ -193,15 +231,17 @@
         <div class="value"><span id="stillValue">1.0</span> <small>s</small></div>
         <input type="range" id="still" min="0" max="5" step="0.5" value="1" aria-label="Seconds the object must stay still">
         <div class="scale"><span>0 s</span><span>5 s</span></div>
-        <p>Stays still after 1 and 2</p>
+        <p>Final continuous time in target; speed under 0.05 m/s</p>
       </div>
     </div>
     <div class="saved-note" id="rulesNote"></div>
-  </section>
+    </div>
+  </details>
 
-  <section class="panel">
-    <div class="row" style="justify-content: space-between; align-items: center;">
-      <h2>Runs</h2>
+  <details class="panel" id="runsPanel" open>
+    <summary>Runs</summary>
+    <div class="panel-content">
+    <div class="row" style="justify-content: flex-end; align-items: center;">
       <button id="saveLabels" class="ghost">Save labels</button>
     </div>
     <table style="margin-top:10px">
@@ -227,19 +267,16 @@
         </div>
       </div>
     </div>
-  </section>
+    </div>
+  </details>
+  </aside>
+  </div>
 </main>
 
 <script>
 const $ = id => document.getElementById(id);
-const STILL_CM = 1;          // rule 3: "still" means moving less than this
-const MAX_ABOVE_CM = 10;     // rule 1: no higher than this above the target's base
-const MIN_ABOVE_CM = -5;     // rule 1: lower than this means it fell off the table
-
 let rules = { distance_cm: 6.5, release: true, still_seconds: 1.0 };
-let runs = [], trajectories = {}, selected = null, liveTimer = null, wasRunning = false;
-// Only runs started while this page is open are listed: reloading the page clears the list (files stay in runs/).
-const pageRuns = new Set();
+let runs = [], selected = null, liveTimer = null, wasRunning = false;
 
 async function api(path, body) {
   const options = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
@@ -253,65 +290,6 @@ const chip = label => `<span class="chip ${label}">${label.toUpperCase()}</span>
 const when = iso => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }); };
 const fmt = (x, n = 1) => Number(x).toFixed(n);
 
-/* ---------- judging ---------- */
-
-function parseTask(task) {
-  const m = /\b(?:put|place|move|drop|set)\s+(?:the\s+|a\s+|an\s+)?(water bottle|bottle|apple|orange|banana)\s+(?:into|in|onto|on|inside)\s+(?:the\s+|a\s+)?(bowl|plate)\b/i.exec(task || "");
-  if (!m) return null;
-  const word = m[1].toLowerCase();
-  return { object: word.includes("bottle") ? "water_bottle" : word, target: m[2].toLowerCase() };
-}
-
-/** Judge one trajectory with the current rules. */
-function judge(run, traj, r) {
-  const parsed = parseTask(run.task);
-  if (!parsed) return { label: "unknown", reason: "Unknown task (use: put apple into the bowl)" };
-  if (!traj.positions[parsed.object] || !traj.positions[parsed.target]) return { label: "unknown", reason: "Not on the table" };
-  const t = traj.t, P = traj.positions[parsed.object], T = traj.positions[parsed.target], touch = traj.touching[parsed.object];
-  const n = t.length;
-  if (n < 2) return { label: "unknown", reason: "Too short" };
-
-  const dist = [], near = [], ok = [];
-  let closest = Infinity, everNear = false, everNearReleased = false;
-  for (let i = 0; i < n; i++) {
-    const d = Math.hypot(P[i][0] - T[i][0], P[i][1] - T[i][1]) * 100;
-    const above = (P[i][2] - T[i][2]) * 100;
-    dist.push(d);
-    near.push(d <= r.distance_cm && above <= MAX_ABOVE_CM && above >= MIN_ABOVE_CM);
-    ok.push(near[i] && (!r.release || !touch[i]));
-    if (d < closest) closest = d;
-    everNear ||= near[i];
-    everNearReleased ||= ok[i];
-  }
-
-  // Rule 3: from the first moment rules 1 and 2 hold, they must keep holding and the object must move < STILL_CM.
-  let success = null, longest = 0;
-  for (let i = 0; i < n && success === null; i++) {
-    if (!ok[i]) continue;
-    let j = i;
-    while (j + 1 < n && ok[j + 1] && Math.hypot(P[j + 1][0] - P[i][0], P[j + 1][1] - P[i][1], P[j + 1][2] - P[i][2]) * 100 < STILL_CM) j++;
-    const held = t[j] - t[i];
-    longest = Math.max(longest, held);
-    if (held >= r.still_seconds - 1e-6) success = { start: t[i], end: t[i] + r.still_seconds };
-  }
-
-  // ok: true pass, false fail, null not checked (an earlier rule failed)
-  const checks = [
-    { ok: everNear, text: everNear ? `Distance: OK` : `Distance: closest ${fmt(closest)} cm (limit ${fmt(r.distance_cm)})` },
-    !r.release ? { ok: true, text: `Release: can hold` }
-      : everNearReleased ? { ok: true, text: `Release: OK` }
-      : everNear ? { ok: false, text: `Release: never released` } : { ok: null, text: `Release` },
-    success ? { ok: true, text: `Still: OK` }
-      : everNearReleased ? { ok: false, text: `Still: ${fmt(longest)} s (need ${fmt(r.still_seconds)})` } : { ok: null, text: `Still` },
-  ];
-  const failed = checks.find(c => c.ok === false);
-  return {
-    label: success ? "success" : "failure",
-    reason: success ? `Placed at ${fmt(success.start)} s` : failed.text,
-    success, checks, dist, touch, t, closest,
-  };
-}
-
 /* ---------- rules ---------- */
 
 let saveTimer = null;
@@ -324,11 +302,11 @@ function showRules() {
 }
 function changeRules(patch) {
   rules = { ...rules, ...patch };
-  showRules(); renderRuns();
+  showRules();
   $("rulesNote").textContent = "";
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
-    try { await api("/api/rules", rules); $("rulesNote").textContent = "Saved"; }
+    try { await api("/api/rules", rules); await loadRuns(); $("rulesNote").textContent = "Saved"; }
     catch (err) { $("rulesNote").textContent = "Not saved: " + err.message; }
   }, 400);
 }
@@ -340,18 +318,11 @@ $("releaseNo").onclick = () => changeRules({ release: false });
 /* ---------- runs ---------- */
 
 async function loadRuns() {
-  runs = (await api("/api/runs")).runs.filter(r => pageRuns.has(r.id));
-  await Promise.all(runs.filter(r => !trajectories[r.id]).map(async r => {
-    try { trajectories[r.id] = await api(`/api/runs/${r.id}/trajectory.json`); } catch { trajectories[r.id] = null; }
-  }));
+  runs = (await api("/api/runs")).runs;
   renderRuns();
 }
 
-function verdict(run) {
-  const traj = trajectories[run.id];
-  if (run.error) return { label: "unknown", reason: "Run error" };
-  return traj ? judge(run, traj, rules) : { label: "unknown", reason: "No data" };
-}
+function verdict(run) { return run.verdict || { label: "invalid", reason: "No evaluation" }; }
 
 function renderRuns() {
   if (!runs.length) { $("runs").innerHTML = '<tr><td colspan="5" class="muted">No runs yet.</td></tr>'; $("detail").hidden = true; return; }
@@ -383,7 +354,7 @@ function renderDetail() {
 
 function drawChart(v) {
   const svg = $("chart");
-  if (!v.t) { svg.innerHTML = ""; return; }
+  if (!v.t?.length || !v.dist?.length) { svg.innerHTML = ""; return; }
   const W = 640, H = 190, L = 44, R = 8, TOP = 10, B = 40;
   const tMax = Math.max(v.t[v.t.length - 1], 1);
   const yMax = Math.min(80, Math.max(rules.distance_cm * 2, 10, Math.ceil(Math.max(...v.dist) / 10) * 10));
@@ -412,13 +383,10 @@ function drawChart(v) {
 }
 
 $("saveLabels").onclick = async () => {
-  const labels = {};
-  for (const run of runs) {
-    const v = verdict(run);
-    labels[run.id] = { label: v.label, reason: v.reason, success_time_s: v.success ? v.success.start : null };
-  }
   try {
-    const { saved } = await api("/api/labels", { rules, labels });
+    clearTimeout(saveTimer);
+    await api("/api/rules", rules);
+    const { saved } = await api("/api/labels", { run_ids: runs.map(r => r.id) });
     $("saveLabels").textContent = `Saved ${saved}`;
     setTimeout(() => { $("saveLabels").textContent = "Save labels"; }, 2500);
     await loadRuns();
@@ -427,14 +395,22 @@ $("saveLabels").onclick = async () => {
 
 /* ---------- scene ---------- */
 
+// Task words -> scene items (the server checks the same with judge.parse_task).
+function parseTask(task) {
+  const m = /\b(?:put|place|move|drop|set)\s+(?:the\s+|a\s+|an\s+)?(water bottle|bottle|apple|orange|banana)\s+(?:into|in|onto|on|inside|in to|on to)\s+(?:the\s+|a\s+)?(bowl|plate)\b/i.exec(task || "");
+  if (!m) return null;
+  const word = m[1].toLowerCase();
+  return { object: word.includes("bottle") ? "water_bottle" : word, target: m[2].toLowerCase() };
+}
+
 // World frame, metres. The map shows the table from above as the top camera does: +x to the left, +y toward the arms.
 const ITEMS = {
-  apple:        { label: "apple",   r: 0.040, color: "#c62828", home: [0.15, 0.105] },
-  orange:       { label: "orange",  r: 0.033, color: "#f97316", home: [0.0, 0.13] },
-  banana:       { label: "banana",  r: 0.050, color: "#eab308", home: [-0.115, 0.085] },
-  water_bottle: { label: "bottle",  r: 0.030, color: "#5b9aa9", home: [0.22, -0.11] },
-  bowl:         { label: "bowl",    r: 0.083, color: "#8b5e3c", home: [0.0, -0.04], target: true },
-  plate:        { label: "plate",   r: 0.072, color: "#3b6ea8", home: [-0.22, -0.045], target: true },
+  apple:        { label: "apple",  r: 0.040, color: "#c62828", home: [0.15, 0.105] },
+  orange:       { label: "orange", r: 0.033, color: "#f97316", home: [0.0, 0.13] },
+  banana:       { label: "banana", r: 0.050, color: "#eab308", home: [-0.115, 0.085] },
+  water_bottle: { label: "bottle", r: 0.030, color: "#5b9aa9", home: [0.22, -0.11] },
+  bowl:         { label: "bowl",   r: 0.083, color: "#8b5e3c", home: [0.0, -0.04], target: true },
+  plate:        { label: "plate",  r: 0.072, color: "#3b6ea8", home: [-0.22, -0.045], target: true },
 };
 const AREA = { x: [-0.30, 0.30], y: [-0.22, 0.18] };   // where items may go (both arms reach it)
 const VIEW = { x0: 0.36, y0: -0.24, scale: 1000 };       // world -> map pixels (720 x 540: the area and both arms)
@@ -448,7 +424,7 @@ function resetScene() {
   drawScene();
 }
 
-/** Pairs of items on the table that touch each other. */
+/** Items on the table that touch another item. */
 function overlaps() {
   const names = Object.keys(ITEMS).filter(n => sceneOn[n]), bad = new Set();
   for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++) {
@@ -467,21 +443,19 @@ function sceneProblem() {
 }
 
 function drawScene() {
-  // Toggles
   for (const [box, wantTarget] of [["objectToggles", false], ["targetToggles", true]]) {
     $(box).innerHTML = Object.entries(ITEMS).filter(([, it]) => !!it.target === wantTarget).map(([name, it]) =>
       `<button class="item ${sceneOn[name] ? "" : "off"}" data-toggle="${name}" aria-pressed="${sceneOn[name]}"><i style="background:${it.color}"></i>${it.label}</button>`).join("");
   }
   document.querySelectorAll("[data-toggle]").forEach(b => b.onclick = () => { sceneOn[b.dataset.toggle] = !sceneOn[b.dataset.toggle]; drawScene(); });
 
-  // Map
   const bad = overlaps();
   const [ax0, ay0] = toMap([AREA.x[1], AREA.y[0]]), [ax1, ay1] = toMap([AREA.x[0], AREA.y[1]]);
   let out = `<rect x="0" y="0" width="720" height="540" fill="#dcc59b"/>
     <rect x="${ax0}" y="${ay0}" width="${ax1 - ax0}" height="${ay1 - ay0}" fill="none" stroke="#a88f63" stroke-dasharray="6 5" rx="6"/>`;
   for (const [side, x] of [["left arm", 0.305], ["right arm", -0.305]]) {
     const [px, py] = toMap([x, 0.24]);
-    out += `<circle cx="${px}" cy="${py}" r="34" fill="#2b2f36"/><text x="${px}" y="${py - 42}" text-anchor="middle">${side}</text>`;
+    out += `<circle cx="${px}" cy="${py}" r="34" fill="#2b2f36"/><text x="${px < 360 ? px - 30 : px + 30}" y="${py - 44}" text-anchor="${px < 360 ? "start" : "end"}">${side}</text>`;
   }
   const order = Object.keys(ITEMS).sort((a, b) => !!ITEMS[b].target - !!ITEMS[a].target);  // targets first, below
   for (const name of order) {
@@ -489,12 +463,12 @@ function drawScene() {
     const it = ITEMS[name], [px, py] = toMap(scenePos[name]), r = it.r * VIEW.scale;
     out += `<g data-item="${name}">
       <circle cx="${px}" cy="${py}" r="${r}" fill="${it.color}" fill-opacity="${it.target ? 0.55 : 0.95}" stroke="${bad.has(name) ? "#dc2626" : "#00000055"}" stroke-width="${bad.has(name) ? 4 : 1.5}"/>
-      <text x="${px}" y="${it.target ? py + 4 : py + r + 15}" text-anchor="middle">${it.label}</text></g>`;
+      <text x="${px}" y="${it.target ? py + 10 : py + r + 28}" text-anchor="middle">${it.label}</text></g>`;
   }
   $("map").innerHTML = out;
 
   const problem = sceneProblem();
-  $("sceneNote").textContent = problem || "Ready. The next run uses this scene.";
+  $("sceneNote").textContent = problem || "Drag to move. The next run uses this.";
   $("sceneNote").classList.toggle("bad", !!problem);
   drawExamples();
   checkTask();
@@ -568,8 +542,7 @@ $("task").addEventListener("input", checkTask);
 /* ---------- API key ---------- */
 
 function showKey(key) {
-  const text = key.source ? `✓ Using your key (…${key.hint}). Kept in memory only, not saved.` : "No key. Paste one to run.";
-  $("keyState").textContent = text;
+  $("keyState").textContent = key.source ? `✓ Using your key (…${key.hint}). Kept in memory only, not saved.` : "No key. Paste one to run.";
   $("keyState").classList.toggle("none", !key.source);
   $("clearKey").hidden = key.source !== "page";
 }
@@ -595,20 +568,19 @@ async function refresh() {
   catch { $("statusText").textContent = "Server is off (run python app.py)"; return; }
 
   showKey(s.key);
-  if (s.running && s.run_id) pageRuns.add(s.run_id);
   $("run").disabled = s.running || !s.key.source;
   $("stop").hidden = !s.running;
   $("dot").classList.toggle("on", s.running);
   if (s.running) {
     $("statusText").textContent = "Running";
     $("statusMore").textContent = `${s.task} · ${s.elapsed_s} s`;
-  } else if (s.task && pageRuns.has(s.run_id)) {
+  } else if (s.task) {
     const rejected = s.log.some(line => line.includes("UNAUTHORIZED"));
     $("statusText").textContent = s.exit_code === 0 ? "Done" : rejected ? "Error: API key rejected" : "Error (see Log)";
     if (s.exit_code !== 0 && wasRunning) $("logBox").open = true;
     $("statusMore").textContent = `${s.task} · ${s.elapsed_s} s`;
   }
-  $("logBox").hidden = !s.log.length || !pageRuns.has(s.run_id);
+  $("logBox").hidden = !s.log.length;
   $("log").textContent = s.log.join("\n");
   $("log").scrollTop = $("log").scrollHeight;
 
@@ -623,8 +595,7 @@ $("run").onclick = async () => {
     const problem = sceneProblem();
     if (problem) { alert(problem); return; }
     if (!checkTask()) { alert($("taskNote").textContent); return; }
-    const started = await api("/api/run", { task: $("task").value, seconds: $("seconds").value, scene: sceneForRun() });
-    pageRuns.add(started.run_id);
+    await api("/api/run", { task: $("task").value, seconds: $("seconds").value, scene: sceneForRun() });
     $("live").hidden = true;
     $("placeholder").hidden = false;
     $("placeholder").textContent = "Starting…";
