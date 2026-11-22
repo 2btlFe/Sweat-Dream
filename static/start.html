@@ -12,7 +12,7 @@
   if (selectedTheme === "soft" || selectedTheme === "bauhaus") {
     sessionStorage.setItem("sweetDreamTheme", selectedTheme);
   }
-  if (sessionStorage.getItem("sweetDreamTheme") === "soft") {
+  if (sessionStorage.getItem("sweetDreamTheme") !== "bauhaus") {
     document.documentElement.dataset.theme = "soft";
   }
 </script>
