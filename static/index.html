@@ -367,17 +367,21 @@
     .grid3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
     .grid3 > :last-child { grid-column: 1 / -1; }
   }
-  .collection-console { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 18px; align-items: start; margin-bottom: 24px; }
+  .collection-console { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; margin-bottom: 24px; }
   #wizard { min-width: 0; }
-  #wizard > section { max-height: 54dvh; overflow: auto; scrollbar-gutter: stable; padding: 2px; }
+  #wizard > section { max-height: 54dvh; overflow: auto; scrollbar-gutter: stable; }
   @media (max-width: 760px) {
     .collection-console { grid-template-columns: minmax(0, 1fr); gap: 12px; }
     #wizard > section { max-height: 38dvh; }
     .collection-console .monitor .view { max-height: 24dvh; }
   }
-  #stageNav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
-  #stageNav button { background: var(--panel); color: var(--text); border: 1px solid var(--line); }
-  #stageNav [aria-current="step"] { background: var(--accent-soft); border-color: var(--accent-ink); }
+  #stageNav { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; margin-bottom: 16px; text-align: center; }
+  @media (min-width: 761px) {
+    .collection-console { align-items: stretch; }
+    .collection-console .monitor-header, #stageNav { min-height: 44px; margin-bottom: 12px; }
+  }
+  #stageNav button { width: 44px; height: 44px; padding: 0; border-radius: 50%; font-size: 20px; }
+  #stageNav button:disabled { opacity: .35; }
   #wizard .panel + .panel { margin-top: 12px; }
   #wizard dl { display: grid; grid-template-columns: minmax(7rem, 1fr) 3fr; gap: 6px 14px; }
   #wizard dd { margin: 0; overflow-wrap: anywhere; }
@@ -472,8 +476,12 @@
     <p class="muted" id="statusMore"></p>
     <details class="log" id="logBox" hidden><summary>Log</summary><pre id="log"></pre></details>
   </section>
-  <section id="wizard" aria-label="Collection setup">
-    <nav id="stageNav" aria-label="Setup steps"></nav>
+  <section class="panel" id="wizard" aria-label="Collection setup">
+    <nav id="stageNav" aria-label="Setup steps">
+      <button type="button" id="previousStage" aria-label="Previous step" disabled>←</button>
+      <strong id="stageTitle" aria-live="polite" aria-atomic="true"></strong>
+      <button type="button" id="nextStage" aria-label="Next step">→</button>
+    </nav>
     <section id="taskStage"></section>
     <section id="sceneStage" hidden></section>
     <section id="optionsStage" hidden></section>
@@ -482,7 +490,6 @@
       <details><summary>Detailed settings</summary><dl id="reviewDetails"></dl></details>
       <div id="launchActions" class="actions"></div></div>
     </section>
-    <div class="actions"><button class="ghost" id="previousStage">Back</button><button id="nextStage">Next</button></div>
   </section>
 
   <section class="panel ood-panel yam-only" aria-label="Camera, robot &amp; environment settings">
@@ -2656,21 +2663,14 @@ function showStage(index, focus = true) {
   if (index === 3) renderReview();
   stages.forEach((stage, i) => {
     stage.hidden = i !== index;
-    const button = $("stageNav").children[i];
-    if (i === index) button.setAttribute("aria-current", "step");
-    else button.removeAttribute("aria-current");
   });
-  $("previousStage").hidden = index === 0;
-  $("nextStage").hidden = index === 3;
-  $("nextStage").textContent = index === 2 ? "Review settings" : "Next";
-  if (focus) $("stageNav").children[index].focus();
+  $("stageTitle").textContent = `Step ${index + 1} of ${stages.length} · ${stageNames[index]}`;
+  $("previousStage").disabled = index === 0;
+  $("nextStage").disabled = index === stages.length - 1;
+  if (focus && (index === 0 || index === stages.length - 1)) {
+    $(index === 0 ? "nextStage" : "previousStage").focus();
+  }
 }
-stageNames.forEach((name, i) => {
-  const button = document.createElement("button");
-  button.textContent = (i + 1) + ". " + name;
-  button.onclick = () => showStage(i);
-  $("stageNav").append(button);
-});
 $("previousStage").onclick = () => showStage(stageIndex - 1);
 $("nextStage").onclick = () => showStage(stageIndex + 1);
 showStage(0, false);
