@@ -56,6 +56,22 @@
   table.results td.num { white-space: nowrap; color: var(--strong); font-weight: 600; }
   pre { background: var(--band); padding: 18px 20px; border-radius: 6px; overflow-x: auto; font-size: 14px; line-height: 1.5; color: var(--strong); margin: 0; }
   code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .chapters { position: sticky; top: 0; z-index: 10; background: rgba(255, 255, 255, .94); backdrop-filter: blur(6px);
+              border-bottom: 1px solid var(--line); margin-top: 18px; }
+  .chapters .container { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; padding-top: 10px; padding-bottom: 10px; }
+  .chapters a { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; color: var(--strong); font-size: 15px; }
+  .chapters a:hover { background: var(--band); text-decoration: none; }
+  .chapters a.on { background: #363636; color: #fff; }
+  .chapters .n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--band); color: var(--strong); font-size: 13px; font-weight: 600; }
+  .chapters a.on .n { background: #fff; color: #363636; }
+  section[id] { scroll-margin-top: 64px; }
+  .chapter { border-top: 1px solid var(--line); margin-top: 26px; }
+  .chapter-no { text-transform: uppercase; letter-spacing: .08em; font-size: 13px; font-weight: 600; color: #7a7a7a; margin: 0 0 4px; }
+  .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 6px 0 10px; }
+  @media (max-width: 860px) { .steps { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  .step { background: var(--band); border-radius: 10px; padding: 14px 16px; }
+  .step p { margin: 0; font-size: 15px; text-align: left; }
+  .step .step-no { font-weight: 600; color: var(--strong); margin-bottom: 6px; }
   footer { margin-top: 40px; padding: 30px 0 48px; background: #fafafa; font-size: 14px; color: #7a7a7a; }
   footer p { margin: 0 0 8px; } footer h5 { margin: 16px 0 6px; font-size: 15px; color: var(--strong); }
 </style>
@@ -98,9 +114,18 @@
     fine-tuned and tested from the same app.</h2>
 </section>
 
-<section class="section">
+<nav class="chapters" aria-label="Chapters">
+  <div class="container">
+    <a href="#overview">Overview</a>
+    <a href="#collect"><span class="n">1</span>Collect Custom Dataset</a>
+    <a href="#train"><span class="n">2</span>Train Custom Model</a>
+    <a href="#test"><span class="n">3</span>Test Custom Model</a>
+  </div>
+</nav>
+
+<section class="section" id="overview">
   <div class="container content">
-    <h2 class="title">The Sweet Dream Pipeline</h2>
+    <h2 class="title">Overview</h2>
     <div class="figure">
       <svg viewBox="0 0 1000 300" role="img" aria-labelledby="pipeTitle">
         <title id="pipeTitle">Pipeline: seeded scenes, Dream-1 runs with failure monitor and recovery, success rules, dataset, fine-tune, test</title>
@@ -131,27 +156,30 @@
         </g>
       </svg>
     </div>
-    <p>Sweet Dream runs a MuJoCo simulation of the YAM two-arm robot with Dream-1 in the loop. A <b>batch seed</b> gives every
-      episode its own object layout, and <i>Vary per episode</i> also draws the workspace camera (±3 cm, ±8°, field of view
-      ±8°), the light (0.8× to 1.2×) and the room from each episode's seed, so the same seed reproduces the same episodes.
-      While Dream-1 acts, a <b>failure monitor</b> reads the simulator's ground truth and spots a stall, a drop, a missed
-      grasp or an object pushed away; a <b>rule-based recovery script</b> then takes the arms with inverse kinematics and
-      finishes the task (grasp, transport, set down, retreat), handing the object from one arm to the other when only one
-      reaches it and only the other reaches the target.</p>
-    <p>Every run is judged by <b>success rules</b> for its task type (pick &amp; place, move to an area, lift, push, goal
-      scenes drawn on the camera picture), which a person's label overrides. The picked runs are saved as one
-      <b>LeRobot v2.1</b> dataset with the YAM embodiment (right arm first, joints in radians, grippers 0 to 1, three
-      cameras at 5 fps), checked with Dream Labs' own validator, uploaded, and used to fine-tune Dream-1 through the Dream
-      Labs API. The new model then runs in the same scenes for comparison.</p>
+    <p>Sweet Dream is a local web app around a MuJoCo simulation of the YAM two-arm robot, in three chapters that follow
+      the loop above: <a href="#collect">collect</a> a dataset of successful, varied episodes;
+      <a href="#train">train</a> a custom Dream-1 on it through the Dream Labs API; and <a href="#test">test</a> the new
+      model in the same scenes against Dream-1. You sign in once with your Dream API key; every chapter uses it.</p>
   </div>
 </section>
 
-<section class="section">
+<section class="section chapter" id="collect">
   <div class="container content">
-    <h2 class="title">Experiments</h2>
-
-    <h3 class="title">Clean Data Collection</h3>
-    <p>We count how many episodes end as successes, since only those go into the dataset.</p>
+    <p class="chapter-no">Chapter 1</p>
+    <h2 class="title">Collect Custom Dataset</h2>
+    <p>Run Dream-1 once or in batches of up to four episodes at a time. A <b>batch seed</b> gives every episode its own
+      object layout and the same seed reproduces the same episodes; the scene can also be set by hand (room, light,
+      camera viewpoint and angle, blur, work surface) or drawn per episode with <i>Vary per episode</i>.</p>
+    <p>While Dream-1 acts, a <b>failure monitor</b> reads the simulator's ground truth and spots a stall, a drop, a missed
+      grasp or an object pushed away. A <b>rule-based recovery script</b> then takes the arms with inverse kinematics and
+      finishes the task (grasp, transport, set down, retreat), handing the object from one arm to the other when only one
+      reaches it and only the other reaches the target. The script can also do whole episodes on its own
+      (<i>Rule-based only</i>, no Dream-1 calls).</p>
+    <p>Every run is judged by <b>success rules</b> for its task type (pick &amp; place, move to an area, lift, push, goal
+      scenes drawn on the camera picture), which a person's label overrides. Picked runs are saved as one
+      <b>LeRobot v2.1</b> dataset with the YAM embodiment (right arm first, joints in radians, grippers 0 to 1, three
+      cameras at 5 fps) and checked with Dream Labs' own validator.</p>
+    <h3 class="title">Results</h3>
     <table class="results">
       <thead><tr><th>Setting</th><th>Episodes</th><th>Success</th></tr></thead>
       <tbody>
@@ -161,17 +189,6 @@
       </tbody>
     </table>
 
-    <h3 class="title">A Dataset Ready for Fine-Tuning</h3>
-    <p>From the rule-based batches we keep one episode per seed: <b>50 unique seeds, 5,078 frames</b> at 5 fps in two
-      rooms (30 YAM tabletop, 20 Evening den). The dataset passes Dream Labs' validator locally and was uploaded and
-      <b>processed</b> by Dream Labs, ready for a fine-tuning job.</p>
-
-    <h3 class="title">Fine-Tuning and Testing</h3>
-    <p>Fine-tuning Dream-1 on this dataset and testing the model against Dream-1 on the 50 evaluation seeds is in
-      progress; results will be added here.</p>
-
-    <h3 class="title">Sample Rollout Videos</h3>
-    <p>Rule-based episodes of "put the banana on the plate", workspace camera at 5 fps (the frames Dream-1 sees).</p>
     <h4 class="title">Ten seeds, ten environments</h4>
     <p>Each episode has its own seed and an environment set by hand: six rooms, light from 0.3× to 2×, five camera
       viewpoints with tilt, pan, roll and field of view changes, a blurred camera, and a gray work surface. The
@@ -202,6 +219,45 @@
       <figure><figcaption>Left wrist</figcaption><video src="assets/videos/banana-evening-den-left-wrist.mp4" autoplay muted loop playsinline></video></figure>
       <figure><figcaption>Right wrist</figcaption><video src="assets/videos/banana-evening-den-right-wrist.mp4" autoplay muted loop playsinline></video></figure>
     </div>
+  </div>
+</section>
+
+<section class="section chapter" id="train">
+  <div class="container content">
+    <p class="chapter-no">Chapter 2</p>
+    <h2 class="title">Train Custom Model</h2>
+    <p>The Train page fine-tunes Dream-1 on a collected dataset through the Dream Labs API, with the key you signed in
+      with; nothing has to be done on the Dream Labs website.</p>
+    <div class="steps">
+      <div class="step"><p class="step-no">1 · Upload</p><p>Every dataset saved in the Dream Labs format is listed. <b>Upload</b>
+        checks it locally, registers the robot once (<code>yam-sim</code>) and uploads it under a name. Free.</p></div>
+      <div class="step"><p class="step-no">2 · Process</p><p>Dream Labs prepares the dataset for training; the page follows it from
+        <i>waiting</i> to <i>processing</i> to <i>processed</i>, a few minutes for 50 episodes. Free.</p></div>
+      <div class="step"><p class="step-no">3 · Train</p><p>Pick a processed dataset, a model name, 500 to 10,000 steps, the training
+        data (mixed with Dream Labs data, or yours only) and the learning-rate schedule. The price shows as you choose and is
+        confirmed before the job starts; a queued job cannot be cancelled.</p></div>
+      <div class="step"><p class="step-no">4 · Follow</p><p>Jobs are read back from Dream Labs every 30 seconds (phase, step, loss);
+        a finished job publishes the model <code>dream-1-ft:&lt;account&gt;-&lt;name&gt;</code>.</p></div>
+    </div>
+    <h3 class="title">Results</h3>
+    <p>Our banana dataset, <b>50 unique seeds and 5,078 frames</b> in two rooms, passed the Dream Labs validator and was
+      uploaded and <b>processed</b> from the Train page, ready for a fine-tuning job. Training runs and their curves will be
+      added here.</p>
+  </div>
+</section>
+
+<section class="section chapter" id="test">
+  <div class="container content">
+    <p class="chapter-no">Chapter 3</p>
+    <h2 class="title">Test Custom Model</h2>
+    <p>The Test page runs a model on its own, without the failure monitor or the recovery script, so its success rate is
+      the model's. A <b>Model</b> bar lists the models your key can run, the public Dream-1 betas and your fine-tunes, and
+      every run records which one it used. A fine-tune that is still starting up is waited for (up to 10 minutes, not
+      counted in the run's time).</p>
+    <p>Runs and batches use the same seeded scenes as collection, including the fixed <b>evaluation set of 50 seeds</b>, so
+      a fine-tuned model and Dream-1 can be compared start for start.</p>
+    <h3 class="title">Results</h3>
+    <p>The comparison of our fine-tuned model with Dream-1 on the evaluation seeds will be added here.</p>
   </div>
 </section>
 
@@ -244,5 +300,18 @@
     <p>We thank <a href="https://www.nota.ai">Nota AI GmbH</a> and <a href="https://dreamlabs.ai">Dream Labs</a> for their support of this project.</p>
   </div>
 </footer>
+<script>
+// The chapter bar marks the chapter on screen.
+const links = [...document.querySelectorAll(".chapters a")];
+const mark = id => links.forEach(a => a.classList.toggle("on", a.getAttribute("href") === "#" + id));
+const seen = new Map();
+const io = new IntersectionObserver(entries => {
+  for (const e of entries) seen.set(e.target.id, e.isIntersecting);
+  const order = links.map(a => a.getAttribute("href").slice(1));
+  const first = order.find(id => seen.get(id));
+  if (first) mark(first);
+}, { rootMargin: "-70px 0px -55% 0px" });
+for (const a of links) { const el = document.getElementById(a.getAttribute("href").slice(1)); if (el) io.observe(el); }
+</script>
 </body>
 </html>
