@@ -470,6 +470,12 @@
           <input id="testsetFile" type="file" accept=".json,application/json" hidden>
         </div>
         <p class="muted small" id="testsetInfo" style="margin: 4px 0 0"></p>
+        <label for="hubRepo" style="margin-top: 10px">From Hugging Face <span class="muted">(a public dataset with testset.json files)</span></label>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+          <input id="hubRepo" list="hubRepos" value="Dangni/sweet-dream-banana" placeholder="owner/name" spellcheck="false" style="flex: 1 1 220px; min-width: 0">
+          <datalist id="hubRepos"><option value="Dangni/sweet-dream-banana"><option value="Dangni/sweet-dream-apple"></datalist>
+          <button id="hubLoad" type="button" title="Download the dataset's testset.json files to testsets/hf/ and list them above">Load from Hugging Face</button>
+        </div>
       </div>
       <div class="grid2" style="margin: 12px 0 0; grid-template-columns: minmax(0, 2fr) minmax(90px, 1fr)">
         <div><label>Each episode</label>
@@ -1602,6 +1608,16 @@ function showTestset() {
   estimate();
 }
 $("testsetPick").onchange = showTestset;
+$("hubLoad").onclick = async () => {
+  const button = $("hubLoad"), label = button.textContent;
+  button.disabled = true; button.textContent = "Loading…";
+  try {
+    const reply = await api("/api/testsets/hub", { repo: $("hubRepo").value });
+    await loadTestsets(reply.ids[0]);
+    notify(`Loaded ${reply.ids.length} test set${reply.ids.length > 1 ? "s" : ""} from ${$("hubRepo").value.trim()}:\n${reply.ids.join("\n")}`);
+  } catch (err) { showError(err, "Hugging Face"); }
+  finally { button.disabled = false; button.textContent = label; }
+};
 $("testsetUpload").onclick = () => $("testsetFile").click();
 $("testsetFile").onchange = async () => {
   const file = $("testsetFile").files[0];

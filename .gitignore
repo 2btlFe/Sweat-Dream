@@ -15,3 +15,6 @@ __pycache__/
 .claude/
 .env
 credentials*
+
+# Test sets downloaded from Hugging Face on the Test page (fetched again on demand)
+testsets/hf/
