@@ -68,10 +68,10 @@ own fine-tuned model, on the YAM two-arm robot in a MuJoCo scene.
 
 ## Screenshots
 
-| **Start**: Sign in with your Dream API key | **1. Collect**: A batch, with its run settings and runs |
+| **Start**: Sign in with your Dream API key | **Collect**: A batch, with its run settings and runs |
 | --- | --- |
 | ![Start: sign in](docs/assets/screens/01-start.png) | ![Collect: a batch](docs/assets/screens/04-collect-batch.png) |
-| **1. Collect**: A run, with its video, verdict and label | **2. Train**: Pick the dataset, steps, data mix and learning rate, and see the price |
+| **Collect**: A run, with its video, verdict and label | **Train**: Pick the dataset, steps, data mix and learning rate, and see the price |
 | ![Collect: a run](docs/assets/screens/05-collect-run.png) | ![Train: training form](docs/assets/screens/07-train-model.png) |
 
 ## Highlights
