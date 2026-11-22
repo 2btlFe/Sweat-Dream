@@ -1,6 +1,8 @@
 # Sweet Dream · Usage
 
 How to use the app, page by page. For what the project is, see the [README](../README.md).
+Sweet Dream adds what Dream YAM Sim leaves out of fine-tuning data: **varied scenes**, **success labels** and
+**recovery**. The pages follow that loop: **Collect** → **Train** → **Test**.
 Prefer to watch? The [demo video](https://2btlfe.github.io/Sweet-Dream/#demo) (90 s, narrated) shows the same steps.
 
 **Contents:** [Start](#1-start) · [Collect](#2-collect-custom-dataset) · [Train](#3-train-custom-model) ·
@@ -32,7 +34,8 @@ sign in again after a restart. **← Sweet Dream · Sections** (top left) goes b
 
 ## 2. Collect Custom Dataset
 
-Run the robot in the simulator, check which runs succeeded, and save the good ones as a dataset.
+*Seeded scenes · labels · format check.* Run the robot in varied scenes, see which runs succeeded, and save the good
+ones as a dataset that passes Dream Labs' format check.
 
 The page has the **Camera feeds** on the left and the setup on the right, in four steps. The arrows **← / →** move
 between the steps; the camera feeds show the start scene as you change the settings.
@@ -127,7 +130,7 @@ Open **Runs** under the setup.
 1. Press **+** on the runs you want, or **+ Add successes** to pick every success the filter shows.
 2. Press **Save dataset…**, give it a **Name** and choose a folder (**Open**, **Up**; the default is `datasets/`).
 3. Keep **Also save in the Dream Labs format (LeRobot v2.1)** ticked: the runs are also written in the format Dream
-   Labs trains on (`dream_format/`) and checked on your computer.
+   Labs trains on (`dream_format/`), and the format check (Dream Labs' own validator) runs on your computer.
 
 **−** takes a run back out, **Clear** empties the pick, and **Delete picked** deletes the picked runs.
 
@@ -162,7 +165,7 @@ picked**. The page asks first, and a run that is going is never deleted.
 
 ## 3. Train Custom Model
 
-Fine-tune Dream-1 on a dataset you saved, without leaving the app. It uses the key you signed in with. The page has
+*Upload · fine-tune.* Fine-tune Dream-1 on a dataset you saved, without leaving the app. It uses the key you signed in with. The page has
 three steps; the arrows **← / →** move between them.
 
 <img src="assets/screens/06-train.png" width="49%" alt="Train page: Upload Dataset"> <img src="assets/screens/07-train-model.png" width="49%" alt="Train page: Configure Training">
@@ -183,10 +186,10 @@ has a dataset with the same name, the row says so: rename it before uploading.
 
 ## 4. Test Custom Model
 
-Run a model by itself, with no recovery script and no human control, to see how good it really is. The page has the
-same four steps as Collect.
+*Same scenes, model only.* Run a model by itself, with no recovery script and no human control, to see how good it
+really is. The page has the same four steps as Collect.
 
-![Test page](assets/screens/08-test.png)
+<img src="assets/screens/08-test.png" width="49%" alt="Test page"> <img src="assets/screens/09-test-runs.png" width="49%" alt="Test page: a recorded evaluation">
 
 1. In the **Model** bar (Step 1), pick your fine-tune. (The first run of a new model may wait a few minutes while it
    starts.)

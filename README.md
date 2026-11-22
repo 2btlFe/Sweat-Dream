@@ -4,7 +4,7 @@
 
 <h1 align="center">Sweet Dream</h1>
 <p align="center"><b>Diverse Data for Custom Dream-1 Fine-Tuning</b></p>
-<p align="center">Collect diverse robot data in simulation, fine-tune a custom Dream-1 on it, and test the result.</p>
+<p align="center">Better data, better Dream: labeled, varied training data for fine-tuning Dream-1.</p>
 <p align="center">
   <a href="https://2btlfe.github.io/Sweet-Dream/#demo"><img src="docs/assets/buttons/demo-video.svg" height="40" alt="Demo video"></a>
   <a href="https://2btlfe.github.io/Sweet-Dream/"><img src="docs/assets/buttons/project-page.svg" height="40" alt="Project page"></a>
@@ -17,9 +17,18 @@
 **Every failure becomes training data.**
 
 [Dream-1](https://dreamlabs.ai) from Dream Labs is a robot foundation model you can prompt with a task and fine-tune
-on your own episodes. A fine-tune is only as good as its data: the episodes must succeed, vary, and come in the right
-format. **Sweet Dream** is a local web app that runs the whole loop, from collecting data with Dream-1 to testing your
-own fine-tuned model, on the YAM two-arm robot in a MuJoCo scene.
+on your own episodes. How well a fine-tune works depends on how its data was collected: good fine-tuning data is
+**varied** and **correctly labeled**. Dream YAM Sim, Dream Labs' local simulator, records runs, but it leaves three
+things out:
+
+| In Dream YAM Sim today | What Sweet Dream adds |
+| --- | --- |
+| **No variety**: the same scene after every reset | **Varied scenes**: one seed changes the layout, room, light and camera, and the same seed gives the same scenes again |
+| **No labels**: nothing marks success or failure | **Success labels**: success rules per task judge every run, and your own label wins |
+| **No recovery**: a stuck run runs out the clock and is wasted | **Recovery**: a rule-based script, or you, finishes the stuck run, so it can still be collected |
+
+**Sweet Dream** is a local web app that runs the whole loop, from collecting data with Dream-1 to testing your own
+fine-tuned model, on the YAM two-arm robot. No extra environment to build: it is one app on your computer.
 
 <table>
 <tr>
@@ -27,22 +36,24 @@ own fine-tuned model, on the YAM two-arm robot in a MuJoCo scene.
 
 ### 1. Collect
 
-**Collect Custom Dataset!** · `/collect`
+**Collect Custom Dataset!** · `/collect`<br>
+*Seeded scenes · labels · format check*
 
 <img src="docs/assets/screens/03-collect.png" width="100%" alt="Collect page">
 
 - **At scale.** One batch seed varies the lighting, layout, camera angle and room for every episode.
 - **Failure recovery.** A failed run is finished by a rule-based script, or by you dragging the trajectory from just
   before the failure.
-- **Labeled and saved.** Success rules label every run; relabel by hand and save the runs as a Dream Labs dataset
-  (LeRobot v2.1).
+- **Labeled and checked.** Success rules label every run; relabel by hand and save the runs as a Dream Labs dataset
+  (LeRobot v2.1) that passes Dream Labs' format check.
 
 </td>
 <td width="33%" valign="top">
 
 ### 2. Train
 
-**Train Custom Model!** · `/train`
+**Train Custom Model!** · `/train`<br>
+*Upload · fine-tune*
 
 <img src="docs/assets/screens/06-train.png" width="100%" alt="Train page">
 
@@ -55,12 +66,14 @@ own fine-tuned model, on the YAM two-arm robot in a MuJoCo scene.
 
 ### 3. Test
 
-**Test Custom Model!** · `/test`
+**Test Custom Model!** · `/test`<br>
+*Same scenes, model only*
 
 <img src="docs/assets/screens/08-test.png" width="100%" alt="Test page">
 
-- **Your eval set.** Run your fine-tuned model on your own test set of seeded scenes.
-- **Compare.** Run Dream-1 in the same scenes and compare the two.
+- **Same scenes.** A test set fixes the starts, the task, the judge and the time limit.
+- **Model only.** No recovery script and no human control, so the result is the model's own.
+- **Compare.** Run Dream-1 on the same test set and compare the success rates.
 
 </td>
 </tr>
@@ -73,21 +86,21 @@ own fine-tuned model, on the YAM two-arm robot in a MuJoCo scene.
 | ![Start: sign in](docs/assets/screens/01-start.png) | ![Collect: a batch](docs/assets/screens/04-collect-batch.png) |
 | **Collect**: A run, with its video, verdict and settings | **Train**: Pick the dataset, steps, data mix and learning rate, and see the price |
 | ![Collect: a run](docs/assets/screens/05-collect-run.png) | ![Train: training form](docs/assets/screens/07-train-model.png) |
-| **Sections**: Choose a workflow | **3. Test**: Review a recorded evaluation |
+| **Sections**: Choose a workflow | **Test**: Review a recorded evaluation |
 | ![Sections](docs/assets/screens/02-sections.png) | ![Test run list and recording](docs/assets/screens/09-test-runs.png) |
 
 ## Highlights
 
-- **Seeded, varied scenes.** One batch seed gives every episode its own object layout; *Vary per episode* also draws
+- **Varied scenes.** One batch seed gives every episode its own object layout; *Vary per episode* also draws
   the workspace camera (a few cm and degrees), the light (0.8x to 1.2x) and the room. The same seed gives the same
   episodes again.
-- **Failures turned into data.** The failure monitor spots a stall, a drop, a missed grasp or an object pushed away,
+- **Recovery.** The failure monitor spots a stall, a drop, a missed grasp or an object pushed away,
   and the rule-based script finishes the task (grasp, transport, set down), including a hand-over between the arms
   when only one reaches the object and only the other the target.
 - **Rule-based only.** The script can also do whole episodes on its own, with no Dream-1 calls and no credits.
-- **Honest labels.** Success rules per task type (pick & place, move to an area, lift, push, goal scenes), hand labels
+- **Success labels.** Success rules per task type (pick & place, move to an area, lift, push, goal scenes), hand labels
   that win over the rules, and a record of how every run was set up.
-- **Ready to train.** Saved datasets pass Dream Labs' own checks (`dream.datasets.validate_dataset`) and upload from
+- **Format check.** Saved datasets pass Dream Labs' own checks (`dream.datasets.validate_dataset`) and upload from
   the Train page.
 
 ## Quick start
@@ -101,6 +114,15 @@ python3 -m venv ~/dream-env
 Open http://localhost:8000, sign in with your Dream API key (create one at
 [platform.dreamlabs.ai/api-keys](https://platform.dreamlabs.ai/api-keys)), and pick a section. The key stays in the
 server's memory only. Every page and option is described in the [usage guide](docs/USAGE.md).
+
+## Limitations and next steps
+
+| Limitations | Next steps |
+| --- | --- |
+| **Limited robots.** Mostly YAM; scene variation and recovery work on YAM only. | **More robots and tasks**, beyond YAM and pick and place. |
+| **Limited tasks.** 4 objects and 2 targets; failure detection and recovery cover pick and place only. | **Prove the effect** further: fine-tuned vs base Dream-1 on more tasks and test sets. |
+| **Simulation only.** No results on a real robot yet. | **Real robots**: check that the gains in simulation carry over. |
+| **Closed, paid model.** Dream-1 cannot be changed, and training costs $0.20 per step. | |
 
 ## Repository
 
