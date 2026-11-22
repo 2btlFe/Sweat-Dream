@@ -36,6 +36,8 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--seconds", type=float, default=60)
     parser.add_argument("--budget-minutes", type=float, default=60)
+    parser.add_argument("--model", default="dreamlabs/dream-1-beta",
+                        help="the checkpoint Dream-1 runs: dreamlabs/dream-1-beta, or a fine-tune (dream-1-ft:...)")
     args = parser.parse_args()
     if args.repeats < 1 or args.seconds <= 0 or args.budget_minutes <= 0:
         parser.error("Use positive repeats, seconds, and budget-minutes")
@@ -58,8 +60,8 @@ def main():
         try:
             proc = subprocess.run(
                 [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(args.seconds),
-                 "--seed", str(seed)], cwd=HERE, env={**os.environ, "RUN_DIR": str(folder)},
-                capture_output=True, text=True, timeout=args.seconds + 180)
+                 "--seed", str(seed), "--model", args.model], cwd=HERE, env={**os.environ, "RUN_DIR": str(folder)},
+                capture_output=True, text=True, timeout=args.seconds + 780)  # + a fine-tune's start-up wait
         except subprocess.TimeoutExpired:
             counts["invalid"] += 1
             print("Run timed out; stopping the batch.")

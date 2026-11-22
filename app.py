@@ -47,7 +47,7 @@ import simulator_settings as sim_settings  # the seed (scene.py): seed field, ra
 HERE = Path(__file__).resolve().parent
 PAGE = HERE / "static" / "index.html"  # the Collect Custom Dataset! page (/collect)
 # The pages: / signs in with the API key, /sections picks a section, /collect is the simulator and datasets page.
-PAGES = {"/": "start.html", "/sections": "sections.html", "/collect": "index.html", "/index.html": "index.html"}
+PAGES = {"/": "start.html", "/sections": "sections.html", "/collect": "index.html", "/test": "test.html", "/index.html": "index.html"}
 RUNS = HERE / "runs"
 RULES = RUNS / "rules.json"
 SETTINGS = RUNS / "simulator_settings.json"  # the robot and room picked on the page (simulator_settings.py)
@@ -208,6 +208,75 @@ def has_api_key():
     return key_status()["source"] is not None
 
 
+## The model Dream-1 runs as, chosen in the page's model bar: the public beta, or one of the account's fine-tunes.
+## Kept in this process's memory (like the key) and handed to each run and batch episode as DREAM_MODEL; a new key or
+## Sign out goes back to the beta, since a fine-tune belongs to one account.
+BETA_MODEL = "dreamlabs/dream-1-beta"
+MODEL = {"value": BETA_MODEL}
+WARMING_SLACK_S = 600  # extra time a batch episode on a fine-tune may take while the model starts (sim.py waits)
+
+
+WARMING_RE = re.compile(r"The model (\S+) is starting; asking again in (\d+) s \(waited (\d+) s")
+
+
+def model_warming(lines):
+    """Whether a run is waiting for its model to start, from sim.py's output (see sim.wait_for_model).
+    @param lines The run's output lines, oldest first.
+    @return {"model", "waited_s", "next_s"} while it waits, else None (not waiting, or the model answered)."""
+    state = None
+    for line in lines:
+        match = WARMING_RE.search(line)
+        if match:
+            state = {"model": match.group(1), "next_s": int(match.group(2)),
+                     "waited_s": int(match.group(3)) + int(match.group(2))}
+        elif state and (" is ready (it took " in line or line.startswith("Stopped") or line.startswith("Saved to")):
+            state = None
+    return state
+
+
+def log_tail(path, size=20000):
+    """The last lines of a batch episode's log file (it can be long)."""
+    try:
+        with open(path, "rb") as file:
+            file.seek(0, os.SEEK_END)
+            file.seek(max(0, file.tell() - size))
+            return file.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return []
+
+
+def list_models():
+    """The models the signed-in key may run (free: nothing runs, nothing is billed).
+    @return [{"id", "owner" ("public" or "mine"), "servable", "base_model", "created_at"}], the public ones first.
+    @throws RuntimeError When there is no key, or Dream Labs could not be asked."""
+    import dream
+    from dream import models
+
+    if not PAGE_KEY["value"]:
+        raise RuntimeError("Sign in with your API key first (the start page).")
+    try:
+        found = models.list_models(api_key=PAGE_KEY["value"])
+    except dream.DreamAuthError:
+        raise RuntimeError("Dream Labs refused this key. Sign in again with a key from platform.dreamlabs.ai/api-keys.")
+    except Exception as error:  # noqa: BLE001  the service could not be reached, or answered something else
+        raise RuntimeError(f"Could not list the models ({type(error).__name__}: {error}).") from error
+    return [{"id": m.id, "owner": m.owner, "servable": bool(m.servable), "base_model": m.base_model,
+             "created_at": str(m.created_at) if m.created_at else None} for m in found]
+
+
+def model_problem(model_id):
+    """Why a model cannot be chosen (None when it can): it must be one the key may run, and ready to run."""
+    if not model_id or any(c.isspace() for c in model_id):
+        return "A model is one model id with no spaces, such as dream-1-ft:<account>-<suffix>."
+    known = {m["id"]: m for m in list_models()}
+    if model_id not in known:
+        return (f"{model_id} is not a model this key may run. A fine-tune runs only with the key of the account "
+                "that trained it; sign in with that key.")
+    if not known[model_id]["servable"]:
+        return f"{model_id} is not ready to run yet (its fine-tuning has not finished)."
+    return None
+
+
 class Runner:
     """One run at a time."""
 
@@ -253,6 +322,7 @@ class Runner:
                 env["LIVE_FRAME"] = str(LIVE)
             if PAGE_KEY["value"]:
                 env["DREAM_API_KEY"] = PAGE_KEY["value"]
+            env["DREAM_MODEL"] = MODEL["value"]
             command = [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(seconds), *robot]
             if changes:
                 command.extend(["--ood", json.dumps(changes)])
@@ -342,6 +412,8 @@ class Runner:
             "run_id": self.run_id,
             "log": list(self.log),
             "key": key_status(),
+            "model": MODEL["value"],
+            "model_warming": model_warming(list(self.log)) if running else None,
             "examples": EXAMPLES,
             "batch": BATCH.status(),
         }
@@ -443,7 +515,7 @@ def delete_runs(run_ids):
 
 
 SETTING_KEYS = ("mode", "robot", "room", "seed", "split", "setting", "scene_version", "layout", "ood", "ood_random",
-                "scene", "collection", "seconds", "batch_id", "resumed_from")
+                "scene", "collection", "seconds", "batch_id", "resumed_from", "model")
 
 
 def run_settings(meta):
@@ -678,7 +750,8 @@ class Batch:
         self.info = {"id": "b" + datetime.now().strftime("%Y%m%d-%H%M%S"), "tasks": tasks, "total": len(seeds),
                      "seconds": seconds, "seeds": seeds, "seed": seeds[0], "split": split, "ood": changes,
                      "ood_random": random_names, "rules": current_rules(), "robot": list(robot), "mode": mode,
-                     "workers": workers, "collection": collection, "original_of": original_of, "original": original or bool(original_of), "batch_seed": batch_seed, "vary_scene": bool(vary_scene), "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
+                     "workers": workers, "collection": collection, "original_of": original_of, "original": original or bool(original_of), "batch_seed": batch_seed, "vary_scene": bool(vary_scene),
+                     "model": MODEL["value"], "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
                      "started": time.time(), "ended": None, "current": None, "active": [], "stopped_reason": None,
                      "durations": [], "invalid_in_a_row": 0}
         self.thread = threading.Thread(target=self._supervise, daemon=True)
@@ -724,6 +797,7 @@ class Batch:
                **({"ORIGINAL_OF": info["original_of"]} if info.get("original_of") else {})}
         if PAGE_KEY["value"]:
             env["DREAM_API_KEY"] = PAGE_KEY["value"]
+        env["DREAM_MODEL"] = info["model"]  # the model when the batch started, whatever the page picks meanwhile
         robot = list(info["robot"])
         if info.get("vary_scene") and seed is not None and "--room" in robot:  # this episode's room, from its seed
             robot[robot.index("--room") + 1] = seed_web.episode_room(seed)
@@ -764,11 +838,13 @@ class Batch:
             with self.lock:
                 self.active[run_id] = (i, process, stop_file)
                 self._show_active(prompt_of={run_id: (prompt, seed)})
+            # A fine-tune may first wait for its model to start (not counted in the run's own seconds).
+            limit = info["seconds"] + 180 + (WARMING_SLACK_S if info["model"] != BETA_MODEL else 0)
             while process.poll() is None:  # a run that hangs is stopped, then killed
                 waited = time.time() - started
-                if waited > info["seconds"] + 180:
+                if waited > limit:
                     stop_file.touch()
-                if waited > info["seconds"] + 240:
+                if waited > limit + 60:
                     process.kill()
                 time.sleep(0.5)
             d = run_dir(run_id)
@@ -820,6 +896,9 @@ class Batch:
         durations = self.info["durations"]
         remaining = info["total"] - info["done"]
         info["running"] = self.running()
+        waiting = [w for w in (model_warming(log_tail(WORK / f"{run_id}.log")) for run_id in self.active_ids()) if w]
+        info["model_warming"] = ({**max(waiting, key=lambda w: w["waited_s"]), "episodes": len(waiting)}
+                                 if waiting and info["running"] else None)
         info["elapsed_s"] = round((info["ended"] or time.time()) - info["started"])
         info["eta_s"] = (round(sum(durations) / len(durations) * remaining / info["workers"])
                          if durations and self.running() else None)
@@ -991,6 +1070,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send((live_frame(run) if run else LIVE).read_bytes(), "image/jpeg")
             except OSError:
                 return self.send_json({"error": "no frame yet"}, 404)
+        if path == "/api/models":  # the models the key may run, and the one chosen
+            try:
+                return self.send_json({"models": list_models(), "model": MODEL["value"]})
+            except RuntimeError as error:
+                return self.send_json({"error": str(error), "model": MODEL["value"]}, 400)
         if path == "/api/rules":
             return self.send_json(current_rules())
         if path == "/api/simulator-settings":
@@ -1194,8 +1278,20 @@ class Handler(BaseHTTPRequestHandler):
                 problem = key_refused(key)
             if problem:  # the key in use (if any) stays as it was
                 return self.send_json({"error": problem}, 400)
+            if key != PAGE_KEY["value"]:
+                MODEL["value"] = BETA_MODEL  # a fine-tune belongs to one account: a new key starts from the beta
             PAGE_KEY["value"] = key or None
             return self.send_json(key_status())
+        if self.path == "/api/model":  # {"model": "<id>"}: the model runs and new batches use
+            model_id = str(body.get("model") or "").strip()
+            try:
+                problem = model_problem(model_id)
+            except RuntimeError as error:
+                return self.send_json({"error": str(error)}, 400)
+            if problem:
+                return self.send_json({"error": problem}, 400)
+            MODEL["value"] = model_id
+            return self.send_json({"model": model_id})
         if self.path == "/api/batch" and body.get("original_of"):
             # The baseline of a finished batch: its task, judge and time limit, with the seed and the environment fixed
             # (the default scene and settings every episode) and Dream-1 with the recovery script (data collection).

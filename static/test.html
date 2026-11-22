@@ -1,0 +1,2570 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sweet Dream · Test Custom Model</title>
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+  /* Dream Labs' palette (dreamlabs.ai, as in theme.css): white page, ink text, creamsicle pill buttons, washes. */
+  :root {
+    color-scheme: light;
+    --bg: #ffffff; --panel: #fafafa; --well: #ffffff;
+    --line: rgba(28, 28, 28, 0.16); --text: #1c1c1c; --muted: #6b6767;
+    --accent: #ff9f4d; --accent-text: #1c1c1c; --accent-soft: #fff4ea; --accent-ink: #9c4f24;
+    --btn: #ffb87b; --btn-hover: #ffb06c; --ink: #1c1c1c; --ink-hover: #383636;
+    --danger: #c9474a; --warn-bg: #fdf3c4; --warn: #7a5c00;
+    --ok: #1f7a46; --ok-bg: #eefbf1; --bad: #c9474a; --bad-bg: #fff4f4; --touch: #3b86d1;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  /* Test page: no dataset picking (the + / − column) */
+  #runsTable th[aria-label="In the dataset"], #runsTable td:has(> .pick) { display: none; }
+  .test-how { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
+  .test-how b { color: var(--text); }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 Figtree, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  main { max-width: 1440px; margin: 0 auto; padding: 36px clamp(16px, 4vw, 56px) 48px; }
+  header { margin-bottom: 24px; }
+  header .topline { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  header .back { display: inline-block; font-size: 13px; color: var(--muted); text-decoration: none; }
+  header .account { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+  header .back:hover { color: var(--accent-ink); }
+  .modelbar { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin: 0 0 20px; padding: 12px 16px;
+              background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 14px; }
+  .modelbar label { margin: 0; font-weight: 600; }
+  .modelbar select { width: auto; flex: 0 1 420px; }
+  .modelbar .model-note { flex: 1 1 260px; font-size: 13px; color: var(--muted); }
+  .modelbar.ft { background: var(--ok-bg); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
+  .modelbar.ft .model-note b { color: var(--ok); }
+  h1 { font-size: clamp(32px, 4.5vw, 48px); line-height: 1.05; letter-spacing: -.023em; font-weight: 400; margin: 0; }
+  h2 { font-size: 18px; letter-spacing: -.01em; font-weight: 500; margin: 0 0 16px; }
+  .sub { color: var(--muted); margin: 8px 0 0; }
+  .workspace { display: grid; grid-template-columns: minmax(410px, 1fr) minmax(0, 1.1fr); gap: 16px 20px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .panel { min-width: 0; background: var(--panel); border: 1px solid rgba(28, 28, 28, 0.08); border-radius: 16px; padding: 20px; }
+  .row { display: grid; grid-template-columns: minmax(0, 1fr) 72px; gap: 10px; }
+  .hrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .grid3 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr); gap: 10px; align-items: start; }
+  label, .label { display: block; font-size: 12px; font-weight: 550; color: var(--muted); margin-bottom: 5px; }
+  input, select { width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--well); color: var(--text); font: inherit; }
+  input[type="number"] { font-variant-numeric: tabular-nums; }
+  input[type="checkbox"], input[type="radio"] { width: auto; flex: none; accent-color: var(--accent); }
+  button, summary, input, select { outline-offset: 3px; }
+  :focus-visible { outline: 2px solid var(--accent); }
+  button { padding: 8px 16px; border: 1px solid var(--btn); border-radius: 999px; font: inherit; font-weight: 500; cursor: pointer; background: var(--btn); color: var(--ink); transition: background .15s, border-color .15s; }
+  button:hover:not(:disabled) { background: var(--btn-hover); border-color: var(--btn-hover); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.stop { background: #fc9ea0; border-color: #fc9ea0; color: var(--ink); }
+  button.stop:hover:not(:disabled) { background: #fb8a8d; border-color: #fb8a8d; }
+  button.ghost { background: transparent; color: var(--text); border-color: var(--line); font-weight: 500; }
+  button.ghost:hover:not(:disabled) { background: #eeeeee; border-color: var(--line); }
+  /* goal scene popup */
+  .goal-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; font-size: 13px; }
+  .goal-row .goal-note { color: var(--muted); flex: 1 1 200px; }
+  .goal-row .goal-note b { color: var(--accent-ink); }
+  .task-card { margin: 14px 0 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--well); }
+  .task-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .task-card-head label { margin: 0; }
+  .task-prompt { font-weight: 600; margin: 6px 0 2px; word-break: break-word; }
+  .task-dialog-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(260px, 1fr); gap: 16px; padding: 8px 18px 0; }
+  @media (max-width: 820px) { .task-dialog-grid { grid-template-columns: 1fr; } }
+  .task-side h4 { margin: 0 0 6px; font-size: 14px; }
+  .task-side section { margin-bottom: 14px; }
+  .task-side .examples { margin-top: 6px; }
+  .range-row { display: grid; grid-template-columns: 92px 1fr 54px; gap: 8px; align-items: center; font-size: 13px; margin: 6px 0; }
+  .range-row input[type=range] { width: 100%; padding: 0; }
+  dialog#goalDialog { width: min(1180px, 97vw); max-width: 96vw; padding: 0; border: 1px solid var(--line); border-radius: 14px;
+    background: var(--panel); color: var(--text); }
+  dialog#goalDialog::backdrop { background: rgba(0, 0, 0, .6); }
+  .goal-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 16px 18px 6px; }
+  .goal-head h3 { margin: 0; font-size: 18px; }
+  .goal-body { padding: 8px 18px 0; }
+  .goal-stage { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 10px; overflow: hidden; }
+  .goal-stage img, .goal-stage svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .goal-stage svg { touch-action: none; }
+  .goal-stage .busy { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .55);
+    color: #fff; font: 700 20px system-ui, sans-serif; letter-spacing: .01em; text-shadow: 0 2px 6px #000; }
+  .goal-stage .busy[hidden] { display: none; }
+  .goal-stage .busy span { padding: 10px 18px; border-radius: 12px; background: rgba(0, 0, 0, .7); border: 1px solid rgba(255, 255, 255, .25); }
+  .goal-marker { cursor: grab; }
+  .goal-marker:active { cursor: grabbing; }
+  .goal-marker text { font: 600 13px system-ui, sans-serif; fill: #fff; paint-order: stroke; stroke: #000; stroke-width: 3px; }
+  .goal-list { display: grid; gap: 6px; font-size: 13px; color: var(--muted); margin: 10px 0 0; min-height: 1.4em; }
+  .goal-list .goal-rel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .goal-list select { width: auto; padding: 4px 8px; font-size: 13px; }
+  .goal-foot { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 14px 18px 16px; }
+  button.small { padding: 4px 9px; font-size: 12px; }
+  button.danger { color: var(--bad); border-color: var(--bad-bg); }
+  button.danger:hover:not(:disabled) { background: var(--bad-bg); filter: none; }
+  .actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; align-items: center; }
+  .actions button { min-width: 90px; }
+  .examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .examples button, #oodReset { background: transparent; color: var(--muted); border-color: var(--line); font-weight: 500; padding: 4px 9px; font-size: 11px; }
+  .fold > summary, .ood summary { cursor: pointer; font-size: 15px; font-weight: 650; }
+  .fold > summary::marker, .ood summary::marker { color: var(--accent-ink); }
+  .fold[open] > summary { margin-bottom: 14px; }
+  .ood-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 14px 0 10px; }
+  .ood fieldset { min-width: 0; margin: 0; padding: 9px 11px 11px; background: var(--well); border: 1px solid var(--line); border-radius: 10px; }
+  .ood legend { padding: 0 5px; font-weight: 650; font-size: 12px; }
+  .ood-field + .ood-field { margin-top: 9px; }
+  .ood-slider { display: grid; grid-template-columns: minmax(0, 1fr) 4.4rem; gap: 8px; align-items: center; }
+  .ood-slider input[type="range"] { background: transparent; border: 0; margin: 0; padding: 0; accent-color: var(--accent); cursor: pointer; }
+  .ood-slider input[type="number"], .ood select { padding: 5px 7px; font-size: 12px; }
+  .monitor-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .monitor-header h2 { margin: 0; }
+  .status { display: inline-flex; align-items: center; gap: 7px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 20px; font-size: 11px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .dot.on { background: var(--accent); }
+  .status[data-state="error"] { color: var(--danger); }
+  .status[data-state="error"] .dot { background: var(--danger); }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  #statusMore { margin: 10px 0 0; font-size: 12px; }
+  #statusMore:empty { display: none; }
+  .view { width: 100%; aspect-ratio: 720 / 270; border-radius: 10px; display: block; }
+  img.view { background: #1c1c1c; object-fit: contain; }
+  .placeholder { border: 1px dashed var(--line); background: var(--well); display: grid; place-items: center; color: var(--muted); text-align: center; padding: 12px; }
+  .legend { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--muted); margin-top: 9px; }
+  pre { margin: 12px 0 0; padding: 10px; border-radius: 8px; background: var(--well); max-height: 160px; overflow: auto; font-size: 12px; color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+  details.log summary { font-size: 11px; color: var(--muted); cursor: pointer; margin-top: 10px; }
+
+  /* API key, mode and task notes */
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  /* error banner: every error the page shows, in one place */
+  .errbar { border: 1px solid var(--danger); background: color-mix(in srgb, var(--danger) 10%, var(--panel)); border-radius: 10px;
+            padding: 10px 14px; margin: 0 0 16px; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; }
+  .errbar[hidden] { display: none; }
+  .errbar strong { color: var(--danger); font-size: 14px; }
+  .errbar .hint { font-size: 13px; grid-column: 1; }
+  .errbar .acts { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; }
+  .errbar .acts:empty { display: none; }
+  .errbar details { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+  .errbar pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 0; }
+  .errbar .close { grid-column: 2; grid-row: 1; align-self: start; }
+  fieldset.bad { border-color: var(--danger) !important; }
+  /* in-page confirm / notice (window.confirm and alert do nothing in some embedded browsers) */
+  dialog.ask { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); padding: 18px 20px; max-width: 440px; }
+  dialog.ask::backdrop { background: #0008; }
+  dialog.ask p { margin: 0 0 14px; font-size: 14px; line-height: 1.5; white-space: pre-line; }
+  dialog.ask .acts { display: flex; justify-content: flex-end; gap: 8px; }
+  .setup-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .robot-note { font-size: 12px; color: var(--muted); margin: -6px 0 14px; min-height: 0; }
+  .robot-note:empty { display: none; }
+  .robot-note.bad { color: var(--warn); }
+  .robot-note a { color: var(--accent-ink); }
+  .yam-only.off { opacity: .45; pointer-events: none; }
+  .toggle { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .toggle button { border-radius: 0; border: 0; background: var(--well); color: var(--muted); font-weight: 500; padding: 7px 6px; line-height: 1.25; min-width: 0; overflow-wrap: anywhere; }
+  .toggle button:hover:not(:disabled):not(.on) { background: #f4f1ec; border: 0; }
+  .toggle button.on { background: var(--ink); border-color: var(--ink); color: #ffffff; font-weight: 600; }
+  .toggle button.on:hover:not(:disabled) { background: var(--ink-hover); border-color: var(--ink-hover); }
+  .mode { max-width: 320px; margin-bottom: 4px; }
+  .toggle.types { grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); margin-bottom: 10px; }
+  .toggle.types button { padding: 6px 4px; font-size: 12px; }
+  .task-note { font-size: 12px; margin-top: 6px; color: var(--muted); }
+  .task-note.bad, .scene-note.bad, .batch-end.bad { color: var(--bad); }
+
+  /* chips (objects, batch tasks) */
+  .items { display: flex; flex-wrap: wrap; gap: 6px; }
+  .item { display: inline-block; max-width: 100%; padding: 4px 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--well); color: var(--text); font-weight: 500; font-size: 12px; line-height: 1.4; text-align: left; overflow-wrap: anywhere; }
+  .item i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: -1px; }
+  .item.on { background: var(--accent-soft); border-color: var(--accent); }
+  .item.off { opacity: .45; text-decoration: line-through; }
+  .item .judge { color: var(--muted); font-weight: 400; }
+  .item .remove { margin-left: 2px; padding: 0 4px; border-radius: 4px; color: var(--muted); font-weight: 700; }
+  .item .remove:hover { background: var(--bad-bg); color: var(--bad); }
+  .pairs-edit { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; font-size: 12px; }
+  .pair { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--well); }
+  .pair select { width: auto; padding: 3px 6px; font-size: 12px; }
+  .pair .remove { cursor: pointer; padding: 0 5px; border-radius: 4px; color: var(--muted); font-weight: 700; }
+  .pair .remove:hover { background: var(--bad-bg); color: var(--bad); }
+
+  /* run modes, human control and recordings (KSY) */
+  .modes { display: grid; gap: 6px; margin-top: 12px; }
+  .modes label { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--well); color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer; }
+  .modes label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+  .modes input { margin-top: 3px; }
+  .modes span.muted { display: block; font-weight: 400; font-size: 12px; }
+  .help { padding: 10px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); margin-top: 12px; font-weight: 600; font-size: 13px; }
+  .help.ok { background: var(--ok-bg); color: var(--ok); }
+  .control-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-weight: 650; font-size: 12px; border: 1px solid var(--line); }
+  .badge.human { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .badge.returning, .badge.paused { background: var(--warn-bg); color: var(--warn); }
+  .badge.script { background: var(--ok-bg); color: var(--ok); border-color: var(--ok); }
+  .control-buttons { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 6px; }
+  .control-buttons button { padding: 6px 11px; font-size: 12px; }
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 12px; margin: 8px 0 0; }
+  .keys dd { margin: 0; color: var(--muted); }
+  kbd.down { background: var(--accent); color: var(--accent-text); }
+  img.view.control { cursor: crosshair; }
+  .pill { display: inline-block; padding: 0 8px; border-radius: 999px; font-size: 11px; border: 1px solid var(--line); }
+  .pill.failure { color: var(--bad); border-color: var(--bad); }
+  .pill.success { color: var(--ok); border-color: var(--ok); }
+  .eps-wrap { max-height: 280px; overflow: auto; }
+  tr.chosen td { background: var(--accent-soft); }
+  .resume { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 14px; }
+  .resume img { width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #1c1c1c; border-radius: 8px; }
+  .resume input[type=range] { padding: 0; border: 0; background: transparent; accent-color: var(--accent); }
+
+  .collect-box { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--well); }
+  .collect-box summary { cursor: pointer; font-size: 13px; font-weight: 650; }
+  .collect-box .grid2 { margin: 10px 0 6px; }
+  .collect-box .check { margin: 6px 0 0; align-items: flex-start; }
+  .collect-box .check input { margin-top: 3px; }
+  .inline-num { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .inline-num input { width: 64px; padding: 5px 7px; }
+
+  /* custom layout */
+  .check { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--text); margin: 0 0 12px; }
+  .check code { font-size: 12px; }
+  #layoutBody { display: flex; flex-direction: column; gap: 12px; }
+  #layoutBody.off { opacity: .5; }
+  .robot { border: 1px solid var(--line); border-radius: 8px; padding: 7px 11px; background: var(--well); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .robot strong { font-size: 13px; }
+  .robot span { font-size: 11px; color: var(--muted); }
+  svg.map { width: 100%; max-width: 520px; height: auto; display: block; border-radius: 10px; touch-action: none; user-select: none; }
+  svg.map text { font-size: 22px; font-weight: 600; fill: #3b3326; pointer-events: none; }
+  svg.map [data-item] { cursor: grab; }
+  .scene-note { font-size: 12px; color: var(--muted); }
+
+  /* batch progress (in the monitor) */
+  .batch-box { display: flex; flex-direction: column; gap: 12px; padding: 18px; border: 1px dashed var(--line); border-radius: 10px; background: var(--well); overflow-wrap: anywhere; }
+  .batch-box .title { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 15px; }
+  .bar { height: 10px; background: var(--line); border-radius: 999px; overflow: hidden; }
+  .bar div { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  .counts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 13px; }
+  video.view { background: #1c1c1c; object-fit: contain; }
+  .cam-tabs { display: inline-flex; gap: 4px; }
+  .cam-tabs button { padding: 2px 8px; font-size: 11px; background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; }
+  .cam-tabs button.on { color: var(--accent-ink); border-color: var(--accent); }
+  .batch-live { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+  .batch-live:empty { display: none; }
+  .batch-live figure { margin: 0; }
+  .batch-live img { width: 100%; aspect-ratio: 16 / 6; object-fit: contain; background: #1c1c1c; border-radius: 8px; display: block; }
+  .batch-live figcaption { font-size: 11px; color: var(--muted); margin-top: 3px; overflow-wrap: anywhere; }
+
+  /* success rules */
+  .banners { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .banner { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--well); display: flex; flex-direction: column; gap: 8px; }
+  .banner .head { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 13px; }
+  .banner .num { width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: var(--accent-text); display: grid; place-items: center; font-size: 11px; flex: none; }
+  .banner .value { font-size: 22px; font-weight: 600; color: var(--accent-ink); line-height: 1.1; }
+  .banner .value small { font-size: 13px; font-weight: 500; color: var(--muted); }
+  .banner p { margin: 0; font-size: 12px; color: var(--muted); }
+  .banner input[type=range] { padding: 0; border: 0; background: transparent; accent-color: var(--accent); }
+  .scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: -6px; }
+  .hint { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
+  .saved-note { font-size: 12px; color: var(--muted); margin-top: 8px; min-height: 18px; }
+
+  /* runs */
+  .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-weight: 700; font-size: 11px; white-space: nowrap; }
+  .chip.success { background: var(--ok-bg); color: var(--ok); }
+  .chip.failure { background: var(--bad-bg); color: var(--bad); }
+  .chip.invalid { background: var(--warn-bg); color: var(--warn); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+  th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: break-word; }
+  th { color: var(--muted); font-weight: 550; font-size: 12px; }
+  th:nth-child(1) { width: 17%; } th:nth-child(3) { width: 16%; } th:nth-child(5) { width: 14%; }
+  #runsTable th:nth-child(1) { width: 34px; } #runsTable th:nth-child(2) { width: 16%; }
+  #runsTable th:nth-child(3) { width: auto; } #runsTable th:nth-child(4) { width: 15%; }
+  #runsTable th:nth-child(5) { width: auto; } #runsTable th:nth-child(6) { width: 12%; }
+  /* The run list fits its panel's width (not the window's): fewer columns when the panel is narrow. */
+  #runsPanel { container-type: inline-size; }
+  @container (max-width: 560px) {
+    .hide-md { display: none; }
+    #runsTable th:nth-child(2) { width: 21%; } #runsTable th:nth-child(4) { width: 21%; }
+  }
+  @container (max-width: 400px) {
+    .hide-sm { display: none; }
+    #runsTable th:nth-child(2) { width: 27%; } #runsTable th:nth-child(4) { width: 27%; }
+  }
+  .pick { width: 26px; height: 26px; padding: 0; border-radius: 6px; font-weight: 700; font-size: 15px; line-height: 1;
+          background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  .pick.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  tr.picked td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  .run-settings { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .dataset-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--well); }
+  .dataset-bar input { width: 150px; padding: 5px 8px; font-size: 12px; }
+  .dataset-note { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .dataset-note.ok { color: var(--ok); }
+  label.check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--text); cursor: pointer; margin: 0; }
+  label.check input { width: auto; margin: 0; }
+  dialog.save { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--text); }
+  dialog.save::backdrop { background: rgba(0, 0, 0, .55); }
+  dialog.save h2 { margin: 0 0 4px; }
+  dialog.save .field { margin-top: 12px; }
+  .places { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .folders { list-style: none; margin: 8px 0 0; padding: 4px; height: 200px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--well); }
+  .folders li button { display: block; width: 100%; text-align: left; padding: 5px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font-weight: 400; font-size: 13px; overflow-wrap: anywhere; }
+  .folders li button:hover, .folders li button:focus-visible { background: var(--accent-soft); }
+  .folders li.empty { padding: 8px; color: var(--muted); font-size: 12px; }
+  .save-target { margin-top: 10px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .save-target code { color: var(--text); }
+  .save-error { margin-top: 8px; font-size: 12px; color: var(--bad); }
+  .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  dl.settings { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 12px; font-size: 12px; margin: 6px 0 0; }
+  dl.settings dt { color: var(--muted); }
+  dl.settings dd { margin: 0; overflow-wrap: anywhere; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover, tbody tr.sel { background: var(--accent-soft); }
+  .detail { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 14px; }
+  .checks { list-style: none; padding: 0; margin: 8px 0 0; font-size: 13px; }
+  .checks li { padding: 2px 0; }
+  .checks .y { color: var(--ok); font-weight: 700; }
+  .checks .n { color: var(--bad); font-weight: 700; }
+  .hand { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--well); }
+  .hand-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
+  .hand-buttons button { background: var(--panel); color: var(--text); border-color: var(--line); font-weight: 550; padding: 6px 11px; }
+  .hand-buttons button.on[data-hand="success"] { background: var(--ok-bg); color: var(--ok); border-color: var(--ok); }
+  .hand-buttons button.on[data-hand="failure"] { background: var(--bad-bg); color: var(--bad); border-color: var(--bad); }
+  .hand-buttons button.on[data-hand="invalid"] { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
+  kbd { font: 11px ui-monospace, monospace; padding: 0 4px; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); margin-left: 4px; }
+  .by-hand { font-size: 11px; color: var(--accent-ink); margin-left: 4px; }
+  svg.chart { width: 100%; height: auto; display: block; margin-top: 6px; }
+  .examples button { max-width: 100%; text-align: left; overflow-wrap: anywhere; }
+  .monitor-header .status { max-width: 100%; }
+  .warming { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 12px; padding: 10px 12px; border-radius: 10px;
+             background: var(--warn-bg); color: var(--warn); font-size: 13px; }
+  .view-wrap { position: relative; }
+  .warming-overlay { position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; justify-items: center; gap: 12px;
+                     border-radius: 10px; background: color-mix(in srgb, var(--bg) 96%, transparent); text-align: center; color: var(--text); }
+  .warming-overlay .ring { width: 64px; height: 64px; border-radius: 50%; border: 6px solid color-mix(in srgb, var(--accent) 30%, var(--bg));
+                           border-top-color: var(--accent-ink); animation: warming-spin .9s linear infinite; }
+  .warming-overlay strong { font-size: 15px; font-weight: 600; }
+  .warming-overlay span { font-size: 13px; color: var(--muted); }
+  @keyframes warming-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .warming-overlay .ring { animation-duration: 2.4s; } }
+  .batch-box .title strong { min-width: 0; overflow-wrap: anywhere; }
+  svg.chart text { fill: var(--muted); font-size: 11px; }
+  .chart-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .sw { display: inline-block; width: 12px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+
+  @media (max-width: 900px) {
+    .workspace { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 560px) {
+    main { padding-top: 24px; }
+    .panel { padding: 14px; }
+    .ood-grid { grid-template-columns: minmax(0, 1fr); }
+    .grid3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .grid3 > :last-child { grid-column: 1 / -1; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="topline">
+      <a class="back" href="/sections">← Sweet Dream · Sections</a>
+      <div class="account"><span>Signed in · key <b id="keyHint">…</b></span><button type="button" class="ghost small" id="signOut">Sign out</button></div>
+    </div>
+    <h1>Test Custom Model!</h1>
+    <p class="sub">Pick your fine-tuned model in the Model bar, run it once or in a batch, and compare its success rate with Dream-1.</p>
+  </header>
+  <section class="modelbar" id="modelBar" aria-label="Model">
+    <label for="model">Model</label>
+    <select id="model" aria-describedby="modelNote"><option>dreamlabs/dream-1-beta</option></select>
+    <button type="button" class="ghost small" id="modelReload" title="List the models this key may run again (after a fine-tuning job finishes)">↻</button>
+    <span class="model-note" id="modelNote">Loading the models this key may run…</span>
+  </section>
+  <dialog class="ask" id="askDialog" aria-labelledby="askText">
+    <p id="askText"></p>
+    <div class="acts"><button class="ghost" id="askNo">Cancel</button><button id="askYes">OK</button></div>
+  </dialog>
+  <div class="errbar" id="errBar" role="alert" hidden>
+    <strong id="errTitle"></strong>
+    <button class="ghost small close" id="errClose" aria-label="Dismiss the error">✕</button>
+    <div class="hint" id="errHint"></div>
+    <div class="acts" id="errActs"></div>
+    <details id="errMore"><summary>Details</summary><pre id="errRaw"></pre></details>
+  </div>
+
+  <div class="workspace">
+  <div class="col">
+  <section class="panel setup" aria-labelledby="setupTitle">
+    <div class="setup-head"><h2 id="setupTitle">Run setup</h2>
+      <button class="ghost small" id="defaults" title="Back to the default start: YAM tabletop, every scene setting at its default, nothing random, no custom layout (the seed is kept)">Default</button></div>
+    <div class="grid2">
+      <div><label for="robot">Robot</label><select id="robot" aria-describedby="robotNote"></select></div>
+      <div><label for="room">Room</label><select id="room"></select></div>
+    </div>
+    <div class="robot-note" id="robotNote"></div>
+
+    <div class="task-card">
+      <div class="task-card-head"><label>Task</label><button id="setTask" class="small">Set task…</button></div>
+      <div class="task-prompt" id="taskPrompt"></div>
+      <div class="muted small" id="taskJudged"></div>
+    </div>
+
+    <div class="toggle mode" role="group" aria-label="Mode">
+      <button id="modeSingle" class="on" aria-pressed="true">Single run</button>
+      <button id="modeBatch" aria-pressed="false">Batch</button>
+    </div>
+    <div id="seedBox"></div>
+
+    <div id="singleForm">
+      <div style="margin-top: 12px; max-width: 160px">
+        <label for="seconds">Limit (s)</label><input id="seconds" type="number" min="10" max="900" value="60" title="Up to 300 s, or 900 s in test and human-only runs">
+      </div>
+      <input type="radio" name="runMode" value="plain" checked hidden>
+      <p class="test-how"><b>Model only</b>: the model in the Model bar does the task alone, with no recovery script and no human control, so the result is the model's own.</p>
+      <div id="singleCollectSlot"></div>
+      <input type="checkbox" id="record" checked hidden>
+      <div class="actions">
+        <button id="run">Run</button>
+        <button id="reset" class="ghost" hidden title="Start the same run again from the beginning">Reset</button>
+        <button id="stop" class="stop" hidden>Stop</button>
+      </div>
+    </div>
+
+    <details class="collect-box" id="collectBox" hidden>
+      <summary id="collectTitle">Data collection settings · faster successes</summary>
+      <div class="inline-num" id="stallRow" style="margin-top: 10px">Hand over to the script after
+        <input id="stallS" type="number" min="2" max="30" step="1" value="6" aria-label="Seconds without progress"> s without progress</div>
+      <label class="check" id="quickRow"><input type="checkbox" id="quickFail" checked><span>Also hand over at once on a <b>missed grasp</b> (gripper closed next to the object, not lifted after 2 s) or an object <b>pushed away</b> (slid 6 cm away from the target)</span></label>
+      <div class="grid2">
+        <div id="goalRow"><label>The script</label>
+          <div class="toggle" role="group" aria-label="The script's goal">
+            <button id="goalFinish" class="on" aria-pressed="true" title="Pick the object up, put it in the target, let go">Finishes the task</button>
+            <button id="goalCarry" aria-pressed="false" title="Pick the object up and give the arms back to Dream-1">Picks it up, back to Dream-1</button>
+          </div>
+        </div>
+        <div><label for="scriptSpeed">Script speed</label>
+          <select id="scriptSpeed"><option value="1">Dream-1's pace</option><option value="1.5">1.5×</option><option value="2">2×</option><option value="3">3×</option></select>
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" id="endOnSuccess" checked><span>End the run as soon as the task is done (placed, released, at rest)</span></label>
+    </details>
+
+    <div id="batchForm" hidden>
+      <div class="grid3" style="margin-top: 12px">
+        <div><label for="batchCount">Episodes</label><input id="batchCount" type="number" min="1" max="500" value="20"></div>
+        <div><label for="batchSeconds">Seconds each</label><input id="batchSeconds" type="number" min="10" max="300" value="60"></div>
+        <div><label>Seeds</label>
+          <div class="toggle" role="group" aria-label="Seeds">
+            <button id="splitTrain" class="on" aria-pressed="true" title="One seed is the whole batch: it gives every episode its own layout, and the same seed gives the same episodes again">From the seed</button>
+            <button id="splitEval" aria-pressed="false" title="The 50 fixed evaluation seeds">Eval set (50)</button>
+          </div>
+        </div>
+      </div>
+      <div class="grid2" style="margin: 12px 0 0; grid-template-columns: minmax(0, 2fr) minmax(90px, 1fr)">
+        <div><label>Each episode</label>
+          <p class="test-how" style="margin: 0"><b>Model only</b>: the model in the Model bar, with no recovery script.</p>
+          <button id="batchPlain" class="on" aria-pressed="true" hidden>Model only</button>
+        </div>
+        <div><label for="batchWorkers">At once</label><input id="batchWorkers" type="number" min="1" max="4" value="2" title="Episodes run at the same time (1 to 4)"></div>
+      </div>
+      <div id="varyRow" style="margin-top: 12px"><label>Scene per episode</label>
+        <div class="toggle" role="group" aria-label="Scene per episode">
+          <button id="varyOff" class="on" aria-pressed="true" title="Every episode uses the scene settings below and the room picked above">Same settings</button>
+          <button id="varyOn" aria-pressed="false" title="Each episode draws, from its own seed and close to the defaults: the workspace camera's position (±3 cm), angle (±8°, roll ±5°) and field of view (±8°), the light (0.8× to 1.2×), and the room (YAM tabletop or Evening den)">Vary per episode</button>
+        </div>
+        <p class="muted small" id="varyNote" style="margin: 4px 0 0" hidden>Each episode draws, from its own seed and close to the defaults: the camera's position, angle and field of view, the light, and the room (YAM tabletop or Evening den). The same batch seed gives the same scenes again.</p>
+      </div>
+      <div id="batchCollectSlot"></div>
+      <p class="muted small" style="margin: 8px 0 12px" id="batchHow">The seed is the whole batch: it gives each episode its own layout (the same episodes again with the same seed; other seeds share none). The scene settings below apply to every episode; the ones marked <em>random</em> are drawn from each episode's seed. Runs in the background.</p>
+      <p class="muted small" style="margin: 8px 0 12px" id="batchHowOriginal" hidden>Original: the seed and the environment are fixed: every episode starts from the simulator's default scene (the same object layout) with default scene settings; the seed and the scene settings below are not used. Dream-1 runs with the failure monitor and the recovery script, as in Data collection (its settings above).</p>
+      <p class="small" style="margin: 0 0 4px">Every episode runs <b>the task above</b> (<span id="batchTaskName"></span>).</p>
+      <div id="batchTaskList" hidden>
+      <label>Tasks <span class="muted">(taken in turn)</span></label>
+      <div class="items" id="batchTasks"></div>
+      <div class="hrow" style="margin-top: 10px">
+        <div style="flex: 1 1 240px"><input id="customPrompt" maxlength="300" placeholder="Your own prompt, e.g. put the apple in the bowl and the banana on the plate" aria-label="Your own prompt"></div>
+        <button class="ghost" id="addTask">Add</button>
+      </div>
+      <div class="pairs-edit">
+        <span class="muted">judge as</span>
+        <select id="draftType" aria-label="Task type" style="width: auto">
+          <option value="pick_place">Pick &amp; place</option><option value="move_to_area">Move to area</option>
+          <option value="lift">Lift</option><option value="push">Push</option>
+        </select>
+        <span id="pairRows" class="pairs-edit" style="margin: 0"></span>
+        <button class="ghost small" id="addPair" title="Judge one more object">+ object</button>
+      </div>
+      </div>
+      <div class="actions" style="justify-content: space-between">
+        <span class="muted small" id="batchEstimate"></span>
+        <span class="hrow"><button id="startBatch">Start batch</button><button id="stopBatch" class="stop" hidden>Stop batch</button></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel ood-panel yam-only" aria-label="Camera, robot &amp; environment settings">
+    <details class="ood" open>
+      <summary>Camera, robot &amp; environment settings</summary>
+      <form id="ood" class="ood-grid" aria-label="Camera, robot &amp; environment settings"></form>
+      <button id="oodReset" type="reset" form="ood" hidden>Reset scene settings</button>
+      <p id="oodError" class="muted" role="status" hidden></p>
+    </details>
+  </section>
+
+  <section class="panel">
+    <details class="fold yam-only" id="layoutPanel">
+      <summary>Custom layout</summary>
+      <label class="check"><input type="checkbox" id="customOn"> Use my own layout instead of the seed's (single runs)</label>
+      <p class="muted small" style="margin: -6px 0 12px">Pick what is on the table and drag it. Settings marked <em>random</em> need the seed's layout, so they are not drawn with a custom layout. Batches always start from seeds.</p>
+      <div id="layoutBody" class="off">
+        <div class="robot"><strong>Robot: YAM · 2 arms</strong><span>The only robot in this simulator</span></div>
+        <div><label>Objects</label><div class="items" id="objectToggles"></div></div>
+        <div><label>Targets</label><div class="items" id="targetToggles"></div></div>
+        <svg class="map" id="map" viewBox="0 0 720 540" role="img" aria-label="Top view of the table. Drag objects to move them."></svg>
+        <div class="hrow" style="justify-content: space-between">
+          <div class="scene-note" id="sceneNote"></div>
+          <div class="hrow"><button id="shuffle" class="ghost small">Shuffle</button><button id="resetScene" class="ghost small">Reset</button></div>
+        </div>
+      </div>
+    </details>
+  </section>
+  </div>
+
+  <div class="col">
+  <section class="panel monitor" aria-labelledby="viewTitle">
+    <div class="monitor-header">
+      <h2 id="viewTitle">Camera feeds</h2>
+      <div class="status" id="statusBadge" role="status"><span class="dot" id="dot"></span><strong id="statusText">Ready</strong></div>
+    </div>
+    <div class="warming" id="warmingNote" role="status" hidden><span id="warmingText"></span></div>
+    <div class="view-wrap">
+    <div class="warming-overlay" id="warmingOverlay" hidden><div class="ring" aria-hidden="true"></div>
+      <strong>Starting the model…</strong><span id="warmingWait"></span></div>
+    <img id="live" class="view" alt="Live camera view" hidden>
+    <div id="placeholder" class="view placeholder">Preparing the initial camera view…</div>
+    <div id="batchBox" class="batch-box" hidden>
+      <div class="title"><strong id="batchTitle"></strong><span class="muted" id="batchTime"></span></div>
+      <div class="bar"><div id="batchBar"></div></div>
+      <div class="counts" id="batchCounts"></div>
+      <div class="muted small" id="batchNow"></div>
+      <div class="batch-live" id="batchLive" aria-label="Camera view of each episode going now"></div>
+      <div class="batch-end small" id="batchEnd"></div>
+      <div><button class="ghost small" id="batchShow">Show these runs</button></div>
+    </div>
+    </div>
+    <div class="legend"><span>Workspace camera</span><span>Wrist cameras</span></div>
+    <div id="controlBox" hidden>
+      <div class="help" id="help" hidden></div>
+      <div class="control-head"><strong>Control</strong><span class="badge" id="controlMode">Dream-1</span><span class="muted small" id="teleopInfo"></span></div>
+      <div class="small" style="color: var(--warn); min-height: 1.2em" id="reach"></div>
+      <div class="muted small" id="message"></div>
+      <div class="muted small" id="stage"></div>
+      <div class="control-buttons" id="controlButtons">
+        <button id="takeBtn">Take over (T)</button>
+        <button class="ghost" data-press="lower">Lower</button>
+        <button class="ghost" data-press="grip">Grip (Space)</button>
+        <button class="ghost" data-press="lift">Lift</button>
+        <button class="ghost" data-press="tab">Switch arm (Tab)</button>
+        <button class="ghost" data-press="home">Home (H)</button>
+        <button class="ghost" data-press="g" id="graspBtn">Grasp: from above (G)</button>
+      </div>
+      <details class="log"><summary>Mouse and keys</summary>
+        <p class="muted small" style="margin: 6px 0 0"><b>Click an object</b> in a camera to move a hand above it (a wrist camera moves its own arm) · <b>drag</b> in the top camera to move the hand along the table · <b>wheel</b> for up / down.</p>
+        <dl class="keys">
+          <dt><kbd data-k="w">W</kbd><kbd data-k="s">S</kbd></dt><dd>hand away from / toward the top camera</dd>
+          <dt><kbd data-k="a">A</kbd><kbd data-k="d">D</kbd></dt><dd>hand left / right in the picture</dd>
+          <dt><kbd data-k="r">R</kbd><kbd data-k="f">F</kbd></dt><dd>hand up / down</dd>
+          <dt><kbd data-k="q">Q</kbd><kbd data-k="e">E</kbd></dt><dd>turn the hand</dd>
+          <dt><kbd data-k="z">Z</kbd><kbd data-k="x">X</kbd></dt><dd>tilt the hand</dd>
+          <dt><kbd>G</kbd></dt><dd>grasp from above ↔ tilted (from the side)</dd>
+          <dt><kbd>Space</kbd></dt><dd>open / close the gripper</dd>
+          <dt><kbd>Tab</kbd></dt><dd>switch arm</dd>
+          <dt><kbd>V</kbd></dt><dd>point the hand straight down</dd>
+          <dt><kbd>H</kbd></dt><dd>arm back to its start pose</dd>
+          <dt><kbd>T</kbd></dt><dd>take the arms from Dream-1 / give them back</dd>
+        </dl>
+      </details>
+    </div>
+    <p class="muted" id="previewStatus" role="status" hidden></p>
+    <p class="muted" id="statusMore"></p>
+    <details class="log" id="logBox" hidden><summary>Log</summary><pre id="log"></pre></details>
+  </section>
+
+  <section class="panel">
+    <details class="fold" id="rulesPanel">
+      <summary>Advanced · success rules for tasks without a goal scene</summary>
+      <p class="muted small" style="margin: 0 0 10px">A task with a goal scene is judged by the range set in <b>Set task</b>. These rules judge tasks by their words alone (lift, push, areas), the team's batch task lists, and past runs.</p>
+      <div class="toggle types" id="ruleTypes" role="group" aria-label="Task type"></div>
+      <p class="hint" id="ruleHint"></p>
+      <div class="banners" id="banners"></div>
+      <div class="saved-note" id="rulesNote"></div>
+    </details>
+  </section>
+
+  <section class="panel">
+    <details class="fold" id="runsPanel" open>
+      <summary>Runs</summary>
+      <div class="hrow" style="justify-content: space-between">
+        <select id="runFilter" aria-label="Which runs" style="width: auto; max-width: 100%"></select>
+        <span class="hrow"><button id="saveLabels" class="ghost small">Save labels</button><button id="deleteShown" class="ghost small danger" title="Delete every run shown in the list, with its recording">Delete shown</button><button id="runOriginal" class="ghost small" hidden title="The baseline of this batch: the same task, judge and time limit, with the seed and the environment fixed (the simulator's default scene and settings every episode) and Dream-1 with the recovery script">Run as original</button></span>
+      </div>
+      <div class="muted small" id="runSummary" style="margin-top: 8px"></div>
+      <div class="dataset-bar" role="group" aria-label="Dataset" hidden>
+        <span class="small"><b id="pickedCount">0</b> picked for a dataset</span>
+        <button class="ghost small" id="pickSuccesses" title="Pick every success the list shows">+ Add successes</button>
+        <button class="ghost small" id="pickClear">Clear</button>
+        <button class="ghost small danger" id="deletePicked" title="Delete the picked runs, with their recordings">Delete picked</button>
+        <button class="small" id="saveDataset" style="margin-left: auto" title="Choose a folder on this computer and save the picked runs there">Save dataset…</button>
+      </div>
+      <div class="dataset-note" id="datasetNote" hidden></div>
+      <table id="runsTable" style="margin-top: 8px">
+        <thead><tr><th aria-label="In the dataset"></th><th>When</th><th>Task</th><th>Result</th><th class="hide-sm">Why</th><th class="hide-md">Label by</th></tr></thead>
+        <tbody id="runs"><tr><td colspan="6" class="muted">No runs yet.</td></tr></tbody>
+      </table>
+      <div id="detail" class="detail" hidden>
+        <div>
+          <video id="detailVideo" class="view" controls muted playsinline preload="metadata" hidden></video>
+          <img id="detailImage" class="view" alt="Last frame">
+          <div class="legend"><span id="detailMedia">Last frame</span>
+            <span class="cam-tabs" id="detailCams" hidden role="group" aria-label="Recording camera">
+              <button data-cam="top" class="on">Top</button><button data-cam="left">Left wrist</button><button data-cam="right">Right wrist</button><button data-cam="last">Last frame</button>
+            </span></div>
+        </div>
+        <div>
+          <div id="detailHead"></div>
+          <div class="hand">
+            <div class="label" style="margin: 0">Your label <span class="muted">(wins over the rules)</span></div>
+            <div class="hand-buttons" role="group" aria-label="Your label">
+              <button data-hand="success">✓ Success<kbd>1</kbd></button>
+              <button data-hand="failure">✗ Failure<kbd>2</kbd></button>
+              <button data-hand="invalid">Invalid<kbd>3</kbd></button>
+              <button data-hand="" class="ghost">Use the rules<kbd>0</kbd></button>
+            </div>
+            <input id="handNote" maxlength="300" placeholder="Note (optional), e.g. dropped it, then put it back">
+            <div class="muted small" id="handState" style="margin-top: 6px"></div>
+          </div>
+          <ul class="checks" id="detailChecks"></ul>
+          <div class="label" style="margin: 12px 0 0">How it was run</div>
+          <dl class="settings" id="detailSettings"></dl>
+        </div>
+        <div>
+          <svg class="chart" id="chart" viewBox="0 0 640 190" role="img" aria-label="Distance from each judged object to its target over time"></svg>
+          <div class="chart-legend" id="chartLegend"></div>
+        </div>
+        <div class="hrow" style="justify-content: flex-end">
+          <button id="deleteRun" class="ghost small danger" title="Delete this run's trajectory, labels and recording">Delete this run</button>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <section class="panel" hidden>
+    <details class="fold" id="recordingsPanel" open>
+      <summary>Recordings · resume a failure</summary>
+      <div class="hrow" style="justify-content: space-between">
+        <label class="check" style="margin: 0"><input type="checkbox" id="failuresOnly" checked> Failures only</label>
+        <button class="ghost small" id="reloadEps">Refresh</button>
+      </div>
+      <p class="muted small" style="margin: 8px 0">Pick a recorded run and a moment in it: the simulator restarts at exactly that state, with you in control. Recover it by hand (or press T to give it to Dream-1); the result is a new run that starts with the original's steps.</p>
+      <div class="eps-wrap"><table>
+        <thead><tr><th>Recorded</th><th>Task</th><th>Result</th><th class="hide-sm">Failures seen</th><th style="width: 76px"></th></tr></thead>
+        <tbody id="epsBody"></tbody></table></div>
+      <div class="muted small" id="epsEmpty" hidden>No recordings yet: runs in data collection, test or human mode are recorded when Record is ticked.</div>
+      <div class="resume" id="resumeBox" hidden>
+        <img id="resumeImg" alt="Top camera at the chosen step">
+        <div>
+          <div><strong id="resumeTitle"></strong></div>
+          <div class="muted small" id="resumeInfo" style="margin: 4px 0 10px"></div>
+          <label for="resumeStep">Start from step <b id="resumeStepText"></b></label>
+          <input type="range" id="resumeStep" min="0" value="0">
+          <div class="hrow" style="margin: 8px 0">
+            <button class="ghost small" id="toFailure">Failure point</button>
+            <button class="ghost small" id="back1s">− 1 s</button>
+            <button class="ghost small" id="fwd1s">+ 1 s</button>
+          </div>
+          <span class="hrow"><button id="resumeBtn">Resume here (you control)</button>
+            <button id="deleteRec" class="ghost small danger" title="Delete this recording and its run">Delete</button></span>
+        </div>
+      </div>
+    </details>
+  </section>
+  </div>
+  </div>
+</main>
+
+<dialog id="goalDialog" aria-labelledby="goalTitle">
+  <div class="goal-head">
+    <h3 id="goalTitle">Task</h3>
+    <span class="muted small">For single runs and batches alike.</span>
+  </div>
+  <div class="task-dialog-grid">
+    <div>
+      <h4 style="margin: 0 0 6px">Goal scene <span class="muted small" style="font-weight: 400">· drag objects to where they should end up (optional)</span></h4>
+      <div class="goal-stage">
+        <img id="goalImg" alt="The robot's top camera: the goal scene">
+        <svg id="goalSvg" viewBox="0 0 640 360" aria-label="Draggable objects and their allowed range"></svg>
+        <div class="busy" id="goalBusy" hidden><span id="goalBusyText">Rendering the scene…</span></div>
+      </div>
+      <div class="goal-list" id="goalList"></div>
+    </div>
+    <div class="task-side">
+      <section>
+        <h4>Language</h4>
+        <label for="task" class="muted small">What Dream-1 is told</label>
+        <input id="task" value="put apple into the bowl" maxlength="300">
+        <div class="task-note" id="taskNote"></div>
+        <div class="examples" id="examples" hidden></div>
+      </section>
+      <section>
+        <h4>Success</h4>
+        <p class="muted small" id="goalRuleNote" style="margin: 0 0 6px"></p>
+        <div class="range-row"><span>Distance</span><input type="range" id="goalTol" min="1" max="15" step="0.5"><b id="goalTolText"></b></div>
+        <div class="range-row"><span>Still time</span><input type="range" id="goalStill" min="0" max="5" step="0.5"><b id="goalStillText"></b></div>
+        <label class="check" style="margin: 6px 0 0"><input type="checkbox" id="goalRelease"> Must let go (released)</label>
+        <p class="muted small" style="margin: 6px 0 0">The shaded areas on the picture are where each moved object may end up.</p>
+      </section>
+    </div>
+  </div>
+  <div class="goal-foot">
+    <span class="hrow"><button id="goalReset" class="ghost small">Clear goal scene</button></span>
+    <span class="hrow">
+      <button id="goalCancel" class="ghost small">Cancel</button>
+      <button id="goalUse">Save task</button>
+    </span>
+  </div>
+</dialog>
+
+<dialog class="save" id="saveDialog" aria-labelledby="saveTitle">
+  <form method="dialog" id="saveForm">
+    <h2 id="saveTitle">Save dataset</h2>
+    <div class="muted small" id="saveSummary"></div>
+    <div class="field">
+      <label for="datasetName">Name</label>
+      <input id="datasetName" maxlength="40" placeholder="dataset" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="savePath">Save in (a folder on this computer)</label>
+      <div class="hrow" style="flex-wrap: nowrap">
+        <input id="savePath" spellcheck="false" autocomplete="off" placeholder="/Users/me/data">
+        <button type="button" class="ghost small" id="saveGo" title="Open the folder typed here">Open</button>
+        <button type="button" class="ghost small" id="saveUp" title="The folder above">Up</button>
+      </div>
+      <div class="places" id="savePlaces"></div>
+      <ul class="folders" id="saveFolders" aria-label="Folders"></ul>
+    </div>
+    <label class="check field" title="Also write the recordings as a LeRobot v2.1 dataset (dream_format/) for Dream Labs fine-tuning, checked with the Dream Labs checks"><input type="checkbox" id="dreamFormat" checked> Also save in the Dream Labs format (LeRobot v2.1)</label>
+    <div class="save-target" id="saveTarget"></div>
+    <div class="save-error" id="saveError" role="alert"></div>
+    <div class="dialog-actions">
+      <button type="button" class="ghost" id="saveCancel">Cancel</button>
+      <button type="submit" id="saveConfirm">Save here</button>
+    </div>
+  </form>
+</dialog>
+<script type="module">
+import { loadOOD, readOOD } from "/ood.js";
+import { initSeed, seeding, afterPreview, newSeed, advanceSeed, useSeed } from "/seed.js";
+
+const $ = id => document.getElementById(id);
+let rules = { distance_cm: 6.5, release: true, still_seconds: 1.0 };
+let runs = [], selected = null, liveTimer = null, wasRunning = false, lastRunId = null;
+// Open-ended tasks (HSY): Dream-1 runs them; they are not judged (no object -> target).
+const OPEN_EXAMPLES = ["Move an object to the center of the workspace", "Move an object to the left side of the workspace"];
+
+async function api(path, body) {
+  const options = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  const res = await fetch(path, options);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const chip = label => `<span class="chip ${label}">${label.toUpperCase()}</span>`;
+// Always English, 24-hour (e.g. "Nov 21, 17:21"), whatever the browser's language.
+const when = iso => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }); };
+const fmt = (x, n = 1) => Number(x).toFixed(n);
+const words = text => String(text ?? "").replace(/_/g, " ");  // reason codes read (and wrap) as words
+
+/* ---------- rules (one set per task type) ---------- */
+
+// How each task type's rules are shown (the ranges are judge.py's RULES; the sliders use a handy part of them).
+const TYPE_UI = {
+  pick_place: { label: "Pick & place", hint: "Put an object into the bowl or on the plate. At the end, every judged object must be in its target, released if required, and still (under 0.05 m/s) for the time below.",
+    fields: [
+      { key: "distance_cm", label: "Distance", unit: "cm", min: 1, max: 15, step: 0.5, scale: ["strict", "loose"], help: "Object to bowl/plate center" },
+      { key: "release", label: "Release", on: "Must release", off: "Can hold", help: ["Gripper must let go", "Gripper may still hold it"] },
+      { key: "still_seconds", label: "Still time", unit: "s", min: 0, max: 5, step: 0.5, scale: ["0 s", "5 s"], help: "Final time in target, standing still" }] },
+  move_to_area: { label: "Move to area", hint: "Move an object (or any object) to the center, left, right, front or back of the workspace. It must have moved, end in the area resting on the table, released if required, and stay still.",
+    fields: [
+      { key: "zone_cm", label: "Area size", unit: "cm", min: 3, max: 25, step: 1, scale: ["small", "large"], help: "Center: radius. Sides: beyond this from the middle" },
+      { key: "release", label: "Release", on: "Must release", off: "Can hold", help: ["Gripper must let go", "Gripper may still hold it"] },
+      { key: "still_seconds", label: "Still time", unit: "s", min: 0, max: 5, step: 0.5, scale: ["0 s", "5 s"], help: "Final time in the area, standing still" }] },
+  lift: { label: "Lift", hint: "Lift an object (or any object). It must rise this high above where it started and stay up there for the time below, in one stretch.",
+    fields: [
+      { key: "height_cm", label: "Height", unit: "cm", min: 1, max: 20, step: 0.5, scale: ["low", "high"], help: "Above where it started" },
+      { key: "hold_seconds", label: "Hold time", unit: "s", min: 0, max: 5, step: 0.5, scale: ["0 s", "5 s"], help: "Up there without coming down" }] },
+  push: { label: "Push", hint: "Push an object (or any object) along the table. It must end this far from where it started, still on the table.",
+    fields: [
+      { key: "distance_cm", label: "Distance", unit: "cm", min: 1, max: 25, step: 0.5, scale: ["short", "far"], help: "From where it started, along the table" },
+      { key: "no_lift", label: "Lifting", on: "Not allowed", off: "Allowed", help: ["Lifting it 3 cm or more fails the run", "Carrying it there also counts"] }] },
+};
+let ruleType = "pick_place";
+let saveTimer = null;
+
+function showRules() {
+  $("ruleTypes").innerHTML = Object.entries(TYPE_UI).map(([kind, ui]) =>
+    `<button data-type="${kind}" class="${kind === ruleType ? "on" : ""}" aria-pressed="${kind === ruleType}">${ui.label}</button>`).join("");
+  document.querySelectorAll("[data-type]").forEach(b => b.onclick = () => { ruleType = b.dataset.type; showRules(); });
+  const ui = TYPE_UI[ruleType], values = rules[ruleType] || {};
+  $("ruleHint").textContent = ui.hint;
+  $("banners").innerHTML = ui.fields.map((f, i) => {
+    const v = values[f.key];
+    const head = `<div class="head"><span class="num">${i + 1}</span>${f.label}</div>`;
+    if (f.on) return `<div class="banner">${head}
+        <div class="toggle" role="group" aria-label="${f.label}">
+          <button data-flag="${f.key}" data-v="1" class="${v ? "on" : ""}" aria-pressed="${!!v}">${f.on}</button>
+          <button data-flag="${f.key}" data-v="0" class="${v ? "" : "on"}" aria-pressed="${!v}">${f.off}</button>
+        </div><p>${v ? f.help[0] : f.help[1]}</p></div>`;
+    return `<div class="banner">${head}
+        <div class="value"><span data-value="${f.key}">${fmt(v)}</span> <small>${f.unit}</small></div>
+        <input type="range" data-rule="${f.key}" min="${f.min}" max="${f.max}" step="${f.step}" value="${v}" aria-label="${f.label} (${f.unit})">
+        <div class="scale"><span>${f.scale[0]}</span><span>${f.scale[1]}</span></div><p>${f.help}</p></div>`;
+  }).join("");
+  document.querySelectorAll("[data-rule]").forEach(input => input.oninput = () => {
+    document.querySelector(`[data-value="${input.dataset.rule}"]`).textContent = fmt(input.value);
+    changeRules(ruleType, { [input.dataset.rule]: Number(input.value) });
+  });
+  document.querySelectorAll("[data-flag]").forEach(b => b.onclick = () => {
+    changeRules(ruleType, { [b.dataset.flag]: b.dataset.v === "1" });
+    showRules();
+  });
+}
+function changeRules(kind, patch) {
+  rules = { ...rules, [kind]: { ...rules[kind], ...patch } };
+  $("rulesNote").textContent = "";
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try { await api("/api/rules", rules); await loadRuns(); $("rulesNote").textContent = "Saved"; }
+    catch (err) { $("rulesNote").textContent = "Not saved: " + err.message; }
+  }, 400);
+}
+
+/* ---------- runs ---------- */
+
+let runFilter = "all";
+const detailCache = {};
+
+async function loadRuns() {
+  runs = (await api("/api/runs")).runs;
+  drawFilter();
+  renderRuns();
+}
+
+const batchName = id => {
+  const m = /^b(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/.exec(id || "");
+  const name = m ? `Batch ${when(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`)}` : `Batch ${id}`;
+  const of = originalOf(id);  // an "original" batch: the seed and environment fixed (default scene), with recovery
+  return of ? `${name} · original of ${batchName(of)}` : isOriginal(id) ? `${name} · original` : name;
+};
+const originalOf = id => (batchState?.id === id && batchState.original_of)
+  || runs.find(r => r.batch_id === id && r.original_of)?.original_of || null;
+const isOriginal = id => (batchState?.id === id && batchState.original) || runs.some(r => r.batch_id === id && (r.original || r.original_of));
+/** Success over valid runs of a batch, as "62% (5/8)". */
+function batchRate(id) {
+  const list = runs.filter(r => r.batch_id === id), ok = list.filter(r => finalLabel(r) === "success").length;
+  const valid = ok + list.filter(r => finalLabel(r) === "failure").length;
+  return valid ? `${Math.round(100 * ok / valid)}% (${ok}/${valid})` : "no valid runs";
+}
+// A person's label wins over the rules' verdict; the rules' verdict stays visible next to it.
+const handLabel = run => run.label?.source === "human" ? run.label : null;
+const finalLabel = run => handLabel(run)?.label || verdict(run).label;
+const disagrees = run => !!handLabel(run) && handLabel(run).label !== verdict(run).label;
+const shownRuns = () => runFilter === "all" ? runs
+  : runFilter === "single" ? runs.filter(r => !r.batch_id)
+  : runFilter === "hand" ? runs.filter(r => handLabel(r))
+  : runFilter === "disagree" ? runs.filter(disagrees)
+  : runs.filter(r => r.batch_id === runFilter);
+
+function drawFilter() {
+  const batches = [...new Set([...(batchState ? [batchState.id] : []), ...runs.map(r => r.batch_id).filter(Boolean)])];
+  if (!["all", "single", "hand", "disagree"].includes(runFilter) && !batches.includes(runFilter)) runFilter = "all";
+  const count = id => runs.filter(r => r.batch_id === id).length;
+  $("runFilter").innerHTML = [`<option value="all">All runs (${runs.length})</option>`,
+    `<option value="single">Single runs (${runs.filter(r => !r.batch_id).length})</option>`,
+    `<option value="hand">Labeled by hand (${runs.filter(r => handLabel(r)).length})</option>`,
+    `<option value="disagree">Hand ≠ rules (${runs.filter(disagrees).length})</option>`,
+    ...batches.map(id => `<option value="${esc(id)}">${esc(batchName(id))} (${count(id)})</option>`)].join("");
+  $("runFilter").value = runFilter;
+}
+$("runFilter").onchange = e => { runFilter = e.target.value; renderRuns(); };
+
+function verdict(run) { return run.verdict || { label: "invalid", reason: "No evaluation" }; }
+
+function renderRuns() {
+  const list = shownRuns();
+  const n = label => list.filter(r => finalLabel(r) === label).length;
+  const valid = n("success") + n("failure"), byHand = list.filter(r => handLabel(r)).length;
+  $("runSummary").textContent = list.length
+    ? `${list.length} runs · success ${n("success")}${valid ? ` (${Math.round(100 * n("success") / valid)}% of valid)` : ""} · failure ${n("failure")} · invalid ${n("invalid")}`
+      + (byHand ? ` · ${byHand} by hand (${list.filter(disagrees).length} differ from the rules)` : "")
+    : "";
+  $("deleteShown").disabled = !list.length;
+  // A batch picked in the filter: run its original (fixed default scene, with recovery); with its pair, compare them.
+  const isBatch = /^b\d{8}-\d{6}$/.test(runFilter);
+  $("runOriginal").hidden = true;  // the Test page: no Original baseline
+  if (isBatch) {
+    const of = originalOf(runFilter), pair = of || runs.find(r => r.original_of === runFilter)?.batch_id;
+    if (pair) {
+      const [method, original] = of ? [of, runFilter] : [runFilter, pair];
+      $("runSummary").textContent += ` · ours ${batchRate(method)} vs original (fixed default scene) ${batchRate(original)}`;
+    }
+  }
+  showPicked();
+  if (!list.length) { $("runs").innerHTML = '<tr><td colspan="6" class="muted">No runs yet.</td></tr>'; $("detail").hidden = true; return; }
+  $("runs").innerHTML = list.map(run => {
+    const v = verdict(run), hand = handLabel(run);
+    const why = hand ? `${hand.reason}${hand.label !== v.label ? ` (rules: ${v.label})` : ""}` : words(v.reason);
+    const by = hand ? "hand" : run.label ? "rules (saved)" : "rules";
+    const on = picked.has(run.id);
+    return `<tr data-id="${esc(run.id)}" class="${run.id === selected ? "sel" : ""} ${on ? "picked" : ""}">
+      <td><button class="pick ${on ? "on" : ""}" data-pick="${esc(run.id)}" aria-pressed="${on}" title="${on ? "Take out of the dataset" : "Add to the dataset"}">${on ? "−" : "+"}</button></td>
+      <td>${when(run.started_at)}</td>
+      <td>${esc(run.task)}<span class="run-settings">${esc(settingsBrief(run))}</span></td>
+      <td>${chip(finalLabel(run))}${hand ? '<span class="by-hand" title="Labeled by hand">✋</span>' : ""}</td>
+      <td class="hide-sm">${esc(why)}</td>
+      <td class="hide-md"><span class="muted">${by}</span></td>
+    </tr>`;
+  }).join("");
+  for (const tr of $("runs").querySelectorAll("tr")) tr.onclick = () => { selected = tr.dataset.id; renderRuns(); };
+  for (const b of $("runs").querySelectorAll("[data-pick]")) b.onclick = e => {
+    e.stopPropagation();
+    togglePick(b.dataset.pick);
+  };
+  renderDetail();
+}
+
+/** A recorded run plays its camera video (top / left / right wrist); otherwise, or on "Last frame", its last frame. */
+let detailCam = "top";
+function showDetailMedia(run) {
+  const video = $("detailVideo"), img = $("detailImage"), recorded = !!run.episode;
+  const useVideo = recorded && detailCam !== "last";
+  $("detailCams").hidden = !recorded;
+  document.querySelectorAll("#detailCams [data-cam]").forEach(b => b.classList.toggle("on", b.dataset.cam === (recorded ? detailCam : "last")));
+  $("detailMedia").textContent = useVideo ? "Recording" : "Last frame";
+  const src = useVideo ? `/api/episodes/${run.episode}/${detailCam}.mp4` : "";
+  if (video.dataset.src !== src) { video.dataset.src = src; if (src) video.src = src; else video.removeAttribute("src"); video.load(); }
+  const last = `/api/runs/${run.id}/last.jpg`;
+  if (img.dataset.src !== last) { img.dataset.src = last; img.src = last; }
+  video.hidden = !useVideo;
+  img.hidden = useVideo;
+}
+document.querySelectorAll("#detailCams [data-cam]").forEach(b => b.onclick = () => { detailCam = b.dataset.cam; renderDetail(); });
+
+async function renderDetail() {
+  const run = shownRuns().find(r => r.id === selected);
+  $("detail").hidden = !run;
+  if (!run) return;
+  const v = verdict(run);
+  showDetailMedia(run);
+  const extra = [run.batch_id ? batchName(run.batch_id) : "Single run",
+                 run.layout === "custom" ? "custom layout" : run.seed != null ? `seed ${run.seed}${run.split === "eval" ? " (eval)" : ""}${run.batch_seed != null ? ` (batch seed ${run.batch_seed})` : ""}` : run.layout === "default" ? "default scene" : "",
+                 run.robot && run.robot !== "yam" ? (simCatalog?.robots[run.robot] || run.robot) : "",
+                 run.room && run.room !== "yam_tabletop" ? (simCatalog?.rooms[run.room] || run.room) : "",
+                 run.ood_random?.length ? `random: ${run.ood_random.join(", ")}` : "",
+                 (run.judge || v.spec) ? `${TYPE_UI[(run.judge || v.spec).type || "pick_place"]?.label || ""}: ${specText(run.judge || v.spec)}` : "not judged"].filter(Boolean).join(" · ");
+  const hand = handLabel(run);
+  $("detailHead").innerHTML = `${chip(finalLabel(run))}${hand ? '<span class="by-hand">✋ by hand</span>' : ""} <strong>${esc(run.task)}</strong><div class="muted" style="font-size:13px">${when(run.started_at)} · ${fmt(run.sim_seconds || 0)} s · ${esc(extra)}</div>`
+    + (run.seed != null && run.layout !== "custom" ? `<button class="ghost small" id="sameStart" title="Put seed ${run.seed} and its random settings back on the page (the settings not marked random are the page's)">Same start (seed ${run.seed})</button>` : "");
+  if ($("sameStart")) $("sameStart").onclick = () => {
+    if (customOn()) { $("customOn").checked = false; $("layoutBody").classList.add("off"); drawScene(); }
+    if (mode !== "single") setMode("single");
+    useSeed(run.seed, run.ood_random || []);
+    $("task").value = run.task; checkTask();
+    schedulePreview();
+  };
+  for (const b of document.querySelectorAll("[data-hand]")) b.classList.toggle("on", !!hand && b.dataset.hand === hand.label);
+  $("detailSettings").innerHTML = settingsRows(run, v).map(([k, val]) => `<dt>${esc(k)}</dt><dd>${esc(val)}</dd>`).join("");
+  if ($("handNote").dataset.run !== run.id) { $("handNote").value = hand && hand.reason !== "set by hand" ? hand.reason : ""; $("handNote").dataset.run = run.id; }
+  $("handState").innerHTML = `Rules say ${chip(v.label)} ${esc(words(v.reason))}`
+    + (hand ? ` · you set ${chip(hand.label)} ${when(hand.saved_at)}` : " · not labeled by hand")
+    + ` · <kbd>J</kbd>/<kbd>K</kbd> next / previous run`;
+  $("detailChecks").innerHTML = (v.checks?.length ? v.checks : [{ ok: false, text: v.reason }])
+    .map(c => `<li><span class="${c.ok ? "y" : c.ok === false ? "n" : "muted"}">${c.ok ? "✓" : c.ok === false ? "✗" : "–"}</span> ${esc(c.text)}</li>`).join("");
+  // The per-step series (for the chart) is fetched for the selected run only.
+  const key = run.id + JSON.stringify(rules);
+  if (!detailCache[key]) detailCache[key] = await api(`/api/runs/${run.id}/verdict`).catch(() => v);
+  if (selected === run.id) drawChart(detailCache[key]);
+}
+
+function drawChart(v) {
+  const svg = $("chart");
+  if (!v.t?.length || !v.dist?.length) { svg.innerHTML = ""; return; }
+  // One line (and one grip strip) per judged object; a single object keeps the accent colour.
+  const series = v.series?.length ? v.series : [{ object: null, dist: v.dist, touch: v.touch }];
+  const many = series.length > 1;
+  const colour = s => many && ITEMS[s.object] ? ITEMS[s.object].color : "var(--accent)";
+  const W = Math.round(Math.min(640, Math.max(300, svg.clientWidth || 640))), L = 44, R = 8, TOP = 10;
+  const B = 40 + 11 * series.length, H = Math.round(W * 0.23) + 10 + B;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const tMax = Math.max(v.t[v.t.length - 1], 1);
+  const top = Math.max(...series.map(s => Math.max(...s.dist)));
+  const limit = v.chart?.limit ?? rules.pick_place?.distance_cm ?? 0;
+  const yMax = Math.min(80, Math.max(limit * 2, 10, Math.ceil(top / 10) * 10));
+  const x = s => L + (s / tMax) * (W - L - R);
+  const y = d => TOP + (1 - Math.min(d, yMax) / yMax) * (H - TOP - B);
+  let out = "";
+  if (v.success) out += `<rect x="${x(v.success.start)}" y="${TOP}" width="${Math.max(2, x(v.success.end) - x(v.success.start))}" height="${H - TOP - B}" fill="var(--ok)" opacity=".25"/>`;
+  for (const d of [0, yMax / 2, yMax]) out += `<line x1="${L}" x2="${W - R}" y1="${y(d)}" y2="${y(d)}" stroke="var(--line)"/><text x="${L - 4}" y="${y(d) + 4}" text-anchor="end">${fmt(d, 0)} cm</text>`;
+  out += `<line x1="${L}" x2="${W - R}" y1="${y(limit)}" y2="${y(limit)}" stroke="var(--muted)" stroke-dasharray="5 4"/>`;
+  if (v.chart?.y) out += `<text x="${L + 4}" y="${TOP + 10}">${esc(v.chart.y)}</text>`;
+  const step = Math.max(1, Math.floor(v.t.length / 600));
+  series.forEach((s, k) => {
+    let path = "";
+    for (let i = 0; i < v.t.length; i += step) path += `${path ? "L" : "M"}${x(v.t[i]).toFixed(1)},${y(s.dist[i]).toFixed(1)}`;
+    out += `<path d="${path}" fill="none" stroke="${colour(s)}" stroke-width="2"/>`;
+    // When a fingertip touches this object, under the chart.
+    const stripY = H - B + 14 + 11 * k;
+    let i = 0;
+    while (i < v.t.length) {
+      if (!s.touch[i]) { i++; continue; }
+      let j = i; while (j + 1 < v.t.length && s.touch[j + 1]) j++;
+      out += `<rect x="${x(v.t[i])}" y="${stripY}" width="${Math.max(1.5, x(v.t[j]) - x(v.t[i]))}" height="6" rx="2" fill="${many ? colour(s) : "var(--touch)"}"/>`;
+      i = j + 1;
+    }
+    out += `<text x="${L - 4}" y="${stripY + 6}" text-anchor="end">${many ? esc(ITEMS[s.object]?.label || s.object) : "grip"}</text>`;
+  });
+  const every = [1, 2, 5, 10, 20, 30, 60, 120].find(e => tMax / e <= (W - L) / 55) || 120;  // ticks that fit
+  for (let s = 0; s <= tMax; s += every) out += `<text x="${x(s)}" y="${H - 6}" text-anchor="middle">${s}s</text>`;
+  svg.innerHTML = out;
+  const sw = (c, text, extra = "") => `<span><span class="sw" style="background:${c};${extra}"></span>${text}</span>`;
+  $("chartLegend").innerHTML = (many
+    ? series.map(s => sw(colour(s), esc(ITEMS[s.object]?.label || s.object) + (["lift", "push"].includes(s.target) ? "" : ` → ${esc(s.target)}`))).join("") + `<span>strips: gripping</span>`
+    : sw("var(--accent)", "distance") + sw("var(--touch)", "gripping"))
+    + sw("var(--muted)", "limit") + sw("var(--ok)", "success", "opacity:.35");
+}
+
+/* ---------- each run's settings ---------- */
+
+const MODE_TEXT = { collect: "data collection", script: "rule-based only", test: "test", human: "human only", resumed: "resumed", plain: "Dream-1 only", assist: "Dream-1 + script + human" };
+const startText = run => run.layout === "custom" ? "custom layout" : run.layout === "sandbox" ? "Sandbox table"
+  : run.seed != null ? `seed ${run.seed}${run.split === "eval" ? " (eval)" : ""}` : "default scene";
+/** One line under the task in the list: mode · start · robot / room. */
+function settingsBrief(run) {
+  return [MODE_TEXT[run.mode] || run.mode, startText(run),
+          run.model && run.model !== "dreamlabs/dream-1-beta" ? run.model.replace(/^dreamlabs\//, "") : "",
+          run.robot && run.robot !== "yam" ? (simCatalog?.robots[run.robot] || run.robot) : "",
+          run.room && run.room !== "yam_tabletop" ? (simCatalog?.rooms[run.room] || run.room) : "",
+          run.ood_random?.length ? `random ×${run.ood_random.length}` : ""].filter(Boolean).join(" · ");
+}
+/** Every setting the run was made with (meta.json), for its detail. */
+function settingsRows(run, v) {
+  const rows = [["Mode", MODE_TEXT[run.mode] || run.mode || "—"],
+                ["Model", run.model || (run.mode === "script" ? "none (rule-based)" : "dreamlabs/dream-1-beta")],
+                ["Robot · room", `${simCatalog?.robots[run.robot] || run.robot || "YAM"} · ${simCatalog?.rooms[run.room] || run.room || "YAM tabletop"}`],
+                ["Start", run.layout === "custom" ? `custom layout: ${Object.keys(run.scene?.items || {}).map(itemName).join(", ")}`
+                  : `${startText(run)}${run.setting ? `, setting ${run.setting}` : ""}${run.scene_version ? `, scene v${run.scene_version}` : ""}`]];
+  const changed = Object.entries(run.ood || {}).filter(([k]) => k !== "camera_views");
+  if (run.ood?.camera_views) changed.push(["camera", Object.keys(run.ood.camera_views).join(", ")]);
+  rows.push(["Scene settings", changed.length ? changed.map(([k, val]) => `${k} ${typeof val === "object" ? JSON.stringify(val) : val}`).join(", ") : "defaults"]);
+  if (run.ood_random?.length) rows.push(["Drawn from the seed", run.ood_random.join(", ")]);
+  const c = run.collection;
+  if (c) rows.push(["Data collection", `hand over after ${c.stall_s ?? 12} s${c.quick_fail ? " + missed grasp / pushed away" : ""} · script ${c.script_goal === "finish" ? "finishes the task" : "picks it up"} · ${c.script_speed ?? 1}× speed${c.end_on_success ? " · ends when done" : ""}`]);
+  rows.push(["Time limit", `${fmt(run.seconds || 0, 0)} s (ran ${fmt(run.sim_seconds || 0)} s simulated${run.ended_early ? `, ended: ${run.ended_early}` : ""})`]);
+  if (run.batch_id) rows.push(["Batch", batchName(run.batch_id)]);
+  if (run.resumed_from) rows.push(["Resumed from", `${run.resumed_from.run} at step ${run.resumed_from.step}`]);
+  const spec = run.judge || v.spec;
+  rows.push(["Judged as", spec ? `${TYPE_UI[spec.type || "pick_place"]?.label}: ${specText(spec)}` : "not judged"]);
+  if (run.steps_by_source) rows.push(["Who acted (steps)", Object.entries(run.steps_by_source).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(", ")]);
+  if (run.model_responses != null) rows.push(["Dream-1 answers", String(run.model_responses)]);
+  return rows;
+}
+
+/* ---------- a dataset: the runs picked with + / − ---------- */
+
+const picked = new Set((() => { try { return JSON.parse(localStorage.getItem("picked") || "[]"); } catch { return []; } })());
+function keepPicked() { try { localStorage.setItem("picked", JSON.stringify([...picked])); } catch {} }
+function togglePick(id) {
+  picked.has(id) ? picked.delete(id) : picked.add(id);
+  keepPicked();
+  renderRuns();
+}
+function showPicked() {
+  for (const id of [...picked]) if (!runs.some(r => r.id === id)) picked.delete(id);  // deleted runs drop out
+  const chosen = runs.filter(r => picked.has(r.id));
+  const n = label => chosen.filter(r => finalLabel(r) === label).length;
+  $("pickedCount").textContent = chosen.length;
+  $("pickedCount").title = `success ${n("success")} · failure ${n("failure")} · invalid ${n("invalid")}`;
+  $("saveDataset").disabled = !chosen.length;
+  $("pickClear").disabled = !chosen.length;
+  $("deletePicked").disabled = !chosen.length;
+}
+$("pickSuccesses").onclick = () => {
+  for (const run of shownRuns()) if (finalLabel(run) === "success") picked.add(run.id);
+  keepPicked();
+  renderRuns();
+};
+$("pickClear").onclick = () => { picked.clear(); keepPicked(); renderRuns(); };
+try { if (localStorage.getItem("dreamFormat") === "off") $("dreamFormat").checked = false; } catch {}
+$("dreamFormat").onchange = () => {
+  try { localStorage.setItem("dreamFormat", $("dreamFormat").checked ? "on" : "off"); } catch {}
+};
+/** One line on the Dream Labs format copy: how many episodes, and whether the Dream Labs checks passed. */
+function dreamFormatText(d) {
+  if (!d) return "";
+  const left = d.skipped.length ? `, ${d.skipped.length} left out (${[...new Set(d.skipped.map(s => s.reason))].join("; ")})` : "";
+  const check = d.check.ok === true ? "passes the Dream Labs checks"
+    : d.check.ok === false ? "fails the Dream Labs checks: " + d.check.error
+    : "Dream Labs checks did not run: " + d.check.error;
+  return ` · Dream Labs format: ${d.episodes} episodes, ${d.frames} frames in ${d.folder}${left}; ${check}`;
+}
+/** The save popup: choose a name and a folder on this computer, then save the picked runs there. */
+const saveBox = { path: "", writable: false, asked: 0 };
+const pickedRuns = () => runs.filter(r => picked.has(r.id));
+function remembered(key) { try { return localStorage.getItem(key) || ""; } catch { return ""; } }
+function remember(key, value) { try { localStorage.setItem(key, value); } catch {} }
+function showTarget() {
+  const name = ($("datasetName").value.trim().replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)) || "dataset";
+  $("saveTarget").innerHTML = saveBox.path
+    ? `Saved as <code>${esc(saveBox.path.replace(/\/$/, ""))}/&lt;date-time&gt;-${esc(name)}/</code>`
+      + (saveBox.writable ? "" : " · <b>this folder cannot be written</b>")
+    : "";
+  $("saveConfirm").disabled = !saveBox.path || !saveBox.writable;
+}
+async function openFolder(path) {
+  const ask = ++saveBox.asked;  // only the folder asked for last counts: a slow answer for an earlier one is dropped
+  $("saveError").textContent = "";
+  $("saveConfirm").disabled = true;
+  try {
+    const r = await api("/api/folders?path=" + encodeURIComponent(path || ""));
+    if (ask !== saveBox.asked) return;
+    Object.assign(saveBox, { path: r.path, writable: r.writable, parent: r.parent });
+    $("savePath").value = r.path;
+    $("saveUp").disabled = !r.parent;
+    $("savePlaces").innerHTML = r.places.map(p =>
+      `<button type="button" class="ghost small" data-path="${esc(p.path)}">${esc(p.name)}</button>`).join("");
+    $("saveFolders").innerHTML = r.folders.length
+      ? r.folders.map(f => `<li><button type="button" data-folder="${esc(f)}">📁 ${esc(f)}</button></li>`).join("")
+        + (r.more ? `<li class="empty">${r.more} more not shown</li>` : "")
+      : `<li class="empty">No folders inside. The dataset is saved here.</li>`;
+    remember("savePath", r.path);
+  } catch (err) {
+    if (ask !== saveBox.asked) return;
+    $("saveError").textContent = err.message;
+  }
+  showTarget();
+}
+$("savePlaces").onclick = e => { const b = e.target.closest("button[data-path]"); if (b) openFolder(b.dataset.path); };
+$("saveFolders").onclick = e => {
+  const b = e.target.closest("button[data-folder]");
+  if (b) openFolder(saveBox.path.replace(/\/$/, "") + "/" + b.dataset.folder);
+};
+$("saveUp").onclick = () => saveBox.parent && openFolder(saveBox.parent);
+$("saveGo").onclick = () => openFolder($("savePath").value.trim());
+$("savePath").onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); openFolder($("savePath").value.trim()); } };
+$("datasetName").oninput = showTarget;
+$("saveCancel").onclick = () => $("saveDialog").close();
+$("saveDataset").onclick = () => {
+  const chosen = pickedRuns();
+  if (!chosen.length) return;
+  const n = label => chosen.filter(r => finalLabel(r) === label).length;
+  $("saveSummary").textContent = `${chosen.length} picked runs · success ${n("success")} · failure ${n("failure")} · invalid ${n("invalid")}`;
+  $("saveError").textContent = "";
+  $("saveConfirm").textContent = "Save here";
+  $("saveDialog").showModal();
+  openFolder(saveBox.path || remembered("savePath"));
+};
+$("saveForm").onsubmit = async e => {
+  e.preventDefault();
+  const ids = pickedRuns().map(r => r.id);
+  if (!ids.length || !saveBox.path) return;
+  const dreamFormat = $("dreamFormat").checked;
+  $("saveConfirm").disabled = true;
+  $("saveConfirm").textContent = dreamFormat ? "Saving and converting…" : "Saving…";
+  $("saveError").textContent = "";
+  try {
+    const r = await api("/api/datasets", { run_ids: ids, name: $("datasetName").value, dream_format: dreamFormat,
+                                           location: saveBox.path });
+    $("saveDialog").close();
+    $("datasetNote").className = r.dream_format && r.dream_format.check.ok !== true ? "dataset-note" : "dataset-note ok";
+    $("datasetNote").textContent = `Saved ${r.folder}: ${r.count} runs (success ${r.labels.success}, failure ${r.labels.failure}, invalid ${r.labels.invalid})`
+      + (r.skipped.length ? ` · ${r.skipped.length} skipped (still going or gone)` : "") + " · with manifest.json"
+      + dreamFormatText(r.dream_format);
+    picked.clear(); keepPicked(); renderRuns();
+  } catch (err) {
+    $("saveError").textContent = "Not saved: " + err.message;
+  }
+  $("saveConfirm").textContent = "Save here";
+  showTarget();
+  showPicked();
+};
+
+/** Label the selected run by hand ("" = back to the rules). */
+async function setHand(label) {
+  const run = runs.find(r => r.id === selected);
+  if (!run) return;
+  try {
+    const { label: saved } = await api(`/api/runs/${run.id}/label`, { label: label || null, note: $("handNote").value });
+    run.label = saved;
+    drawFilter();
+    renderRuns();
+  } catch (err) { showError(err); }
+}
+for (const b of document.querySelectorAll("[data-hand]")) b.onclick = () => setHand(b.dataset.hand);
+$("handNote").addEventListener("keydown", e => {  // Enter keeps the label, with the note
+  if (e.key === "Enter") { const run = runs.find(r => r.id === selected); if (run) setHand(handLabel(run)?.label || finalLabel(run)); }
+});
+
+/** Move the selection in the list. */
+function step(by) {
+  const list = shownRuns();
+  if (!list.length) return;
+  const i = list.findIndex(r => r.id === selected);
+  selected = list[Math.min(list.length - 1, Math.max(0, (i < 0 ? 0 : i + by)))].id;
+  renderRuns();
+  document.querySelector("#runs tr.sel")?.scrollIntoView({ block: "nearest" });
+}
+document.addEventListener("keydown", e => {
+  if (teleopOn || e.target.closest("input, textarea, select") || e.metaKey || e.ctrlKey || e.altKey || !selected || $("detail").hidden) return;
+  const key = e.key.toLowerCase();
+  if (key in { 1: 1, 2: 1, 3: 1, 0: 1 }) { e.preventDefault(); setHand({ 1: "success", 2: "failure", 3: "invalid", 0: "" }[key]); }
+  else if (key === "j") { e.preventDefault(); step(1); }
+  else if (key === "k") { e.preventDefault(); step(-1); }
+});
+
+/** Delete finished runs for good: trajectory, labels and recording (the run going now is never deleted). */
+async function deleteRuns(ids, what) {
+  ids = ids.filter(id => !(running && id === lastRunId));
+  if (!ids.length) return;
+  if (!(await ask(`Delete ${what}? Its trajectory, labels and recording are removed for good.`, "Delete"))) return;
+  try {
+    const { deleted, skipped } = await api("/api/runs/delete", { run_ids: ids });
+    if (skipped.length) notify(`${skipped.length} not deleted (still going, or already gone).`);
+    if (deleted.includes(selected)) selected = null;
+    if (chosen && deleted.includes(chosen.id)) { chosen = null; $("resumeBox").hidden = true; }
+    await loadRuns();
+    loadEpisodes();
+  } catch (err) { showError(err); }
+}
+$("deleteRun").onclick = () => selected && deleteRuns([selected], "this run");
+$("runOriginal").onclick = async () => {
+  const id = runFilter, n = runs.filter(r => r.batch_id === id && r.seed != null).length;
+  if (!(await ask(`Run ${n} original episodes for ${batchName(id)}: the same task, judge and time limit, with the seed and the environment fixed (the simulator's default scene and settings every episode) and Dream-1 with the recovery script (as in Data collection)?`, "Run original"))) return;
+  try {
+    await api("/api/batch", { original_of: id, workers: Number($("batchWorkers").value) || 1, collection: collectionSettings() });
+    setMode("batch"); followBatch = true; refresh();
+  } catch (err) { showError(err, "Original"); }
+};
+$("deleteShown").onclick = () => {
+  const ids = shownRuns().map(r => r.id);
+  deleteRuns(ids, `the ${ids.length} run${ids.length > 1 ? "s" : ""} shown ("${$("runFilter").selectedOptions[0]?.text || "All runs"}")`);
+};
+$("deleteRec").onclick = () => chosen && deleteRuns([chosen.id], "this recording and its run");
+$("deletePicked").onclick = () => {
+  const ids = runs.filter(r => picked.has(r.id)).map(r => r.id);
+  deleteRuns(ids, `the ${ids.length} picked run${ids.length > 1 ? "s" : ""}`);
+};
+
+$("saveLabels").onclick = async () => {
+  try {
+    clearTimeout(saveTimer);
+    await api("/api/rules", rules);
+    const { saved, kept } = await api("/api/labels", { run_ids: shownRuns().map(r => r.id) });
+    $("saveLabels").textContent = `Saved ${saved}` + (kept ? ` · kept ${kept} by hand` : "");
+    setTimeout(() => { $("saveLabels").textContent = "Save labels"; }, 2500);
+    await loadRuns();
+  } catch (err) { showError(err); }
+};
+
+/* ---------- scene ---------- */
+
+// Task words -> scene items (the server checks the same with judge.parse_task).
+function parseTask(task) {
+  const m = /\b(?:put|place|move|drop|set)\s+(?:the\s+|a\s+|an\s+)?(water bottle|bottle|apple|orange|banana)\s+(?:into|in|onto|on|inside|in to|on to)\s+(?:the\s+|a\s+)?(bowl|plate)\b/i.exec(task || "");
+  if (!m) return null;
+  const word = m[1].toLowerCase();
+  return { object: word.includes("bottle") ? "water_bottle" : word, target: m[2].toLowerCase() };
+}
+
+// World frame, metres. The map shows the table from above as the top camera does: +x to the left, +y toward the arms.
+const ITEMS = {
+  apple:        { label: "apple",  r: 0.040, color: "#c62828", home: [0.15, 0.105] },
+  orange:       { label: "orange", r: 0.033, color: "#f97316", home: [0.0, 0.13] },
+  banana:       { label: "banana", r: 0.050, color: "#eab308", home: [-0.115, 0.085] },
+  water_bottle: { label: "bottle", r: 0.030, color: "#5b9aa9", home: [0.22, -0.11] },
+  bowl:         { label: "bowl",   r: 0.083, color: "#8b5e3c", home: [0.0, -0.04], target: true },
+  plate:        { label: "plate",  r: 0.072, color: "#3b6ea8", home: [-0.22, -0.045], target: true },
+};
+const AREA = { x: [-0.30, 0.30], y: [-0.22, 0.18] };   // where items may go (both arms reach it)
+const VIEW = { x0: 0.36, y0: -0.24, scale: 1000 };       // world -> map pixels (720 x 540: the area and both arms)
+const toMap = ([x, y]) => [(VIEW.x0 - x) * VIEW.scale, (y - VIEW.y0) * VIEW.scale];
+const fromMap = (px, py) => [VIEW.x0 - px / VIEW.scale, py / VIEW.scale + VIEW.y0];
+const clampArea = ([x, y]) => [Math.min(Math.max(x, AREA.x[0]), AREA.x[1]), Math.min(Math.max(y, AREA.y[0]), AREA.y[1])];
+
+let sceneOn = {}, scenePos = {}, dragging = null;
+let seedLayout = {};  // where the seed's scene puts each item (the last preview's X-Scene-Layout)
+/** Every item on the table where the seed's scene has it (its usual spot before the first preview), kept inside
+ *  the layout area as app.py keeps it: a seed may place an item a little beyond it. */
+function resetScene() {
+  for (const [name, item] of Object.entries(ITEMS)) { sceneOn[name] = true; scenePos[name] = clampArea(seedLayout[name] || item.home); }
+  drawScene();
+}
+
+/** Items on the table that touch another item. */
+function overlaps() {
+  const names = Object.keys(ITEMS).filter(n => sceneOn[n]), bad = new Set();
+  for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++) {
+    const a = names[i], b = names[j];
+    if (Math.hypot(scenePos[a][0] - scenePos[b][0], scenePos[a][1] - scenePos[b][1]) < ITEMS[a].r + ITEMS[b].r + 0.005) { bad.add(a); bad.add(b); }
+  }
+  return bad;
+}
+
+function sceneProblem() {
+  const on = Object.keys(ITEMS).filter(n => sceneOn[n]);
+  if (!on.some(n => !ITEMS[n].target)) return "Pick at least one object.";
+  if (!on.some(n => ITEMS[n].target)) return "Pick a bowl or a plate.";
+  if (overlaps().size) return "Some items overlap. Move them apart.";
+  return "";
+}
+
+function drawScene() {
+  for (const [box, wantTarget] of [["objectToggles", false], ["targetToggles", true]]) {
+    $(box).innerHTML = Object.entries(ITEMS).filter(([, it]) => !!it.target === wantTarget).map(([name, it]) =>
+      `<button class="item ${sceneOn[name] ? "" : "off"}" data-toggle="${name}" aria-pressed="${sceneOn[name]}"><i style="background:${it.color}"></i>${it.label}</button>`).join("");
+  }
+  document.querySelectorAll("[data-toggle]").forEach(b => b.onclick = () => { sceneOn[b.dataset.toggle] = !sceneOn[b.dataset.toggle]; drawScene(); });
+
+  const bad = overlaps();
+  const [ax0, ay0] = toMap([AREA.x[1], AREA.y[0]]), [ax1, ay1] = toMap([AREA.x[0], AREA.y[1]]);
+  let out = `<rect x="0" y="0" width="720" height="540" fill="#dcc59b"/>
+    <rect x="${ax0}" y="${ay0}" width="${ax1 - ax0}" height="${ay1 - ay0}" fill="none" stroke="#a88f63" stroke-dasharray="6 5" rx="6"/>`;
+  for (const [side, x] of [["left arm", 0.305], ["right arm", -0.305]]) {
+    const [px, py] = toMap([x, 0.24]);
+    out += `<circle cx="${px}" cy="${py}" r="34" fill="#2b2f36"/><text x="${px < 360 ? px - 30 : px + 30}" y="${py - 44}" text-anchor="${px < 360 ? "start" : "end"}">${side}</text>`;
+  }
+  const order = Object.keys(ITEMS).sort((a, b) => !!ITEMS[b].target - !!ITEMS[a].target);  // targets first, below
+  for (const name of order) {
+    if (!sceneOn[name]) continue;
+    const it = ITEMS[name], [px, py] = toMap(scenePos[name]), r = it.r * VIEW.scale;
+    out += `<g data-item="${name}">
+      <circle cx="${px}" cy="${py}" r="${r}" fill="${it.color}" fill-opacity="${it.target ? 0.55 : 0.95}" stroke="${bad.has(name) ? "#dc2626" : "#00000055"}" stroke-width="${bad.has(name) ? 4 : 1.5}"/>
+      <text x="${px}" y="${it.target ? py + 10 : py + r + 28}" text-anchor="middle">${it.label}</text></g>`;
+  }
+  $("map").innerHTML = out;
+
+  const problem = sceneProblem();
+  $("sceneNote").textContent = problem || (customOn() ? "Drag to move. Single runs start from this layout." : "Not in use: tick the box above.");
+  $("sceneNote").classList.toggle("bad", customOn() && !!problem);
+  drawExamples();
+  checkTask();
+  if (customOn()) schedulePreview();
+}
+
+function eventToWorld(e) {
+  const pt = $("map").createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  const p = pt.matrixTransform($("map").getScreenCTM().inverse());
+  return fromMap(p.x, p.y);
+}
+$("map").addEventListener("pointerdown", e => {
+  const g = e.target.closest("[data-item]");
+  if (!g) return;
+  dragging = g.dataset.item;
+  $("map").setPointerCapture(e.pointerId);
+});
+$("map").addEventListener("pointermove", e => {
+  if (!dragging) return;
+  scenePos[dragging] = clampArea(eventToWorld(e));
+  drawScene();
+});
+for (const type of ["pointerup", "pointercancel"]) $("map").addEventListener(type, () => { dragging = null; });
+
+$("shuffle").onclick = () => {
+  const placed = [];
+  for (const name of Object.keys(ITEMS).filter(n => sceneOn[n])) {
+    const r = ITEMS[name].r;
+    for (let tries = 0; tries < 300; tries++) {
+      const p = [AREA.x[0] + Math.random() * (AREA.x[1] - AREA.x[0]), AREA.y[0] + Math.random() * (AREA.y[1] - AREA.y[0])];
+      if (placed.every(q => Math.hypot(p[0] - q.p[0], p[1] - q.p[1]) > r + q.r + 0.02)) { scenePos[name] = p; break; }
+    }
+    placed.push({ p: scenePos[name], r });
+  }
+  drawScene();
+};
+$("resetScene").onclick = resetScene;
+
+function sceneForRun() {
+  const items = {};
+  for (const name of Object.keys(ITEMS)) if (sceneOn[name]) items[name] = scenePos[name].map(v => Math.round(v * 1e4) / 1e4);
+  return { items };
+}
+
+/** Example tasks for what is on the table. */
+const WORDS = { apple: "apple", orange: "orange", banana: "banana", water_bottle: "water bottle" };
+const ALL_OBJECTS = Object.keys(ITEMS).filter(n => !ITEMS[n].target);
+const ALL_TARGETS = Object.keys(ITEMS).filter(n => ITEMS[n].target);
+// What is on the table for a single run: everything (a seed's scene has all six), or the custom layout's items.
+const onTable = n => !customOn() || sceneOn[n];
+
+/** Example tasks: for a single run, what is on the table plus open-ended ones (not judged); for a batch, every
+ *  object -> target prompt and a few that move two objects (a seed's scene has all six items). */
+function drawExamples() {
+  const prompt = (o, t) => t === "bowl" ? `put ${WORDS[o]} into the bowl` : `put ${WORDS[o]} on the plate`;
+  const single = [];
+  for (const t of ALL_TARGETS.filter(onTable)) for (const o of ALL_OBJECTS.filter(onTable)) single.push(prompt(o, t));
+  $("examples").innerHTML = "";
+  for (const text of [...single.slice(0, 6), ...OPEN_EXAMPLES]) {
+    const b = document.createElement("button");
+    b.textContent = text;
+    b.onclick = () => { $("task").value = text; checkTask(); };
+    $("examples").appendChild(b);
+  }
+  const batchList = [];
+  for (const t of ALL_TARGETS) for (const o of ALL_OBJECTS)
+    batchList.push({ prompt: prompt(o, t), judge: { type: "pick_place", pairs: [{ object: o, target: t }] } });
+  const into = t => t === "bowl" ? "into the bowl" : "on the plate";
+  for (const [a, b] of [["apple", "banana"], ["orange", "water_bottle"]]) {
+    batchList.unshift({ prompt: `put ${WORDS[a]} ${into("bowl")} and ${WORDS[b]} ${into("plate")}`,
+                        judge: { type: "pick_place", pairs: [{ object: a, target: "bowl" }, { object: b, target: "plate" }] } });
+  }
+  batchList.push(
+    { prompt: "Move an object to the center of the workspace", judge: { type: "move_to_area", object: "any", area: "center" } },
+    { prompt: "Move an object to the left side of the workspace", judge: { type: "move_to_area", object: "any", area: "left" } },
+    { prompt: "lift the apple", judge: { type: "lift", object: "apple" } },
+    { prompt: "push the orange", judge: { type: "push", object: "orange" } });
+  drawBatchTasks(batchList);
+}
+
+/** The items a judge spec needs on the table ("any" object: none in particular). */
+function specItems(spec) {
+  if (!spec) return [];
+  if ((spec.type || "pick_place") === "pick_place") return (spec.pairs || [spec]).flatMap(p => [p.object, p.target]);
+  if (spec.type === "goal") return [...Object.keys(spec.objects || {}), ...Object.values(spec.objects || {}).map(e => e.in || e.near).filter(Boolean)];
+  return spec.object === "any" ? [] : [spec.object];
+}
+
+/** Under the task: how it will be judged (the server reads the task's words), or why it will not be. */
+let classifyTimer = null, taskSpec = null;
+function checkTask() {
+  clearTimeout(classifyTimer);
+  classifyTimer = setTimeout(async () => {
+    const reply = await api(`/api/classify?task=${encodeURIComponent($("task").value)}`).catch(() => null);
+    taskSpec = reply?.spec || null;
+    const missing = [...new Set(specItems(taskSpec))].filter(n => !onTable(n));
+    const note = $("taskNote");
+    note.classList.toggle("bad", missing.length > 0);
+    note.textContent = missing.length ? `Not on the table: ${missing.map(itemName).join(", ")}`
+      : taskSpec ? `Judged as ${reply.text}` : "Not judged by its words: set a goal scene, or name an object and a bowl or plate, an area, lift or push.";
+    note.dataset.words = note.textContent;
+    showGoalNote();
+    showTask();
+  }, 150);
+  return true;
+}
+$("task").addEventListener("input", checkTask);
+
+/* ---------- API key ---------- */
+
+/** The key comes from the sign-in page (/): it is shown here, never typed here. Signed out (or the server restarted,
+ *  which forgets the key): back to the sign-in page. */
+function showKey(key) {
+  if (!key.source) { location.replace("/"); return; }
+  $("keyHint").textContent = "…" + key.hint;
+}
+$("signOut").onclick = async () => {
+  await api("/api/key", { key: "" }).catch(() => {});
+  location.href = "/";
+};
+
+/* ---------- model ---------- */
+
+/** The model bar: Dream-1 runs as the public beta or as one of this account's fine-tunes. The server keeps the choice
+ *  and hands it to each run and new batch; a batch keeps the model it started with. */
+let models = [], chosenModel = "dreamlabs/dream-1-beta";
+const modelLabel = m => m.owner === "mine" ? `${m.id}${m.servable ? "" : " (not ready)"}`
+  : `${m.id.replace(/^dreamlabs\//, "")} (public)`;
+
+function showModel(id) {
+  chosenModel = id || chosenModel;
+  const sel = $("model");
+  if (![...sel.options].some(o => o.value === chosenModel)) sel.add(new Option(chosenModel, chosenModel));
+  sel.value = chosenModel;
+  const m = models.find(x => x.id === chosenModel), mine = m?.owner === "mine" || chosenModel.startsWith("dream-1-ft:");
+  $("modelBar").classList.toggle("ft", mine);
+  const fineTunes = models.filter(x => x.owner === "mine").length;
+  $("modelNote").innerHTML = mine
+    ? `<b>Fine-tune</b>${m?.base_model ? ` of ${esc(m.base_model)}` : ""}: runs and new batches use it. Its first call waits while the model starts (that wait is not counted in the run's time). Prompt it the way it was trained.`
+    : `Runs and new batches use the public model. ${fineTunes ? `${fineTunes} fine-tune${fineTunes > 1 ? "s" : ""} of this account in the list.` : "This key has no fine-tunes: a fine-tune runs only with the key of the account that trained it."}`;
+}
+
+async function loadModels() {
+  $("modelNote").textContent = "Loading the models this key may run…";
+  try {
+    const r = await api("/api/models");
+    models = r.models;
+    const groups = [["Public", models.filter(m => m.owner !== "mine")], ["Your fine-tunes", models.filter(m => m.owner === "mine")]];
+    $("model").innerHTML = groups.filter(([, list]) => list.length).map(([name, list]) =>
+      `<optgroup label="${name}">${list.map(m => `<option value="${esc(m.id)}"${m.servable ? "" : " disabled"}>${esc(modelLabel(m))}</option>`).join("")}</optgroup>`).join("");
+    showModel(r.model);
+  } catch (err) {
+    showModel(chosenModel);
+    $("modelNote").textContent = `Could not list the models: ${err.message}`;
+  }
+}
+$("model").onchange = async () => {
+  const next = $("model").value, before = chosenModel;
+  try { showModel((await api("/api/model", { model: next })).model); }
+  catch (err) { showModel(before); showError(err, "Model"); }
+};
+$("modelReload").onclick = loadModels;
+
+/* ---------- batch ---------- */
+
+let mode = "single", split = "train", lastBatchDone = null, followBatch = false, batchState = null;
+// Batch tasks: the scene's example prompts and the user's own prompts, each judged on an object and a target.
+let batchTasks = new Set(), exampleList = [], customTasks = [];
+
+function setMode(next) {
+  mode = next;
+  for (const [id, m] of [["modeSingle", "single"], ["modeBatch", "batch"]]) {
+    $(id).classList.toggle("on", mode === m); $(id).setAttribute("aria-pressed", mode === m);
+  }
+  $("singleForm").hidden = mode !== "single";
+  $("batchForm").hidden = mode !== "batch";
+  showBatch(batchState);
+}
+$("modeSingle").onclick = () => setMode("single");
+$("modeBatch").onclick = () => setMode("batch");
+
+function setSplit(next) {
+  split = next;
+  for (const [id, l] of [["splitTrain", "train"], ["splitEval", "eval"]]) {
+    $(id).classList.toggle("on", split === l); $(id).setAttribute("aria-pressed", split === l);
+  }
+  $("batchCount").max = split === "eval" ? 50 : 500;
+  if (split === "eval" && Number($("batchCount").value) > 50) $("batchCount").value = 50;
+  estimate();
+}
+let batchMode = "plain";  // the Test page runs the model alone
+let varyScene = false;
+/** Vary per episode (camera, light, room from each episode's seed) or the same settings for every episode. Original
+ *  keeps its scene and settings fixed, so it does not vary. */
+function setVary(on) {
+  varyScene = on;
+  for (const [id, v] of [["varyOff", false], ["varyOn", true]]) { $(id).classList.toggle("on", v === on); $(id).setAttribute("aria-pressed", v === on); }
+  $("varyNote").hidden = !on;
+  estimate();
+}
+$("varyOff").onclick = () => setVary(false);
+$("varyOn").onclick = () => setVary(true);
+const BATCH_MODES = [["batchPlain", "plain"]];  // the Test page: the model alone
+for (const [id, m] of BATCH_MODES) $(id).onclick = () => {
+  batchMode = m;
+  for (const [other, om] of BATCH_MODES) { $(other).classList.toggle("on", om === m); $(other).setAttribute("aria-pressed", om === m); }
+  // Original uses no seed and no scene settings: the seed choice does not apply.
+  $("splitTrain").disabled = $("splitEval").disabled = m === "original";
+  $("batchHow").hidden = m === "original"; $("batchHowOriginal").hidden = m !== "original";
+  $("varyRow").hidden = m === "original";
+  estimate();
+  refresh();  // a rule-based batch needs no key: the Start button follows the mode
+};
+$("splitTrain").onclick = () => setSplit("train");
+$("splitEval").onclick = () => setSplit("eval");
+
+const itemName = n => n === "any" ? "any object" : (ITEMS[n]?.label || n);
+/** What a judge spec checks, in words (older specs: {pairs} or {object, target} are pick & place). */
+function specText(spec) {
+  if (!spec) return "";
+  const kind = spec.type || "pick_place";
+  if (kind === "pick_place") return (spec.pairs || [spec]).map(p => `${itemName(p.object)} · ${itemName(p.target)}`).join(", ");
+  if (kind === "move_to_area") return `${itemName(spec.object)} → ${spec.area}`;
+  if (kind === "goal") return Object.entries(spec.objects || {}).map(([n, e]) =>
+    `${itemName(n)} ${e.in === "bowl" ? "in the bowl" : e.in === "plate" ? "on the plate" : e.near ? `beside the ${itemName(e.near)}` : "at a table spot"}`).join(", ");
+  return `${TYPE_UI[kind]?.label.toLowerCase() || kind} ${itemName(spec.object)}`;
+}
+
+function taskOptions() {
+  const examples = exampleList.map(e => ({ ...e, custom: false, usable: true }));
+  const own = customTasks.map(t => ({ ...t, custom: true, usable: true }));  // a seed's scene has every item
+  return [...own, ...examples];
+}
+
+function drawBatchTasks(list) {
+  exampleList = list;
+  drawDraft();
+  renderBatchTasks();
+}
+
+function renderBatchTasks() {
+  const options = taskOptions();
+  for (const t of [...batchTasks]) if (!options.some(o => o.usable && o.prompt === t)) batchTasks.delete(t);
+  if (!batchTasks.size && options.some(o => o.usable)) batchTasks.add(options.find(o => o.usable).prompt);
+  $("batchTasks").innerHTML = options.map(o => {
+    const on = batchTasks.has(o.prompt);
+    const simple = o.judge.type === "pick_place" && o.judge.pairs.length === 1;
+    const judge = o.custom || !simple ? ` <span class="judge">→ ${esc(specText(o.judge))}${o.usable ? "" : " (not on the table)"}</span>` : "";
+    const remove = o.custom ? `<span class="remove" data-remove="${esc(o.prompt)}" title="Remove" role="button" aria-label="Remove">×</span>` : "";
+    return `<button class="item ${on ? "on" : ""} ${o.usable ? "" : "off"}" data-task="${esc(o.prompt)}" data-usable="${o.usable}" aria-pressed="${on}">${esc(o.prompt)}${judge}${remove}</button>`;
+  }).join("");
+  document.querySelectorAll("[data-task]").forEach(b => b.onclick = e => {
+    const t = b.dataset.task;
+    if (e.target.dataset.remove != null) {
+      customTasks = customTasks.filter(c => c.prompt !== t);
+      batchTasks.delete(t);
+    } else if (b.dataset.usable !== "true") { return; }
+    else if (batchTasks.has(t)) { if (batchTasks.size > 1) batchTasks.delete(t); }
+    else batchTasks.add(t);
+    renderBatchTasks();
+  });
+  estimate();
+}
+
+/* The "judge as" spec for the prompt being typed: a task type, and its objects (pick & place: object -> target
+   pairs, each object once; move to area: an object or any, and the area; lift, push: an object or any). */
+let draft = { type: "pick_place", pairs: [], object: "any", area: "center" };
+const tableObjects = () => ALL_OBJECTS;  // batches start from seeds: all six items are on the table
+const tableTargets = () => ALL_TARGETS;
+const AREAS = ["center", "left", "right", "front", "back"];
+
+function drawDraft() {
+  const objects = tableObjects(), targets = tableTargets();
+  const option = (n, chosen, label = itemName(n)) => `<option value="${n}" ${n === chosen ? "selected" : ""}>${label}</option>`;
+  $("draftType").value = draft.type;
+  if (draft.type === "pick_place") {
+    if (!draft.pairs.length) draft.pairs = [{ object: objects[0], target: targets[0] }];
+    $("pairRows").innerHTML = draft.pairs.map((p, i) => `<span class="pair">
+        <select data-pair="${i}" data-field="object" aria-label="Object ${i + 1}">${objects.map(n => option(n, p.object)).join("")}</select>
+        → <select data-pair="${i}" data-field="target" aria-label="Target ${i + 1}">${targets.map(n => option(n, p.target)).join("")}</select>
+        ${draft.pairs.length > 1 ? `<span class="remove" data-pair-remove="${i}" title="Remove" role="button" aria-label="Remove">×</span>` : ""}</span>`).join("");
+    document.querySelectorAll("[data-pair]").forEach(sel => sel.onchange = () => { draft.pairs[sel.dataset.pair][sel.dataset.field] = sel.value; });
+    document.querySelectorAll("[data-pair-remove]").forEach(x => x.onclick = () => { draft.pairs.splice(Number(x.dataset.pairRemove), 1); drawDraft(); });
+  } else {
+    const which = `<select data-draft="object" aria-label="Object">${["any", ...objects].map(n => option(n, draft.object)).join("")}</select>`;
+    const where = draft.type === "move_to_area"
+      ? ` → <select data-draft="area" aria-label="Area">${AREAS.map(a => option(a, draft.area, a)).join("")}</select>` : "";
+    $("pairRows").innerHTML = `<span class="pair">${which}${where}</span>`;
+    document.querySelectorAll("[data-draft]").forEach(sel => sel.onchange = () => { draft[sel.dataset.draft] = sel.value; });
+  }
+  $("addPair").hidden = draft.type !== "pick_place";
+  $("addPair").disabled = draft.pairs.length >= Math.min(4, objects.length);
+}
+$("draftType").onchange = () => { draft.type = $("draftType").value; drawDraft(); };
+$("addPair").onclick = () => {
+  const free = tableObjects().find(n => !draft.pairs.some(p => p.object === n));
+  if (free) { draft.pairs.push({ object: free, target: draft.pairs[draft.pairs.length - 1]?.target || tableTargets()[0] }); drawDraft(); }
+};
+
+// Fill the editor from the prompt's words, as the server reads them (judge.classify).
+let draftTimer = null;
+$("customPrompt").addEventListener("input", () => {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(async () => {
+    const reply = await api(`/api/classify?task=${encodeURIComponent($("customPrompt").value)}`).catch(() => null);
+    const spec = reply?.spec;
+    if (!spec) return;
+    draft = { ...draft, ...spec, pairs: spec.pairs ? spec.pairs.map(p => ({ ...p })) : draft.pairs };
+    drawDraft();
+  }, 200);
+});
+function addCustomTask() {
+  const prompt = $("customPrompt").value.replace(/\s+/g, " ").trim();
+  if (!prompt) return;
+  let judge;
+  if (draft.type === "pick_place") {
+    const pairs = draft.pairs.filter(p => p.object && p.target);
+    if (!pairs.length) { notify("Pick an object and a bowl or plate to judge it on."); return; }
+    if (new Set(pairs.map(p => p.object)).size !== pairs.length) { notify("Each object can be judged only once."); return; }
+    judge = { type: "pick_place", pairs: pairs.map(p => ({ ...p })) };
+  } else {
+    judge = { type: draft.type, object: draft.object, ...(draft.type === "move_to_area" ? { area: draft.area } : {}) };
+  }
+  customTasks = [{ prompt, judge }, ...customTasks.filter(c => c.prompt !== prompt)];
+  batchTasks.add(prompt);
+  $("customPrompt").value = "";
+  renderBatchTasks();
+}
+$("addTask").onclick = addCustomTask;
+$("customPrompt").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); addCustomTask(); } });
+
+function estimate() {
+  const count = Number($("batchCount").value) || 0, secs = Number($("batchSeconds").value) || 0;
+  const workers = Math.max(1, Math.min(4, Number($("batchWorkers").value) || 1, count || 1));
+  // Every mode runs in real time; rule-based runs start up faster (no Dream-1 session).
+  const each = batchMode === "script" ? secs + 10 : secs + 20;
+  const minutes = Math.round(Math.ceil(count / workers) * each / 60);
+  const seeds = batchMode === "original" ? "original: fixed default scene and settings, with the recovery script"
+    : split === "eval" ? `eval seeds 1-${Math.min(count, 50)}` : `batch seed ${$("seed")?.value || "?"} (${count} different layouts, the same again with this seed)`;
+  const vary = varyScene && batchMode !== "original" ? " · camera, light and room vary" : "";
+  $("batchEstimate").textContent = count && secs ? `${count} episodes · ${workers} at once · ${seeds}${vary} · about ${minutes} min · ${batchTasks.size} task${batchTasks.size > 1 ? "s" : ""}` : "";
+  return minutes;
+}
+$("batchCount").oninput = estimate;
+$("batchWorkers").oninput = estimate;
+$("batchSeconds").oninput = estimate;
+
+$("startBatch").onclick = async () => {
+  const ood = isOpenYAM() ? {} : readOOD();
+  if (ood === null) return;
+  const count = Number($("batchCount").value);
+  // Every episode runs the task set above (its words, and its goal scene when it has one).
+  if (goalSpec && !goalRelational()) { notify("The task's goal scene has a fixed table spot, which only fits one seed: for batches, tie every object to an item (in the bowl, beside the plate, ...)."); return; }
+  const how = batchMode === "original" ? " as the original (the default scene and settings every episode, Dream-1 with the recovery script)"
+    : batchMode === "script" ? " rule-based (the script alone, no Dream-1 use)" : "";
+  const use = batchMode === "script" ? "" : " of Dream-1 use";
+  if (!(await ask(`Run ${count} episodes${how} in the background (about ${estimate()} min${use})?`, "Start batch"))) return;
+  try {
+    const tasks = [{ prompt: $("task").value.trim(), ...(goalSpec ? { judge: goalSpec } : {}) }];
+    const { seed, ood_random } = seeding();
+    await api("/api/batch", { tasks, count, seconds: $("batchSeconds").value, split, seed, ood, mode: batchMode,
+                              vary_scene: varyScene && batchMode !== "original",
+                              workers: Number($("batchWorkers").value) || 1, collection: collectionSettings(),
+                              ood_random: isOpenYAM() ? [] : ood_random });
+    if (split !== "eval" && batchMode !== "original") advanceSeed(1);  // the seed was the whole batch: the next batch gets the next one
+    followBatch = true;
+    refresh();
+  } catch (err) { showError(err); }
+};
+$("stopBatch").onclick = async () => {
+  $("stopBatch").disabled = true;
+  await api("/api/stop", {}).catch(() => {});
+  setTimeout(() => { $("stopBatch").disabled = false; }, 2000);
+};
+$("batchShow").onclick = () => {
+  if (!batchState) return;
+  runFilter = batchState.id; drawFilter(); renderRuns();
+  $("runsPanel").open = true; $("runsPanel").scrollIntoView({ behavior: "smooth" });
+};
+
+const duration = s => s == null ? "" : s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.round(s % 3600 / 60)} min` : s >= 60 ? `${Math.round(s / 60)} min` : `${s} s`;
+
+function showBatch(b) {
+  const inBatch = mode === "batch";
+  $("batchBox").hidden = !inBatch || !b;
+  if (inBatch && b) { $("live").hidden = true; $("placeholder").hidden = true; }
+  else if (!$("live").src) { $("placeholder").hidden = false; }
+  else { $("live").hidden = false; $("placeholder").hidden = true; }
+  if (!b) return;
+  const valid = b.counts.success + b.counts.failure;
+  $("batchTitle").textContent = `${batchName(b.id)} · ${b.done} / ${b.total}`;
+  $("batchTime").textContent = b.running ? `${duration(b.elapsed_s)} so far${b.eta_s != null ? ` · about ${duration(b.eta_s)} left` : ""}` : `took ${duration(b.elapsed_s)}`;
+  $("batchBar").style.width = `${100 * b.done / b.total}%`;
+  $("batchCounts").innerHTML = `${chip("success")} ${b.counts.success} ${chip("failure")} ${b.counts.failure} ${chip("invalid")} ${b.counts.invalid}`
+    + (valid ? ` <span class="muted">· ${Math.round(100 * b.counts.success / valid)}% success of valid</span>` : "");
+  const now = b.active?.length ? b.active : (b.current ? [b.current] : []);
+  $("batchNow").textContent = now.length ? `Now${b.workers > 1 ? ` (${now.length} at once)` : ""}: ` + now.map(e => `#${e.index} ${e.task} (${e.seed != null ? `seed ${e.seed}` : "default scene"})`).join(" · ")
+    : b.original ? `Original: the default scene and settings every episode (fixed), Dream-1 with the recovery script · ${b.seconds} s each`
+    : `${b.split === "eval" ? "Eval seeds" : `Batch seed ${b.batch_seed ?? b.seed}`}${b.ood_random?.length ? ` · random: ${b.ood_random.join(", ")}` : ""} · ${b.seconds} s each · labeled with the rules as at the start`;
+  $("batchEnd").textContent = (b.running ? "" : b.stopped_reason || "Finished.")
+    + (b.capacity_retries ? ` Dream-1 was at capacity ${b.capacity_retries} time${b.capacity_retries > 1 ? "s" : ""}: those episodes were tried again.` : "");
+  $("batchEnd").classList.toggle("bad", !b.running && !!b.stopped_reason && b.stopped_reason !== "Stopped by you.");
+  showBatchLive(b.running ? (b.active || []).filter(e => e.run) : []);
+}
+
+/** One camera view per episode going now (each writes its own, /api/live.jpg?run=...), refreshed twice a second. */
+let batchLiveTimer = null;
+function showBatchLive(episodes) {
+  const box = $("batchLive"), want = new Set(episodes.map(e => e.run));
+  for (const fig of [...box.children]) if (!want.has(fig.dataset.run)) fig.remove();
+  for (const e of episodes) {
+    let fig = box.querySelector(`[data-run="${e.run}"]`);
+    if (!fig) {
+      fig = document.createElement("figure");
+      fig.dataset.run = e.run;
+      fig.innerHTML = `<img alt="Episode ${e.index} camera view"><figcaption></figcaption>`;
+      box.append(fig);
+    }
+    fig.querySelector("figcaption").textContent = `#${e.index} · seed ${e.seed} · ${e.task}`;
+  }
+  if (episodes.length && !batchLiveTimer) batchLiveTimer = setInterval(refreshBatchLive, 500);
+  if (!episodes.length && batchLiveTimer) { clearInterval(batchLiveTimer); batchLiveTimer = null; }
+}
+function refreshBatchLive() {
+  for (const fig of $("batchLive").children) {
+    const next = new Image();  // swap only when the new frame has loaded (no flicker, no broken image before the first)
+    next.onload = () => { const img = fig.querySelector("img"); if (img) img.src = next.src; };
+    next.src = `/api/live.jpg?run=${fig.dataset.run}&t=${Date.now()}`;
+  }
+}
+
+
+/* ---------- errors ---------- */
+
+// Known errors in plain words: [pattern, title, hint, setup problem?]. Anything else shows its own message.
+const ERRORS = [
+  [/not a Dream API key/i, "That is not a Dream API key", "Sign out (top right) and sign in again with the key from platform.dreamlabs.ai (it starts with dl_).", false],
+  [/not_entitled|is not a model this key may run|unknown_checkpoint/i, "This key may not run that model", "A fine-tune runs only with the key of the account that trained it. Pick another model in the Model bar, or sign in with that account's key.", false],
+  [/is not ready to run yet|pool_warming/i, "The model is not ready yet", "Its fine-tuning has not finished, or it is still starting. Press ↻ in the Model bar later, or pick another model.", false],
+  [/UNAUTHORIZED|api key|401|403/i, "The Dream API rejected the key", "Sign out (top right) and sign in again with a valid key.", false],
+  [/busy/i, "The simulator is busy", "A run, batch or preview is going. Wait for it to finish, then try again.", false],
+  [/Initial arm pose overlaps/i, "The arms' start pose collides with the scene", "The joint angles put an arm into the table, an object or the other arm. Change them, or draw again / go back to the defaults.", true],
+  [/Random arm pose rejected/i, "The random arm pose does not work", "Its wrist camera would not see the table. Draw again with a new seed, or untick random on the arm angles.", true],
+  [/Random camera\/arm settings rejected/i, "The random camera or arm values hide an object", "The workspace camera would not see every object. Draw again with a new seed.", true],
+  [/no layout found/i, "This seed has no possible object layout", "Draw a new seed.", true],
+  [/outside the simulator joint limits|Invalid value for/i, "A scene setting is out of range", "Bring it back inside its range, or go back to the defaults.", true],
+  [/Cannot reach app\.py|Failed to fetch|NetworkError/i, "The page cannot reach app.py", "Start python app.py again and reload the page.", false],
+];
+/** An in-page confirm: resolves true on OK, false on Cancel / Esc. window.confirm returns false at once, without
+ *  asking, in some embedded browsers (the app's preview pane), which silently cancelled batches and deletes. */
+function ask(message, ok = "OK") {
+  const box = $("askDialog");
+  $("askText").textContent = message;
+  $("askYes").textContent = ok;
+  $("askNo").hidden = false;
+  return new Promise(resolve => {
+    const done = answer => { box.onclose = null; if (box.open) box.close(); resolve(answer); };
+    $("askYes").onclick = () => done(true);
+    $("askNo").onclick = () => done(false);
+    box.onclose = () => done(false);  // Esc
+    box.showModal();
+    $("askYes").focus();
+  });
+}
+/** An in-page notice with one OK button (instead of window.alert, for the same reason). */
+function notify(message) {
+  ask(message).then(() => {});
+  $("askNo").hidden = true;
+}
+
+let setupProblem = null;  // why the start scene cannot be built (blocks Run until a preview works)
+let setupShown = false;   // the banner shows that problem (a working preview then clears it)
+
+function clearError() { $("errBar").hidden = true; setupShown = false; }
+$("errClose").onclick = clearError;
+
+/** Show an error in the banner: where it happened, in plain words, with fixes, and the raw text under Details. */
+function showError(err, where = "", raw = "") {
+  const message = String(err?.message ?? err ?? "Something went wrong.");
+  const [, title, hint, setup] = ERRORS.find(([pattern]) => pattern.test(message)) || [null, message, "", false];
+  $("errTitle").textContent = (where ? where + ": " : "") + title;
+  $("errHint").textContent = hint;
+  $("errRaw").textContent = raw || message;
+  $("errMore").hidden = !raw && title === message;
+  $("errActs").innerHTML = "";
+  setupShown = setup;
+  if (setup) {
+    setSetupProblem(message);
+    const action = (text, fn) => { const b = Object.assign(document.createElement("button"), { className: "small", textContent: text }); b.onclick = fn; $("errActs").append(b); };
+    action("Draw again (new seed)", () => { newSeed(); clearError(); schedulePreview(); });
+    action("Default settings", () => { defaults(); clearError(); });
+  }
+  $("errBar").hidden = false;
+}
+
+/** Mark (or clear) a start scene that cannot be built: Run waits, and the arm groups are outlined when it is the arms. */
+function setSetupProblem(message) {
+  setupProblem = message;
+  const arms = !!message && /arm/i.test(message);
+  document.querySelectorAll("#ood fieldset").forEach(f => f.classList.toggle("bad", arms && /arm/i.test(f.querySelector("legend")?.textContent || "")));
+  if (!message && setupShown) clearError();
+  if (message) $("run").disabled = true;
+}
+
+/** Back to the default start: YAM tabletop, every scene setting at its default, nothing random, no custom layout.
+ *  The seed stays (it is the object layout). */
+async function defaults() {
+  $("ood").reset();  // also unticks the random boxes; seed.js unlocks their fields
+  if (customOn()) { $("customOn").checked = false; $("layoutBody").classList.add("off"); drawScene(); }
+  const robot = simCatalog?.target_robots?.[0] || "yam";
+  if ($("robot").value !== robot || $("room").value !== "yam_tabletop") {
+    $("robot").value = robot; $("room").value = "yam_tabletop";
+    await saveSimulator();
+  } else schedulePreview();
+}
+$("defaults").onclick = () => { clearError(); defaults(); };
+
+/* ---------- robot and room ---------- */
+
+let simSettings = null, simCatalog = null;
+const robotRunsHere = () => !simCatalog || simCatalog.local_robots.includes($("robot").value);
+const isOpenYAM = () => $("robot").value === "openyam";
+
+async function loadSimulator() {
+  const { settings, catalog } = await api("/api/simulator-settings");
+  simSettings = settings;
+  simCatalog = catalog;
+  const offered = catalog.target_robots || catalog.local_robots;  // the team's target robot (simulator_settings.py)
+  $("robot").innerHTML = offered.map(key => `<option value="${key}">${esc(catalog.robots[key])}</option>`).join("");
+  if (!offered.includes(settings.robot)) settings.robot = offered[0];  // a robot saved before it was hidden
+  $("room").innerHTML = Object.entries(catalog.rooms).map(([key, label]) => `<option value="${key}">${esc(label)}</option>`).join("");
+  $("robot").value = settings.robot;
+  $("room").value = settings.room;
+  showRobot();
+}
+
+/** What the picked robot can do here, and the YAM-only parts of the page. */
+function showRobot() {
+  const note = $("robotNote");
+  note.classList.toggle("bad", !robotRunsHere());
+  if (!robotRunsHere()) {
+    note.innerHTML = `${esc(simCatalog.robots[$("robot").value])} runs only in the <a href="${simCatalog.sandbox_url}" target="_blank" rel="noopener">Dream Labs Sandbox</a>. Choose YAM or OpenYAM to run here.`;
+  } else if (isOpenYAM()) {
+    note.textContent = "OpenYAM on the Sandbox table (needs Node.js). The scene settings and custom layout below are for YAM; the seed shifts the objects by up to 2 cm.";
+  } else {
+    note.textContent = "";
+  }
+  for (const part of document.querySelectorAll(".yam-only")) part.classList.toggle("off", isOpenYAM());
+  if (isOpenYAM() && customOn()) { $("customOn").checked = false; $("layoutBody").classList.add("off"); }
+}
+
+async function saveSimulator() {
+  try {
+    ({ settings: simSettings } = await api("/api/simulator-settings", { ...simSettings, robot: $("robot").value, room: $("room").value }));
+  } catch (err) { showError(err); }
+  showRobot();
+  checkTask();
+  schedulePreview();
+}
+$("robot").onchange = saveSimulator;
+$("room").onchange = saveSimulator;
+
+/** The start-scene part of a request: OpenYAM takes the seed only (no YAM scene settings or layout). */
+function startScene(ood) {
+  if (isOpenYAM()) return { ood: {}, seed: seeding().seed, scene: null };
+  return { ood, ...seeding(), scene: customOn() ? sceneForRun() : null };
+}
+
+/* ---------- custom layout ---------- */
+
+const customOn = () => !!$("customOn")?.checked;
+$("customOn").addEventListener("change", () => {
+  if (customOn()) resetScene();  // start from the scene the preview shows, not from fixed spots
+  $("layoutBody").classList.toggle("off", !customOn());
+  drawScene();
+  schedulePreview();
+});
+
+/* ---------- start-scene preview (no Dream API) ---------- */
+
+let running = false, starting = false, settingsReady = false;
+let previewTimer, previewPending = false, previewRevision = 0, previewUrl;
+
+function schedulePreview() {
+  previewRevision++;
+  clearTimeout(previewTimer);
+  if (settingsReady && !starting && !running) previewTimer = setTimeout(renderPreview, 350);
+}
+
+async function renderPreview() {
+  if (running || starting || previewPending) return;
+  if (!robotRunsHere()) { $("previewStatus").hidden = false; $("previewStatus").textContent = "No preview: this robot runs only in the Sandbox."; return; }
+  const ood = isOpenYAM() ? {} : readOOD(false);
+  if (ood === null) return;
+  if (customOn() && sceneProblem()) return;
+  const revision = previewRevision;
+  previewPending = true;
+  const note = $("previewStatus");
+  note.hidden = false;
+  note.textContent = "Updating initial scene…";
+  try {
+    const response = await fetch("/api/preview", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(startScene(ood)),
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(response.status === 404 ? "Restart app.py and reload the page." : error.error || "Rendering failed.");
+    }
+    if (!customOn() && !isOpenYAM()) afterPreview(response);
+    if (!customOn()) seedLayout = JSON.parse(response.headers.get("X-Scene-Layout") || "{}");
+    const frame = await response.blob();
+    if (revision !== previewRevision || running || starting) return;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(frame);
+    $("live").src = previewUrl;
+    if (!(mode === "batch" && batchState)) { $("live").hidden = false; $("placeholder").hidden = true; }
+    note.textContent = customOn() ? "Initial scene · custom layout · settings apply on Run" : "Initial scene · settings apply on Run";
+    setSetupProblem(null);
+  } catch (error) {
+    if (revision === previewRevision && !running && !starting) {
+      note.textContent = "Preview unavailable: " + error.message;
+      showError(error, "Start scene");
+      if (!$("placeholder").hidden) $("placeholder").textContent = "No initial camera image available.";
+    }
+  } finally {
+    previewPending = false;
+    if (revision !== previewRevision && !running && !starting) schedulePreview();
+  }
+}
+
+/* ---------- running ---------- */
+
+function showLive() {
+  const img = new Image();
+  img.onload = () => { $("live").src = img.src; $("live").hidden = false; $("placeholder").hidden = true; };
+  img.src = "/api/live.jpg?t=" + Date.now();
+}
+
+async function refresh() {
+  let s;
+  try { s = await api("/api/status"); }
+  catch { $("statusText").textContent = "Cannot reach app.py. Is it running?"; return; }
+
+  showKey(s.key);
+  if (s.model && s.model !== chosenModel) showModel(s.model);
+  lastRunId = s.run_id;
+  const b = s.batch, batchRunning = !!b?.running;
+  batchState = b;
+  running = s.running || batchRunning;
+  if (running) $("previewStatus").hidden = true;
+  if (batchRunning && mode !== "batch") setMode("batch");
+  $("modeSingle").disabled = $("modeBatch").disabled = running;
+  // Human-only and rule-based runs need no key (no Dream-1; a human-only run asks it only after T).
+  $("run").disabled = running || (!s.key.source && !["human", "script"].includes(runMode())) || !robotRunsHere() || !!setupProblem;
+  $("startBatch").disabled = running || (!s.key.source && batchMode !== "script") || !robotRunsHere();
+  $("robot").disabled = $("room").disabled = running;
+  $("model").disabled = $("modelReload").disabled = running;
+  $("stop").hidden = !s.running || batchRunning;
+  $("stopBatch").hidden = !batchRunning;
+  $("dot").classList.toggle("on", running);
+  $("statusBadge").dataset.state = !running && s.exit_code > 0 ? "error" : "";
+  showBatch(b);
+  if (b && b.done !== lastBatchDone) {  // a batch episode finished: list it
+    lastBatchDone = b.done;
+    if (followBatch) { runFilter = b.id; followBatch = false; }
+    await loadRuns();
+  }
+  if (batchRunning) {
+    $("statusText").textContent = "Batch running";
+    const now = b.active?.length ? b.active : (b.current ? [b.current] : []);
+    $("statusMore").textContent = now.length > 1 ? `episodes ${now.map(e => e.index).join(", ")} of ${b.total} · ${b.workers} at once`
+      : now.length ? `episode ${now[0].index} of ${b.total} · ${now[0].task} · seed ${now[0].seed}` : "";
+  } else if (b && mode === "batch") {
+    $("statusText").textContent = b.stopped_reason ? "Batch stopped" : "Batch finished";
+    $("statusMore").textContent = `${b.done} of ${b.total} episodes`;
+  } else if (s.running) {
+    $("statusText").textContent = "Running";
+    $("statusMore").textContent = `${s.task} · ${s.elapsed_s} s`;
+  } else if (s.task) {
+    const rejected = s.log.some(line => line.includes("UNAUTHORIZED"));
+    $("statusText").textContent = s.exit_code === 0 ? "Finished" : rejected ? "Error: API key rejected" : "Stopped with an error";
+    if (s.exit_code !== 0 && wasRunning) {
+      $("logBox").open = true;
+      const why = [...s.log].reverse().find(line => /^Stopped|Error|rejected|UNAUTHORIZED/i.test(line)) || "The run stopped with an error.";
+      showError(new Error(why.replace(/^Stopped:\s*/, "")), "Run", s.log.join("\n"));
+    }
+    $("statusMore").textContent = `${s.task} · ${s.elapsed_s} s`;
+  }
+  showWarming(batchRunning ? b.model_warming : s.running ? s.model_warming : null, batchRunning);
+  $("logBox").hidden = !s.log.length;
+  $("log").textContent = s.log.join("\n");
+  $("log").scrollTop = $("log").scrollHeight;
+
+  showControl(s, batchRunning);
+  $("reset").hidden = !s.task || batchRunning || mode !== "single";
+  const live = s.running && !batchRunning && mode === "single";
+  const fps = s.mode === "human" || (s.teleop && s.teleop.mode !== "dream") ? 100 : 250;  // smoother while a human steers
+  if (live && liveTimer && liveFps !== fps) { clearInterval(liveTimer); liveTimer = null; }
+  if (live && !liveTimer) { liveTimer = setInterval(showLive, fps); liveFps = fps; }
+  if (!live && liveTimer) { clearInterval(liveTimer); liveTimer = null; if (mode === "single") showLive(); }
+  if (wasRunning && !s.running && !batchRunning && !b?.current) {
+    selected = s.run_id; await loadRuns(); setTimeout(loadEpisodes, 1500);  // its recording appears
+  }
+  wasRunning = s.running;
+}
+
+$("run").onclick = async () => {
+  try {
+    const ood = isOpenYAM() ? {} : readOOD();
+    if (ood === null) return;
+    if (customOn()) { const problem = sceneProblem(); if (problem) { showError(new Error(problem), "Custom layout"); return; } }
+    if (setupProblem) { showError(new Error(setupProblem), "Start scene"); return; }
+    clearError();
+    starting = true;
+    previewRevision++;
+    clearTimeout(previewTimer);
+    $("previewStatus").hidden = true;
+    document.activeElement.blur();  // so the keys go to the robot, not to the box last clicked
+    const start = startScene(ood);
+    if (goalSpec && !goalRelational() && JSON.stringify(start) !== goalStart) {
+      if (!(await ask("The start scene changed since the goal was set (seed, settings or layout). Run without the goal?", "Run without goal"))) return;
+      clearGoal();
+    }
+    await api("/api/run", { task: $("task").value, seconds: $("seconds").value, ...start,
+                            mode: runMode(), record: $("record").checked, collection: collectionSettings(),
+                            ...(goalSpec ? { judge: goalSpec } : {}) });
+    // The next run starts from the next seed's scene, unless a goal is tied to this start (it would no longer fit).
+    if (!customOn() && !isOpenYAM() && !(goalSpec && !goalRelational())) advanceSeed(1);
+    $("live").hidden = true;
+    $("placeholder").hidden = false;
+    $("placeholder").textContent = "Starting the simulator… (the first picture takes a few seconds)";
+    running = true;
+    await refresh();
+  } catch (err) { showError(err); }
+  finally { starting = false; }
+};
+$("stop").onclick = async () => {
+  $("stop").disabled = true;
+  await api("/api/stop", {}).catch(() => {});
+  $("statusText").textContent = "Stopping…";
+  setTimeout(() => { $("stop").disabled = false; }, 2000);
+};
+
+$("reset").onclick = async () => {
+  $("reset").disabled = true;
+  $("statusText").textContent = "Resetting…";
+  try {
+    await api("/api/reset", {});
+    $("live").hidden = true; $("placeholder").hidden = false;
+    $("placeholder").textContent = "Starting again from the beginning…";
+  } catch (err) { showError(err); }
+  $("reset").disabled = false;
+  refresh();
+};
+
+/* ---------- goal scene: drag objects on the robot's camera picture to the end state ---------- */
+// The server renders the start scene (sim.py --goal-preview) and, after every drop, the scene with the dragged
+// objects let go at their spots and settled by the physics. Its 3x4 projection maps world points to the picture;
+// on the plane of an object's height it is a homography, inverted here to turn the cursor into a table spot.
+const GOAL_ITEMS = { apple: ["#ef4444", 0.040], orange: ["#f97316", 0.033], banana: ["#eab308", 0.050], water_bottle: ["#38bdf8", 0.030] };
+let goalSpec = null, goalStart = null, goalView = null, goalDrag = null, goalPending = {}, goalBase = null;
+let goalChoice = {};  // per moved object: "in:bowl", "near:apple", or "at" (its relation, chosen in the popup)
+const GOAL_REFS = ["bowl", "plate", "apple", "orange", "banana", "water_bottle"];
+// Offset of an object from an item, in the top camera's directions (cm): +left = picture left, +front = toward the arms.
+const offsetCm = (n, ref) => [(goalView.positions[n][0] - goalView.positions[ref][0]) * 100,
+                              (goalView.positions[n][1] - goalView.positions[ref][1]) * 100];
+function offsetWords([left, front], ref) {
+  const parts = [];
+  if (Math.abs(left) >= 1) parts.push(`${fmt(Math.abs(left))} cm ${left > 0 ? "left" : "right"}`);
+  if (Math.abs(front) >= 1) parts.push(`${fmt(Math.abs(front))} cm ${front > 0 ? "forward" : "back"}`);
+  return parts.length ? `${parts.join(" and ")} from the ${itemName(ref)}` : `right at the ${itemName(ref)}`;
+}
+function defaultChoice(n) {  // in the bowl / on the plate when it landed there, else beside the nearest item
+  const inside = goalView.relations?.[n];
+  if (inside) return "in:" + inside;
+  const p = goalView.positions[n];
+  const near = GOAL_REFS.filter(r => r !== n && goalView.positions[r])
+    .sort((a, b) => Math.hypot(...offsetCm(n, a)) - Math.hypot(...offsetCm(n, b)))[0];
+  return near ? "near:" + near : "at";
+}
+function choiceValid(n, c) {
+  if (!c) return false;
+  if (c.startsWith("in:")) return goalView.relations?.[n] === c.slice(3);
+  return c === "at" || (c.startsWith("near:") && c.slice(5) !== n);
+}
+const project = (P, [x, y, z]) => { const h = P.map(r => r[0] * x + r[1] * y + r[2] * z + r[3]); return [h[0] / h[2] * 640, h[1] / h[2] * 360]; };
+function unproject(P, px, py, z) {  // picture pixel -> world (x, y) on the plane at height z
+  const H = [0, 1, 2].map(i => [P[i][0], P[i][1], P[i][2] * z + P[i][3]]);
+  const [a, b, c] = H, inv = [
+    [b[1] * c[2] - b[2] * c[1], a[2] * c[1] - a[1] * c[2], a[1] * b[2] - a[2] * b[1]],
+    [b[2] * c[0] - b[0] * c[2], a[0] * c[2] - a[2] * c[0], a[2] * b[0] - a[0] * b[2]],
+    [b[0] * c[1] - b[1] * c[0], a[1] * c[0] - a[0] * c[1], a[0] * b[1] - a[1] * b[0]]];
+  const u = px / 640, v = py / 360, w = inv.map(r => r[0] * u + r[1] * v + r[2]);
+  return [w[0] / w[2], w[1] / w[2]];
+}
+function svgPoint(e) {
+  const pt = $("goalSvg").createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+  return pt.matrixTransform($("goalSvg").getScreenCTM().inverse());
+}
+function drawGoal() {
+  if (!goalView) return;
+  const P = goalView.projection;
+  for (const n of Object.keys(goalView.goal || {})) if (!choiceValid(n, goalChoice[n])) goalChoice[n] = defaultChoice(n);
+  let out = "";
+  for (const [name, [color, r]] of Object.entries(GOAL_ITEMS)) {
+    const now = goalDrag?.name === name ? goalDrag.world : goalView.positions[name];
+    if (!now) continue;
+    const start = goalBase.positions[name];
+    const [px, py] = project(P, now), [rx] = project(P, [now[0] + r, now[1], now[2]]);
+    const radius = Math.max(12, Math.abs(rx - px) * 1.15);
+    const tie = goalView.goal?.[name] && !goalDrag && goalChoice[name]?.startsWith("near:") ? goalChoice[name].slice(5) : null;
+    if (tie && goalView.positions[tie]) {
+      const [tx, ty] = project(P, goalView.positions[tie]);
+      out += `<line x1="${tx}" y1="${ty}" x2="${px}" y2="${py}" stroke="#fff" stroke-width="2" stroke-dasharray="2 4" opacity=".9"/>`;
+    }
+    if (goalPending[name] || goalView.goal?.[name]) {
+      const [sx, sy] = project(P, start);
+      out += `<line x1="${sx}" y1="${sy}" x2="${px}" y2="${py}" stroke="${color}" stroke-width="2" stroke-dasharray="5 4" opacity=".9"/>
+              <circle cx="${sx}" cy="${sy}" r="5" fill="${color}" opacity=".8"/>`;
+    }
+    out += `<g class="goal-marker" data-goal="${name}">
+      <circle cx="${px}" cy="${py}" r="${radius}" fill="${color}" fill-opacity=".18" stroke="${color}" stroke-width="3"/>
+      <text x="${px}" y="${py - radius - 6}" text-anchor="middle">${itemName(name)}</text></g>`;
+  }
+  // Where each moved object may end up: anywhere in its bowl / on its plate (their size), or within the distance of its
+  // spot beside an item / on the table (drawn on top of the markers).
+  const ring = (cx, cy, z, radius) => Array.from({ length: 40 }, (_, i) => {
+    const a = i / 40 * 2 * Math.PI, [px, py] = project(P, [cx + radius * Math.cos(a), cy + radius * Math.sin(a), z]);
+    return `${i ? "L" : "M"}${px.toFixed(1)},${py.toFixed(1)}`;
+  }).join("") + "Z";
+  const tol = (rules.goal?.tolerance_cm ?? 4) / 100;
+  for (const n of Object.keys(goalView.goal || {})) {
+    if (goalDrag?.name === n) continue;
+    const c = goalChoice[n], color = GOAL_ITEMS[n][0], p = goalView.positions[n];
+    const zone = c.startsWith("in:") ? [...goalView.positions[c.slice(3)].slice(0, 2), goalView.positions[c.slice(3)][2] + 0.02, 0.07]
+      : [p[0], p[1], 0.762, tol];
+    out += `<path d="${ring(...zone)}" fill="${color}" fill-opacity=".18" stroke="#fff" stroke-width="2.5" stroke-dasharray="6 4" pointer-events="none"/>
+            <path d="${ring(...zone)}" fill="none" stroke="${color}" stroke-width="1.5" stroke-dasharray="6 4" pointer-events="none"/>`;
+  }
+  $("goalSvg").innerHTML = out;
+  const moved = Object.keys(goalView.goal || {});
+  for (const n of moved) if (!choiceValid(n, goalChoice[n])) goalChoice[n] = defaultChoice(n);
+  const describe = n => {
+    const c = goalChoice[n];
+    if (c.startsWith("in:")) return `judged: anywhere ${c === "in:bowl" ? "in the bowl" : "on the plate"}, wherever it ends up`;
+    if (c === "at") return `judged: this spot on the table (${goalView.positions[n].slice(0, 2).map(v => fmt(v * 100)).join(", ")} cm) · this seed only`;
+    const ref = c.slice(5);
+    return `judged: ${offsetWords(offsetCm(n, ref), ref)}, wherever it ends up`;
+  };
+  const options = n => [
+    ...(goalView.relations?.[n] ? [[`in:${goalView.relations[n]}`, goalView.relations[n] === "bowl" ? "in the bowl" : "on the plate"]] : []),
+    ...GOAL_REFS.filter(r => r !== n && goalView.positions[r]).map(r => [`near:${r}`, `beside the ${itemName(r)}`]),
+    ["at", "a fixed spot on the table"]];
+  $("goalList").innerHTML = moved.length
+    ? moved.map(n => `<div class="goal-rel"><b style="color:${GOAL_ITEMS[n][0]}">${itemName(n)}</b>
+        <select data-rel="${n}" aria-label="What ${itemName(n)} is judged against">${options(n).map(([v, label]) =>
+          `<option value="${v}" ${v === goalChoice[n] ? "selected" : ""}>${label}</option>`).join("")}</select>
+        <span>${esc(describe(n))}</span></div>`).join("")
+    : "<span>Nothing moved yet: drag an object.</span>";
+  document.querySelectorAll("[data-rel]").forEach(s => s.onchange = () => { goalChoice[s.dataset.rel] = s.value; drawGoal(); });
+  showGoalNote();
+  showGoalRules();
+}
+async function renderGoal(goal) {
+  $("goalBusyText").textContent = Object.keys(goal).length ? "Placing the objects…" : "Rendering the scene…";
+  $("goalBusy").hidden = false;
+  try {
+    const ood = readOOD();
+    if (ood === null) throw new Error("Fix the scene settings first.");
+    const view = await api("/api/goal-preview", { ...startScene(ood), goal });
+    view.goal = goal;
+    goalView = view;
+    if (!Object.keys(goal).length) goalBase = view;
+    $("goalImg").src = view.image;
+    goalPending = {};
+    drawGoal();
+  } catch (err) { notify(err.message); }
+  finally { $("goalBusy").hidden = true; }
+}
+$("goalSvg").addEventListener("pointerdown", e => {
+  const g = e.target.closest("[data-goal]");
+  if (!g || !goalView || !$("goalBusy").hidden) return;
+  const name = g.dataset.goal, z = goalBase.positions[name][2];
+  goalDrag = { name, z, world: [...goalView.positions[name]] };
+  $("goalSvg").setPointerCapture(e.pointerId);
+});
+$("goalSvg").addEventListener("pointermove", e => {
+  if (!goalDrag) return;
+  const p = svgPoint(e), [x, y] = unproject(goalView.projection, p.x, p.y, goalDrag.z);
+  goalDrag.world = [Math.min(0.32, Math.max(-0.32, x)), Math.min(0.2, Math.max(-0.26, y)), goalDrag.z];
+  goalPending[goalDrag.name] = true;
+  drawGoal();
+});
+for (const type of ["pointerup", "pointercancel"]) $("goalSvg").addEventListener(type, () => {
+  if (!goalDrag) return;
+  const { name, world } = goalDrag;
+  goalDrag = null;
+  const goal = { ...(goalView.goal || {}) };
+  goal[name] = world.slice(0, 2).map(v => Math.round(v * 1e4) / 1e4);
+  renderGoal(goal);
+});
+// A goal of relations only (in the bowl, on the plate) means the same for any seed: runs and batches can use it.
+const goalRelational = () => !!goalSpec && Object.values(goalSpec.objects).every(e => !e.at);
+function clearGoal() {
+  goalSpec = null; goalStart = null;
+  showTask();
+}
+// The task card above Single / Batch: what Dream-1 is told and how success is judged.
+function showTask() {
+  $("taskPrompt").textContent = `“${$("task").value.trim() || "(no prompt)"}”`;
+  const r = rules.goal || {};
+  $("taskJudged").textContent = goalSpec
+    ? `Success: goal scene · ${specText(goalSpec)} · within ${fmt(r.tolerance_cm ?? 4)} cm` + (goalRelational() ? " · any seed" : " · this seed only (a fixed spot)")
+    : `Success: ${($("taskNote").textContent || "by the task's words").replace(/^Judged as /, "by its words · ")}`;
+  if ($("batchTaskName")) $("batchTaskName").textContent = $("taskPrompt").textContent + (goalSpec ? " with its goal scene" : "");
+}
+// Under the prompt in the task dialog: a goal scene (objects moved on the picture) decides success, not the words.
+function showGoalNote() {
+  const note = $("taskNote"), moved = Object.keys(goalView?.goal || {});
+  if (!$("goalDialog").open || !moved.length) { if (note.dataset.words) note.textContent = note.dataset.words; note.classList.remove("good"); return; }
+  const draft = moved.map(n => {
+    const c = goalChoice[n] || "";
+    return `${itemName(n)} ${c.startsWith("in:") ? (c === "in:bowl" ? "in the bowl" : "on the plate")
+      : c.startsWith("near:") ? offsetWords(offsetCm(n, c.slice(5)), c.slice(5)) : "at its spot"}`;
+  });
+  note.classList.remove("bad");
+  note.textContent = `Judged by the goal scene: ${draft.join("; ")} (not by the words).`;
+}
+function showGoalRules() {
+  const r = rules.goal || {};
+  $("goalTol").value = r.tolerance_cm ?? 4; $("goalTolText").textContent = `${fmt(r.tolerance_cm ?? 4)} cm`;
+  $("goalStill").value = r.still_seconds ?? 1; $("goalStillText").textContent = `${fmt(r.still_seconds ?? 1)} s`;
+  $("goalRelease").checked = r.release !== false;
+  $("goalRuleNote").textContent = "In the bowl / on the plate: anywhere in it (its own size). Distance: how far from its spot " +
+    "beside an item or on the table. Relations follow their item wherever it ends up (any seed).";
+}
+$("goalTol").oninput = () => { changeRules("goal", { tolerance_cm: Number($("goalTol").value) }); showGoalRules(); drawGoal(); showTask(); };
+$("goalStill").oninput = () => { changeRules("goal", { still_seconds: Number($("goalStill").value) }); showGoalRules(); };
+$("goalRelease").onchange = () => { changeRules("goal", { release: $("goalRelease").checked }); showGoalRules(); };
+let taskBefore = "";
+$("setTask").onclick = async () => {
+  taskBefore = $("task").value;
+  showGoalRules();
+  $("goalDialog").showModal();
+  if (isOpenYAM()) { $("goalList").innerHTML = "<span>The goal scene is for YAM: on OpenYAM the task is judged by its words.</span>"; return; }
+  const ood = readOOD();
+  if (ood === null) return;
+  $("goalImg").removeAttribute("src"); $("goalSvg").innerHTML = ""; goalView = null;
+  goalStart = JSON.stringify(startScene(ood));
+  await renderGoal({});
+  if (goalSpec && goalBase) {
+    goalChoice = Object.fromEntries(Object.entries(goalSpec.objects).map(([n, e]) => [n, e.in ? "in:" + e.in : e.near ? "near:" + e.near : "at"]));
+    await renderGoal(Object.fromEntries(Object.entries(goalSpec.objects).map(([n, e]) => {
+      if (e.in) return [n, goalBase.positions[e.in].slice(0, 2)];
+      if (e.near) return [n, [goalBase.positions[e.near][0] + e.offset_cm[0] / 100, goalBase.positions[e.near][1] + e.offset_cm[1] / 100]];
+      return [n, e.at.slice(0, 2)];
+    })));
+  }
+};
+$("goalReset").onclick = () => { goalChoice = {}; renderGoal({}); };
+$("goalCancel").onclick = () => { $("task").value = taskBefore; $("goalDialog").close(); checkTask(); };
+$("goalUse").onclick = () => {
+  if (!$("task").value.trim()) { notify("Write what Dream-1 should do."); return; }
+  const moved = Object.keys(goalView?.goal || {});
+  if (!moved.length) { goalSpec = null; showTask(); $("goalDialog").close(); return; }  // judged by the words
+  goalSpec = { type: "goal", objects: Object.fromEntries(moved.map(n => {
+    const c = goalChoice[n] || defaultChoice(n);
+    if (c.startsWith("in:")) return [n, { in: c.slice(3) }];
+    if (c.startsWith("near:")) return [n, { near: c.slice(5), offset_cm: offsetCm(n, c.slice(5)).map(v => Math.round(v * 10) / 10), z: goalView.positions[n][2] }];
+    return [n, { at: goalView.positions[n] }];
+  })) };
+  $("goalDialog").close();
+  checkTask();
+  showTask();
+};
+
+/* ---------- data collection settings (monitor.py, recovery.py) ---------- */
+
+let scriptGoal = "finish";
+for (const [id, g] of [["goalFinish", "finish"], ["goalCarry", "carry"]]) $(id).onclick = () => {
+  scriptGoal = g;
+  for (const [other, og] of [["goalFinish", "finish"], ["goalCarry", "carry"]]) {
+    $(other).classList.toggle("on", og === g); $(other).setAttribute("aria-pressed", og === g);
+  }
+};
+const collectionSettings = () => ({
+  stall_s: Number($("stallS").value) || 6, quick_fail: $("quickFail").checked, script_goal: scriptGoal,
+  script_speed: Number($("scriptSpeed").value) || 1, end_on_success: $("endOnSuccess").checked,
+});
+/** The settings show under whichever form runs in data collection or rule-based mode; a rule-based run has no
+ *  Dream-1 to hand over from, so only the script's speed and ending on success apply. */
+function placeCollectBox() {
+  $("collectBox").hidden = true;  // the Test page: no recovery script, so none of its settings
+  return;
+  const scripted = ["collect", "script"];  // Original runs in data collection mode too (fixed scene, with recovery)
+  const single = mode === "single" && scripted.includes(runMode()), batch = mode === "batch" && [...scripted, "original"].includes(batchMode);
+  const ruleBased = (single ? runMode() : batchMode) === "script";
+  $("collectBox").hidden = !(single || batch);
+  for (const id of ["stallRow", "quickRow", "goalRow"]) $(id).hidden = ruleBased;
+  $("collectTitle").textContent = ruleBased ? "Rule-based script settings" : "Data collection settings · faster successes";
+  if (single) $("singleCollectSlot").append($("collectBox"));
+  if (batch) $("batchCollectSlot").append($("collectBox"));
+}
+for (const id of ["modeSingle", "modeBatch", "batchPlain"]) $(id).addEventListener("click", placeCollectBox);
+for (const radio of document.querySelectorAll("input[name=runMode]")) radio.addEventListener("change", placeCollectBox);
+
+/* ---------- human control (KSY: teleop.py, monitor.py, recovery.py) ---------- */
+
+let liveFps = 0, teleopOn = false, teleopOnly = false;
+const runMode = () => document.querySelector("input[name=runMode]:checked")?.value || "collect";
+for (const radio of document.querySelectorAll("input[name=runMode]")) radio.addEventListener("change", refresh);
+const MODE_NAMES = { dream: "Dream-1", paused: "Dream-1 needs help", human: "Human", script: "Script recovering", returning: "Giving back to Dream-1…" };
+const REASONS = { dropped: "Dream-1 dropped the object", stalled: "Dream-1 stopped making progress", off_table: "The object fell off the table (cannot be recovered)" };
+
+/** While a run waits for its model to start on Dream Labs (a fine-tune that is not running yet answers DA-2000
+ *  pool_warming): the arms do not move until it answers, so say so above the camera view. */
+function showWarming(w, batch) {
+  $("warmingNote").hidden = $("warmingOverlay").hidden = !w;
+  if (!w) return;
+  $("warmingWait").textContent = `waited about ${w.waited_s} s · the arms move once it answers`;
+  const who = batch ? (w.episodes > 1 ? `${w.episodes} episodes are` : "An episode is") : "The run is";
+  $("warmingText").innerHTML = `<b>Starting the model on Dream Labs</b> · ${esc(w.model)} · waited about ${w.waited_s} s. `
+    + `${who} waiting for it: the arms move once it answers. A model that has not run for a while takes a few minutes to start `
+    + `(up to 10 min); this wait is not counted in the run's time.`;
+  $("statusText").textContent = "Starting the model…";
+}
+
+/** The control panel under the camera, from sim.py's control state. */
+function showControl(s, batchRunning) {
+  const t = s.teleop;
+  teleopOn = !!(s.running && t && !batchRunning);
+  teleopOnly = s.mode === "human" || s.mode === "resumed";
+  $("controlBox").hidden = !teleopOn;
+  $("live").classList.toggle("control", teleopOn && !t?.collecting);
+  if (!teleopOn) return;
+  $("controlMode").textContent = MODE_NAMES[t.mode] || t.mode;
+  $("controlMode").className = "badge " + t.mode;
+  $("teleopInfo").textContent = `arm: ${t.active} · gripper ${t.grip[t.active]}` + (t.hand[t.active] ? ` · hand at ${t.hand[t.active].join(", ")} m` : "");
+  $("reach").textContent = t.reach_limited ? "The hand cannot go further that way (reach or joint limit)." : "";
+  $("message").textContent = t.message || "";
+  $("graspBtn").textContent = t.grasp_style === "tilted" ? "Grasp: tilted (G)" : "Grasp: from above (G)";
+  const m = t.monitor, r = t.recovery;
+  $("stage").textContent = (m && m.understood ? `Task stage: ${m.stage}` + (t.mode === "dream" && m.seconds_without_progress > 3 ? ` · no progress for ${m.seconds_without_progress} s` : "") : "Monitor: pick and place tasks only")
+    + (t.recording ? ` · ● recording (${t.recording.steps} steps)` : " · not recording");
+  let help = "", ok = false;
+  if (t.mode === "script" && r && r.event === "scripted") help = `Rule-based run: the script is placing the ${(t.monitor?.object || "object").replace("water_", "")} (goal: ${m && m.goal || "—"}) · step: ${r.step || "—"} · attempt ${r.attempt} of ${r.max_attempts} (${r.arm || "—"} arm).`;
+  else if (t.mode === "script" && r) help = `${REASONS[r.event] || r.event}. The script is recovering (goal: ${m && m.goal || r.goal}) · step: ${r.step || "—"} · attempt ${r.attempt} of ${r.max_attempts} (${r.arm || "—"} arm).` + (t.collecting ? "" : " Press T or click the picture to take over.");
+  else if (t.mode === "paused" && r && r.result && r.result.startsWith("gave up")) help = `The script ${r.result}. The arms are held. Recovery goal: ${m && m.goal || "—"}. Click the picture or press T to start.`;
+  else if (t.mode === "paused") help = `${REASONS[t.reason] || t.reason}. The arms are held. Recovery goal: ${m && m.goal || "—"}. Click the picture or press T to start.`;
+  else if (t.mode === "human" && m && m.goal) { ok = m.goal_reached; help = ok ? `Recovery goal reached (${m.goal}). Press T to give the arms back to Dream-1.` : `Recovery goal: ${m.goal}.`; }
+  else if (t.mode === "returning") help = "Giving the arms back: Dream-1 starts a fresh chunk…";
+  $("help").hidden = !help;
+  $("help").textContent = help;
+  $("help").classList.toggle("ok", ok);
+  // In a human-only run T hands the arms to Dream-1 (once); after that it works as in a Dream-1 run.
+  $("takeBtn").textContent = t.mode === "human" ? (teleopOnly && !t.dream_available ? "Hand to Dream-1 (T)" : "Give back (T)") : "Take over (T)";
+  // Data collection: the model and the recovery script only; the human controls come back in a resumed run.
+  $("controlButtons").hidden = !!t.collecting;
+  if (t.collecting) {
+    const ruleBased = s.mode === "script";
+    $("controlMode").textContent = ruleBased ? "Rule-based · script" : t.mode === "script" ? "Collecting · recovery script" : "Collecting · Dream-1";
+    $("message").textContent = ruleBased ? "Rule-based only: the script does the task, no Dream-1. If it gives up, the run ends; recover it later in Recordings."
+      : "Data collection: no human input. A failure the script cannot recover ends the run; recover it later in Recordings.";
+  }
+}
+
+$("takeBtn").onclick = () => api("/api/keys", { press: "t" }).then(refresh).catch(() => {});
+for (const b of document.querySelectorAll("[data-press]")) b.onclick = () => api("/api/keys", { press: b.dataset.press }).then(refresh).catch(() => {});
+
+// Keyboard: held direction keys are sent whenever the set changes; Space, Tab, V, T, H and G are single presses.
+// Keys by their place on the keyboard (e.code), so a Korean input source still works (H types "ㅗ").
+const HELD = new Set(["w", "a", "s", "d", "r", "f", "q", "e", "z", "x"]);
+const PRESS = { " ": "space", "tab": "tab", "v": "v", "t": "t", "h": "home", "g": "g" };
+const held = new Set();
+const typing = e => e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT" || (e.target.tagName === "INPUT" && !["checkbox", "radio", "button", "submit", "range"].includes(e.target.type));
+function sendHeld() {
+  document.querySelectorAll("kbd[data-k]").forEach(k => k.classList.toggle("down", held.has(k.dataset.k)));
+  api("/api/keys", { held: [...held] }).catch(() => {});
+}
+function keyName(e) {
+  if (e.code && e.code.startsWith("Key")) return e.code.slice(3).toLowerCase();
+  if (e.code === "Space") return " ";
+  if (e.code === "Tab") return "tab";
+  return (e.key || "").toLowerCase();
+}
+document.addEventListener("keydown", e => {
+  if (!teleopOn || typing(e) || e.metaKey || e.ctrlKey || e.altKey) return;
+  const key = keyName(e);
+  if (HELD.has(key)) { e.preventDefault(); if (!held.has(key)) { held.add(key); sendHeld(); } }
+  else if (PRESS[key] && !e.repeat) { e.preventDefault(); api("/api/keys", { press: PRESS[key] }).then(refresh).catch(() => {}); }
+});
+document.addEventListener("keyup", e => { if (held.delete(keyName(e))) sendHeld(); });
+window.addEventListener("blur", () => { if (held.size) { held.clear(); sendHeld(); } });  // never leave a key stuck down
+
+// Mouse on the live picture (720 x 270): the top camera fills the left 480 x 270, the left wrist camera the top right
+// 240 x 135, the right wrist camera the bottom right. u, v are 0..1 within that camera's part.
+function view(e) {
+  const r = $("live").getBoundingClientRect();
+  const x = (e.clientX - r.left) / r.width * 720, y = (e.clientY - r.top) / r.height * 270;
+  if (x < 0 || y < 0 || x > 720 || y > 270) return null;
+  if (x < 480) return { camera: "top", uv: [x / 480, y / 270] };
+  return y < 135 ? { camera: "left", uv: [(x - 480) / 240, y / 135] } : { camera: "right", uv: [(x - 480) / 240, (y - 135) / 135] };
+}
+const topCamera = e => { const v = view(e); return v && v.camera === "top" ? v.uv : null; };
+let down = null, draggingHand = false, lastDrag = 0;
+$("live").addEventListener("mousedown", e => {
+  if (!teleopOn) return;
+  e.preventDefault(); document.activeElement.blur();
+  down = view(e) && [e.clientX, e.clientY]; draggingHand = false;
+});
+window.addEventListener("mousemove", e => {
+  if (!down || !teleopOn) return;
+  if (!draggingHand && Math.hypot(e.clientX - down[0], e.clientY - down[1]) < 5) return;
+  if (!topCamera({ clientX: down[0], clientY: down[1] })) return;  // drag only in the top camera
+  draggingHand = true;
+  const uv = topCamera(e);
+  if (uv && Date.now() - lastDrag > 50) { lastDrag = Date.now(); api("/api/keys", { drag: uv }).catch(() => {}); }
+});
+window.addEventListener("mouseup", e => {
+  if (down && !draggingHand && teleopOn) { const v = view(e); if (v) api("/api/keys", { click: v.uv, camera: v.camera }).then(refresh).catch(() => {}); }
+  down = null; draggingHand = false;
+});
+$("live").addEventListener("wheel", e => {
+  if (!teleopOn) return;
+  e.preventDefault();
+  api("/api/keys", { wheel: Math.sign(e.deltaY) * -1 }).catch(() => {});
+}, { passive: false });
+
+/* ---------- recordings: pick a recorded run and a step, restart it there with a human in control ---------- */
+
+let episodes = [], chosen = null, frameTimer = null;
+const recorded = id => { const m = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})/.exec(id); return m ? when(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`) : id; };
+async function loadEpisodes() {
+  try { episodes = (await api("/api/episodes")).episodes; } catch { return; }
+  const list = $("failuresOnly").checked ? episodes.filter(e => e.label !== "success") : episodes;
+  $("epsEmpty").hidden = list.length > 0;
+  $("epsBody").innerHTML = "";
+  for (const e of list) {
+    const tr = document.createElement("tr");
+    if (chosen && chosen.id === e.id) tr.className = "chosen";
+    const fails = e.failures.length ? e.failures.map(f => `${f.event} @ step ${f.step}`).join(", ") : (e.label === "success" ? "—" : `none flagged · ended at "${esc(e.final_stage)}"`);
+    const extra = (e.script?.length ? `<div class="muted">script: ${esc(e.script.join("; "))}</div>` : "") + (e.ended ? `<div class="muted">run ended: ${esc(e.ended)}</div>` : "");
+    const origin = e.resumed_from ? ` · resumed from ${esc(String(e.resumed_from.episode || "").slice(9))} @ ${e.resumed_from.step}` : "";
+    tr.innerHTML = `<td>${recorded(e.id)}<div class="muted">${esc(e.started_as || "")}${origin}</div></td><td>${esc(e.task || "")}</td>
+      <td><span class="pill ${esc(e.label || "")}">${esc(e.label || "")}</span><div class="muted">${e.steps} steps</div></td>
+      <td class="hide-sm">${fails}${extra}</td><td><button class="ghost small">Choose</button></td>`;
+    tr.querySelector("button").onclick = () => choose(e);
+    $("epsBody").appendChild(tr);
+  }
+}
+function choose(e) {
+  chosen = e;
+  const failure = e.failures.length ? e.failures[0].step : null;
+  chosen.defaultStep = failure !== null ? Math.max(0, failure - 20) : Math.max(0, e.steps - 40);  // 1 s before the failure
+  $("resumeBox").hidden = false;
+  $("resumeTitle").textContent = `${recorded(e.id)} · ${e.task}`;
+  $("resumeInfo").textContent = failure !== null ? `The monitor saw "${e.failures[0].event}" at step ${failure}. Starting 1 s before it.`
+    : `No failure flagged; it ended at stage "${e.final_stage}". Starting 2 s before the end.`;
+  $("resumeStep").max = e.steps - 1;
+  setStep(chosen.defaultStep);
+  loadEpisodes();
+}
+function setStep(k) {
+  k = Math.max(0, Math.min(chosen.steps - 1, Math.round(k)));
+  $("resumeStep").value = k;
+  $("resumeStepText").textContent = `${k} (${(k * 0.05).toFixed(2)} s)`;
+  clearTimeout(frameTimer);
+  frameTimer = setTimeout(() => { $("resumeImg").src = `/api/episodes/${chosen.id}/frame.jpg?step=${k}`; }, 120);
+}
+$("resumeStep").oninput = () => setStep(+$("resumeStep").value);
+$("toFailure").onclick = () => setStep(chosen.failures.length ? chosen.failures[0].step : chosen.steps - 1);
+$("back1s").onclick = () => setStep(+$("resumeStep").value - 20);
+$("fwd1s").onclick = () => setStep(+$("resumeStep").value + 20);
+$("failuresOnly").onchange = loadEpisodes;
+$("reloadEps").onclick = loadEpisodes;
+$("resumeBtn").onclick = async () => {
+  if (running && !(await ask("A run is going. Stop it (its recording is saved) and resume this one?", "Stop and resume"))) return;
+  $("resumeBtn").disabled = true;
+  $("resumeBtn").textContent = running ? "Stopping the current run…" : "Restoring…";
+  try {
+    if (mode !== "single") setMode("single");
+    await api("/api/resume", { episode: chosen.id, step: +$("resumeStep").value, seconds: $("seconds").value, record: $("record").checked });
+    $("live").hidden = true; $("placeholder").hidden = false;
+    $("placeholder").textContent = "Restoring the recorded moment…";
+    $("placeholder").scrollIntoView({ behavior: "smooth", block: "center" });
+    refresh();
+  } catch (err) { showError(err); }
+  $("resumeBtn").disabled = false;
+  $("resumeBtn").textContent = "Resume here (you control)";
+};
+
+$("ood").addEventListener("input", schedulePreview);
+$("ood").addEventListener("reset", schedulePreview);
+
+(async () => {
+  try { rules = await api("/api/rules"); } catch {}
+  showRules();
+  resetScene();
+  await loadSimulator().catch(() => {});
+  const ready = await loadOOD(api);
+  settingsReady = ready;
+  if (ready) {
+    initSeed(schedulePreview);
+    // seed.js puts the Seed field above the examples; it serves both modes, so it goes under the mode switch.
+    $("seedBox").append(...document.querySelectorAll(".seed-row, .seed-note"));
+    $("seed").addEventListener("input", estimate);
+    $("newSeed").addEventListener("click", estimate);
+    estimate();
+  }
+  loadModels();
+  await loadRuns().catch(() => {});
+  loadEpisodes();
+  placeCollectBox();
+  await refresh();
+  if (ready) schedulePreview();
+  else $("placeholder").textContent = "Restart app.py to load the current scene settings.";
+  setInterval(refresh, 1000);
+})();
+</script>
+</body>
+</html>

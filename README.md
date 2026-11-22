@@ -22,12 +22,26 @@ Open http://localhost:8000. The site has several pages:
 
 - **Start** (`/`): **Sweet Dream** and a sign-in box. Paste your Dream API key → **Sign in**: Dream Labs is asked
   whether it accepts the key (it lists the models: free, nothing runs). The key is kept in memory only.
-- **Sections** (`/sections`): **Collect Custom Dataset!** (the page below), **Train Custom Model!** and
-  **Test the model!** (coming soon). **Sign out** clears the key.
+- **Sections** (`/sections`): **Collect Custom Dataset!** (the page below), **Train Custom Model!** (coming soon)
+  and **Test Custom Model!**. **Sign out** clears the key.
 - **Collect Custom Dataset!** (`/collect`): runs, batches, labels and datasets, as follows.
+- **Test Custom Model!** (`/test`, `static/test.html`): for now a copy of the Collect page, to try a fine-tune: pick it
+  in the **Model** bar (below), then run it once or in a batch. It shares the runs, rules and model choice with the
+  Collect page.
 
 1. The API key from the sign-in is used (no key box here): the top right shows its last characters, and **Sign out**
    clears it and goes back to the start page. Without a key (signed out, or the server restarted) the page goes there too.
+   **Model** (the bar under the title): the model Dream-1 runs as, from the models this key may run: the public ones
+   (`dream-1-beta`, `dream-1-beta-flash`) and **Your fine-tunes** (`dream-1-ft:<account>-<suffix>`; one not finished
+   yet is greyed out, and **↻** lists them again). Single runs and new batches use it; a batch keeps the model it
+   started with, and each run keeps its model in `meta.json` (`model`, also in a dataset's manifest). A fine-tune runs
+   only with the key of the account that trained it, and a new key or Sign out goes back to the beta. A fine-tune that
+   is not running yet is started by its first call (`DA-2000 pool_warming`): the run waits, up to 10 minutes, and that
+   wait is not counted in its seconds; the camera view shows a spinning ring with the time waited until it answers.
+   A fine-tune can overshoot the gripper a little (such as 1.07, fully open): values up to 0.25 outside 0..1 are
+   clipped to 0..1 (`meta.json`: `gripper_clipped`), and only ones further out stop the run as a wrong reply.
+   Prompt a fine-tune the way it was trained. From the command line:
+   `python sim.py "..." --model dream-1-ft:<account>-<suffix>` (or `batch.py --model ...`).
 2. **Robot** and **Room**: the list offers the team's target robot, YAM (`simulator_settings.TARGET_ROBOTS`; add
    `"openyam"` there to offer it again). YAM (with the seed scenes and scene settings below) or OpenYAM (on the Dream Labs Sandbox
    table; needs [Node.js](https://nodejs.org) to fetch it, and a seed only shifts its objects by up to 2 cm). The other
@@ -227,6 +241,7 @@ or the scene settings change after the goal is set, Run asks before dropping the
 | --- | --- |
 | `app.py` | The website: runs, previews, batches, rules, labels |
 | `static/index.html`, `static/ood.js`, `static/seed.js` | The page; scene settings form; seed field and random boxes |
+| `static/test.html` | The Test Custom Model page (for now a copy of `index.html` with its own title) |
 | `sim.py` | Runs one task (or renders a start scene with `--preview`) and saves its trajectory |
 | `scene.py`, `scene_reach_map.npz` | Start scenes from a seed (see `SCENE_SEED.md`) |
 | `ood.py`, `seed_web.py` | Scene settings (camera, arms, blur, light, table); the web side of the seed |
