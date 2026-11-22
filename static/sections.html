@@ -12,9 +12,9 @@
 <style>
   .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
          max-width: 1200px; margin: 0 auto; padding: 18px clamp(16px, 3vw, 40px); border-bottom: 1px solid var(--line-soft); }
-  .top .name { font-size: 20px; font-weight: 500; letter-spacing: -0.01em; text-decoration: none; color: var(--ink);
+  .top .name { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; text-decoration: none; color: var(--ink);
                display: inline-flex; align-items: center; gap: 8px; }
-  .top .name .logo { width: 34px; height: 34px; }
+  .top .name .logo { width: 40px; height: 40px; }
   .account { display: flex; align-items: center; gap: 12px; font-size: 15px; }
   main { max-width: 1200px; margin: 0 auto; padding: 40px clamp(16px, 3vw, 40px) 72px; }
   .intro { margin: 24px 0 40px; max-width: 760px; }
@@ -39,7 +39,7 @@
 </head>
 <body>
 <header class="top">
-  <a class="name" href="/sections"><img class="logo" src="/icon.svg" alt="">Sweet <span class="mark">Dream</span></a>
+  <a class="name" href="/sections"><img class="logo" src="/icon.svg" alt=""><span><span class="sweet">Sweet</span> Dream</span></a>
   <div class="account">
     <span class="muted">Key <b id="keyHint">…</b></span>
     <button type="button" class="outline" id="signOut">Sign out</button>
@@ -57,12 +57,12 @@
       <p>Run Dream-1, the rule-based script or whole batches in the simulator, label the runs, and save the successes as a dataset in the Dream Labs format.</p>
       <span class="go button dark">Open</span>
     </a>
-    <div class="card train soon" aria-disabled="true">
+    <a class="card train" href="https://platform.dreamlabs.ai/fine-tuning/datasets" target="_blank" rel="noopener">
       <span class="step">Step 2</span>
       <h2>Train Custom Model!</h2>
-      <p>Upload a dataset to Dream Labs and fine-tune Dream-1 on it.</p>
-      <span class="go">Coming soon</span>
-    </div>
+      <p>Upload a dataset to Dream Labs and fine-tune Dream-1 on it, on the Dream Labs platform (opens in a new tab).</p>
+      <span class="go button dark">Open Dream Labs ↗</span>
+    </a>
     <a class="card test" href="/test">
       <span class="step">Step 3</span>
       <h2>Test Custom Model!</h2>

@@ -22,8 +22,8 @@ Open http://localhost:8000. The site has several pages:
 
 - **Start** (`/`): **Sweet Dream** and a sign-in box. Paste your Dream API key → **Sign in**: Dream Labs is asked
   whether it accepts the key (it lists the models: free, nothing runs). The key is kept in memory only.
-- **Sections** (`/sections`): **Collect Custom Dataset!** (the page below), **Train Custom Model!** (coming soon)
-  and **Test Custom Model!**. **Sign out** clears the key.
+- **Sections** (`/sections`): **Collect Custom Dataset!** (the page below), **Train Custom Model!** (the Dream Labs
+  platform's fine-tuning page, in a new tab) and **Test Custom Model!**. **Sign out** clears the key.
 - **Collect Custom Dataset!** (`/collect`): runs, batches, labels and datasets, as follows.
 - **Test Custom Model!** (`/test`, `static/test.html`): for now a copy of the Collect page, to try a fine-tune: pick it
   in the **Model** bar (below), then run it once or in a batch. It shares the runs, rules and model choice with the

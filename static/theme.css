@@ -21,7 +21,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 a { color: var(--ink); }
-.brand { font-size: clamp(48px, 9vw, 88px); line-height: 1.02; letter-spacing: -0.023em; font-weight: 400; margin: 0; }
+.brand { font-size: clamp(48px, 9vw, 88px); line-height: 1.02; letter-spacing: -0.023em; font-weight: 600; margin: 0; }
+.sweet { color: #e8a200; } /* honey: Sweet in Sweet Dream */
 .mark { background: var(--sunshine); border-radius: 4px; padding: 0 .08em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .tagline { color: var(--ink-2); margin: 16px 0 0; font-size: clamp(17px, 2vw, 20px); line-height: 1.45; }
 .panel { background: var(--clay); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 28px; }
