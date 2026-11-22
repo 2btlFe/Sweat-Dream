@@ -826,6 +826,8 @@ class Batch:
                      "ood_random": random_names, "rules": current_rules(), "robot": list(robot), "mode": mode,
                      "workers": workers, "collection": collection, "original_of": original_of, "original": original or bool(original_of), "batch_seed": batch_seed, "vary_scene": bool(vary_scene),
                      "testset": testset and {"id": testset["id"], "name": testset["name"] or testset["id"]},
+                     # Model-only batches (the Test page) end each episode as soon as the judge says success.
+                     "end_on_success": mode == "plain",
                      "model": MODEL["value"], "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
                      "started": time.time(), "ended": None, "current": None, "active": [], "stopped_reason": None,
                      "durations": [], "invalid_in_a_row": 0}
@@ -906,6 +908,7 @@ class Batch:
                 "tasks": info["tasks"], "seconds": info["seconds"], "total": info["total"], "seeds": info["seeds"],
                 "scene_settings": info["ood"], "random_settings": info["ood_random"], "vary_scene": info["vary_scene"],
                 "robot": info["robot"], "workers": info["workers"], "collection": info["collection"],
+                "end_on_success": info.get("end_on_success"),
                 "rules": info["rules"],
                 "started_at": datetime.fromtimestamp(info["started"]).isoformat(timespec="seconds"),
                 "ended_at": datetime.fromtimestamp(info["ended"]).isoformat(timespec="seconds") if info["ended"] else None,
@@ -925,6 +928,7 @@ class Batch:
         env = {**os.environ, "PYTHONUTF8": "1", "PYTHONUNBUFFERED": "1", "PYTHONWARNINGS": "ignore",
                "STOP_FILE": str(stop_file), "RUN_DIR": str(RUNS / run_id), "BATCH_ID": info["id"],
                "JUDGE_SPEC": json.dumps(task["judge"]),
+               "JUDGE_RULES": json.dumps(info["rules"]),  # the rules as at the batch's start (its labels use them)
                "LIVE_FRAME": str(live_frame(run_id)),  # its camera view, for the page (/api/live.jpg?run=...)
                **({"ORIGINAL": "1"} if info.get("original") else {}),
                **({"BATCH_SEED": str(info["batch_seed"])} if info.get("batch_seed") is not None else {}),
@@ -941,6 +945,8 @@ class Batch:
                    {"collect": "--collect", "script": "--script-only", "plain": "--plain"}[info["mode"]]]
         if info["mode"] in ("collect", "script"):
             command += collection_args(info["collection"])[1]
+        elif info.get("end_on_success"):
+            command.append("--end-on-success")
         if info["ood"]:
             command += ["--ood", json.dumps(info["ood"])]
         if info["ood_random"]:
