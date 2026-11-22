@@ -88,17 +88,6 @@ own fine-tuned model, on the YAM two-arm robot in a MuJoCo scene.
 - **Ready to train.** Saved datasets pass Dream Labs' own checks (`dream.datasets.validate_dataset`) and upload from
   the Train page.
 
-## Results so far
-
-| What | Result |
-| --- | --- |
-| Rule-based only batch, "put the banana on the plate", varied scenes | **66 of 68** valid episodes succeeded (97%) |
-| Rule-based script on 4 pick-and-place tasks x 5 seeds, after the reach and hand-over fixes | 4 of 20 -> **7 of 20** succeeded |
-| Data collection (Dream-1 + recovery), faster failure hand-off, same 3 seeds | 1 of 3 -> **3 of 3** succeeded |
-| Banana dataset (50 unique seeds, 5,078 frames at 5 fps) | Passed the Dream Labs checks; uploaded and **processed** by Dream Labs |
-
-Fine-tuning runs and their test results will be added here.
-
 ## Quick start
 
 ```bash
@@ -138,6 +127,15 @@ Sweet Dream is licensed under the [Apache License 2.0](LICENSE); see [NOTICE](NO
 - Dream Labs, Dream-1 and the Dream Labs cloud mark (from which the Sweet Dream icon is drawn) are Dream Labs' names
   and marks, not covered by this license. Sweet Dream is not made or endorsed by Dream Labs.
 
+## Team
+
+- [Se Yeon Kim](https://www.linkedin.com/in/se-yeon-k-440760126/)
+- [DaEun Lee](https://www.linkedin.com/in/daeun-lee-b41b0133a/)
+- [Eunbin Lee](https://www.linkedin.com/in/eunbinlee/)
+- [Seogyoung Hwang](https://www.linkedin.com/in/seogyounghwang/)
+- [Yoonseo Lee](https://www.linkedin.com/in/yoonseo-lee-65307b330/)
+- [ByeongCheol Lee](https://www.linkedin.com/in/byeong-cheol-lee-637311202/)
+
 ## Acknowledgements
 
-We thank [Nota AI GmbH](https://www.nota.ai) and [Dream Labs](https://dreamlabs.ai) for their support of this project.
+We thank [Dream Labs](https://dreamlabs.ai) for its support of this project.

@@ -114,6 +114,10 @@
   .step { background: var(--white); padding: 14px 16px; }
   .step p { margin: 0; font-size: 15px; text-align: left; }
   .step .step-no { font-weight: 650; color: var(--ink); margin-bottom: 6px; }
+  .team { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 6px 0 10px;
+          padding: 0; background: var(--rule); border: 1px solid var(--rule); border-top: 2px solid var(--ink); }
+  @media (max-width: 760px) { .team { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  .team li { background: var(--white); padding: 14px 16px; font-weight: 650; }
   footer { margin-top: 40px; padding: 30px 0 48px; background: var(--white); border-top: 1px solid var(--rule); font-size: 14px; color: var(--ink-3); }
   footer p { margin: 0 0 8px; } footer h5 { margin: 16px 0 6px; font-size: 15px; color: var(--ink); }
   footer a { color: var(--ink-2); }
@@ -410,6 +414,20 @@
   </div>
 </section>
 
+<section class="section" id="team">
+  <div class="container content">
+    <h2 class="title">Team</h2>
+    <ul class="team">
+      <li><a href="https://www.linkedin.com/in/se-yeon-k-440760126/">Se Yeon Kim</a></li>
+      <li><a href="https://www.linkedin.com/in/daeun-lee-b41b0133a/">DaEun Lee</a></li>
+      <li><a href="https://www.linkedin.com/in/eunbinlee/">Eunbin Lee</a></li>
+      <li><a href="https://www.linkedin.com/in/seogyounghwang/">Seogyoung Hwang</a></li>
+      <li><a href="https://www.linkedin.com/in/yoonseo-lee-65307b330/">Yoonseo Lee</a></li>
+      <li><a href="https://www.linkedin.com/in/byeong-cheol-lee-637311202/">ByeongCheol Lee</a></li>
+    </ul>
+  </div>
+</section>
+
 <section class="section">
   <div class="container content">
     <h2 class="title">BibTeX</h2>
@@ -435,7 +453,7 @@
     <p>Page layout after the <a href="https://openvla.github.io">OpenVLA</a> project page and the
       <a href="https://nerfies.github.io">Nerfies</a> template.</p>
     <h5>Acknowledgements</h5>
-    <p>We thank <a href="https://www.nota.ai">Nota AI GmbH</a> and <a href="https://dreamlabs.ai">Dream Labs</a> for their support of this project.</p>
+    <p>We thank <a href="https://dreamlabs.ai">Dream Labs</a> for its support of this project.</p>
   </div>
 </footer>
 <script>

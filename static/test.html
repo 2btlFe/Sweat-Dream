@@ -1794,8 +1794,9 @@ $("startBatch").onclick = async () => {
   const how = batchMode === "original" ? " as the original (the default scene and settings every episode, Dream-1 with the recovery script)"
     : batchMode === "script" ? " rule-based (the script alone, no Dream-1 use)" : "";
   const use = batchMode === "script" ? "" : " of Dream-1 use";
+  const early = batchMode === "plain" ? " Each episode ends as soon as it is judged a success." : "";
   const on = testset ? ` on the test set ${testset.id} (“${testset.task}”), ${Number($("batchSeconds").value) || testset.seconds} s each` : "";
-  if (!(await ask(`Run ${count} episodes${how}${on} in the background (about ${estimate()} min${use})?`, "Start batch"))) return;
+  if (!(await ask(`Run ${count} episodes${how}${on} in the background (about ${estimate()} min${use})?${early}`, "Start batch"))) return;
   try {
     const tasks = testset ? [{ prompt: testset.task, judge: testset.judge }]
       : [{ prompt: $("task").value.trim(), ...(goalSpec ? { judge: goalSpec } : {}) }];
