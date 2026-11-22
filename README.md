@@ -30,6 +30,11 @@ things out:
 **Sweet Dream** is a local web app that runs the whole loop, from collecting data with Dream-1 to testing your own
 fine-tuned model, on the YAM two-arm robot. No extra environment to build: it is one app on your computer.
 
+> [!TIP]
+> **See it all on the [project page](https://2btlfe.github.io/Sweet-Dream/)**: the method in five steps, the
+> narrated demo video, the same task across diverse environments, and our fine-tune's result on 50 held-out apple
+> starts (**74%** success, against **2%** for Dream-1 base).
+
 <table>
 <tr>
 <td width="33%" valign="top">
