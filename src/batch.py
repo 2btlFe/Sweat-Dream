@@ -1,6 +1,6 @@
 """Collect and label independent Dream-1 episodes with the current UI rules.
 
-Example: python batch.py --repeats 10 --seconds 60 --budget-minutes 60
+Example: python src/batch.py --repeats 10 --seconds 60 --budget-minutes 60
 """
 
 import argparse
@@ -17,8 +17,9 @@ from pathlib import Path
 import judge
 from seed_web import episode_seed
 
-HERE = Path(__file__).resolve().parent
-RUNS = HERE / "runs"
+HERE = Path(__file__).resolve().parent  # the code (src/)
+ROOT = HERE.parent  # the repository: pages, data folders and test sets
+RUNS = ROOT / "runs"
 TASKS = ("put apple into the bowl", "put orange into the bowl", "put banana on the plate")
 
 
@@ -60,7 +61,7 @@ def main():
         try:
             proc = subprocess.run(
                 [sys.executable, str(HERE / "sim.py"), task, "--seconds", str(args.seconds),
-                 "--seed", str(seed), "--model", args.model], cwd=HERE, env={**os.environ, "RUN_DIR": str(folder)},
+                 "--seed", str(seed), "--model", args.model], cwd=ROOT, env={**os.environ, "RUN_DIR": str(folder)},
                 capture_output=True, text=True, timeout=args.seconds + 780)  # + a fine-tune's start-up wait
         except subprocess.TimeoutExpired:
             counts["invalid"] += 1

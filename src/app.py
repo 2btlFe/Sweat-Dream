@@ -1,6 +1,6 @@
 """A small website for running Dream-1 in the Dream Labs simulator.
 
-    python app.py              then open http://localhost:8000
+    python src/app.py          then open http://localhost:8000
 
 Press Run on the page: sim.py runs the task in its own process, the page shows the cameras live, and the run's
 trajectory is saved in runs/<id>/. The start scene comes from a seed (scene.py; see SCENE_SEED.md) with the scene
@@ -45,12 +45,13 @@ import ood
 import seed_web
 import simulator_settings as sim_settings  # the seed (scene.py): seed field, random scene controls
 
-HERE = Path(__file__).resolve().parent
-PAGE = HERE / "static" / "index.html"  # the Collect Custom Dataset! page (/collect)
+HERE = Path(__file__).resolve().parent  # the code (src/)
+ROOT = HERE.parent  # the repository: pages, data folders and test sets
+PAGE = ROOT / "static" / "index.html"  # the Collect Custom Dataset! page (/collect)
 # The pages: / signs in with the API key, /sections picks a section, /collect is the simulator and datasets page.
 PAGES = {"/": "start.html", "/sections": "sections.html", "/collect": "index.html", "/index.html": "index.html",
          "/train": "train.html", "/test": "test.html"}
-RUNS = HERE / "runs"
+RUNS = ROOT / "runs"
 RULES = RUNS / "rules.json"
 SETTINGS = RUNS / "simulator_settings.json"  # the robot and room picked on the page (simulator_settings.py)
 DEFAULT_RULES = judge.DEFAULT_RULES
@@ -70,8 +71,8 @@ WORK = Path(tempfile.mkdtemp(prefix="dream-web-"))
 LIVE = WORK / "live.jpg"
 STOP = WORK / "stop"
 TELEOP_STATE = WORK / "teleop.json"
-EPISODES = HERE / "episodes"  # KSY's recordings (recorder.py), one per run id
-DATASETS = HERE / "datasets"  # datasets saved from the page: chosen runs, their recordings and a manifest
+EPISODES = ROOT / "episodes"  # KSY's recordings (recorder.py), one per run id
+DATASETS = ROOT / "datasets"  # datasets saved from the page: chosen runs, their recordings and a manifest
 MODES = ("collect", "script", "test", "human", "plain")  # script: rule-based only (sim.py --script-only), no Dream-1
 NO_KEY_MODES = ("human", "script")  # runs that do not call Dream-1 (a human-only run calls it only after T)
 ## Data collection: how fast a failure is handed to the recovery script, and what it does (sim.py's options).
@@ -119,7 +120,7 @@ def eval_seeds():
 ## Test sets: a testset.json each (the start seeds, the task, its judge, the time limit and the scene settings), in
 ## folders under testsets/ (e.g. testsets/sweet-dream-apple/batchseed07_50/testset.json, as on Hugging Face). A batch
 ## on a test set runs exactly those starts, so models are compared on the same scenes.
-TESTSETS = HERE / "testsets"
+TESTSETS = ROOT / "testsets"
 TESTSET_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
 
@@ -412,7 +413,7 @@ class Runner:
             if not record:
                 command.append("--no-record")
             self.process = subprocess.Popen(
-                command, cwd=str(HERE), env=env, stdin=subprocess.PIPE,
+                command, cwd=str(ROOT), env=env, stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8", errors="replace")
             self.task, self.started, self.ended, self.run_id = task, time.time(), None, run_id
             self.mode = "resumed" if resume else mode
@@ -697,7 +698,7 @@ def save_location(location):
 def shown_path(folder):
     """A saved dataset's folder as the page shows it: datasets/<name> in this project, else its full path."""
     try:
-        return str(folder.relative_to(HERE))
+        return str(folder.relative_to(ROOT))
     except ValueError:
         return str(folder)
 
@@ -885,7 +886,7 @@ class Batch:
         if info["ood_random"]:
             command += ["--ood-random", ",".join(info["ood_random"])]
         log = open(WORK / f"{run_id}.log", "w", encoding="utf-8")
-        process = subprocess.Popen(command, cwd=str(HERE), env=env, stdin=subprocess.DEVNULL, stdout=log,
+        process = subprocess.Popen(command, cwd=str(ROOT), env=env, stdin=subprocess.DEVNULL, stdout=log,
                                    stderr=subprocess.STDOUT)
         log.close()
         return process, task["prompt"], seed
@@ -1101,7 +1102,7 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/ood.js", "/seed.js"):
             return self.send(PAGE.with_name(path[1:]).read_bytes(), "text/javascript; charset=utf-8")
         if path in ("/assets/collect-demo.png", "/assets/test-third-person.png"):
-            return self.send((HERE / "static" / path.lstrip("/")).read_bytes(), "image/png")
+            return self.send((ROOT / "static" / path.lstrip("/")).read_bytes(), "image/png")
         if path == "/api/ood":
             return self.send_json(ood.GROUPS)
         if path == "/api/status":
@@ -1204,7 +1205,7 @@ class Handler(BaseHTTPRequestHandler):
                 frame = Path(folder) / "initial.jpg"
                 result = subprocess.run(
                     [sys.executable, str(HERE / "sim.py"), "--preview", str(frame), "--ood", json.dumps(changes),
-                     *seeding, *robot], cwd=HERE, env=env, capture_output=True, text=True, timeout=120)
+                     *seeding, *robot], cwd=ROOT, env=env, capture_output=True, text=True, timeout=120)
                 if result.returncode:
                     # sim.py says why on stdout ("Stopped: ..."); stderr may end with an unrelated MuJoCo warning.
                     said = [line[len("Stopped:"):].strip() for line in result.stdout.splitlines() if line.startswith("Stopped:")]
@@ -1239,7 +1240,7 @@ class Handler(BaseHTTPRequestHandler):
             with tempfile.TemporaryDirectory(prefix="dream-goal-") as folder:
                 result = subprocess.run(
                     [sys.executable, str(HERE / "sim.py"), "--goal-preview", folder, "--goal", json.dumps(goal),
-                     "--ood", json.dumps(changes), *seeding, *robot], cwd=HERE, env=env, capture_output=True,
+                     "--ood", json.dumps(changes), *seeding, *robot], cwd=ROOT, env=env, capture_output=True,
                     text=True, timeout=120)
                 if result.returncode:
                     error = (result.stderr or result.stdout).strip().splitlines()

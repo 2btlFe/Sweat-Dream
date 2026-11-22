@@ -14,7 +14,7 @@ Prefer to watch? The [demo video](https://2btlfe.github.io/Sweet-Dream/#demo) (9
 ```bash
 python3 -m venv ~/dream-env
 ~/dream-env/bin/pip install dreamlabs pyarrow av
-~/dream-env/bin/python app.py --port 8000
+~/dream-env/bin/python src/app.py --port 8000
 ```
 
 1. Open **http://localhost:8000**.
@@ -171,16 +171,16 @@ Errors and stopped runs are **invalid**, never failures.
 
 ```bash
 # One run: rule-based only, seed 42, in the kitchen
-~/dream-env/bin/python sim.py "put apple into the bowl" --seed 42 --room kitchen --script-only
+~/dream-env/bin/python src/sim.py "put apple into the bowl" --seed 42 --room kitchen --script-only
 
 # One run with a fine-tuned model
-~/dream-env/bin/python sim.py "put apple into the bowl" --model dream-1-ft:<account>-<name>
+~/dream-env/bin/python src/sim.py "put apple into the bowl" --model dream-1-ft:<account>-<name>
 
 # Resume a recorded run at step 120, with you in control
-~/dream-env/bin/python sim.py --resume <run id> --resume-step 120
+~/dream-env/bin/python src/sim.py --resume <run id> --resume-step 120
 
 # A batch from the command line (uses the key in ~/.dreamlabs/credentials)
-~/dream-env/bin/python batch.py --repeats 10 --seconds 60
+~/dream-env/bin/python src/batch.py --repeats 10 --seconds 60
 ```
 
 Runs made here show up in the app's Runs list too.
@@ -191,15 +191,16 @@ Runs made here show up in the app's Runs list too.
 
 | File | What it does |
 | --- | --- |
-| `app.py` | The web server and every page's API |
+| `src/app.py` | The web server and every page's API |
 | `static/` | The pages: start, sections, collect (`index.html`), train, test |
-| `sim.py` | One run in the simulator |
-| `monitor.py`, `recovery.py`, `teleop.py` | Failure detection, the rescue script, mouse / key control |
-| `judge.py` | Success rules |
-| `scene.py`, `ood.py`, `seed_web.py` | Seeds and scene settings |
-| `recorder.py`, `lerobot_export.py` | Recordings, and the Dream Labs dataset format |
-| `train.py` | Upload and fine-tuning through the Dream Labs API |
-| `batch.py` | Batches from the command line |
+| `src/sim.py` | One run in the simulator |
+| `src/monitor.py`, `src/recovery.py`, `src/teleop.py` | Failure detection, the rescue script, mouse / key control |
+| `src/judge.py` | Success rules |
+| `src/scene.py`, `src/ood.py`, `src/seed_web.py` | Seeds and scene settings |
+| `src/recorder.py`, `src/lerobot_export.py` | Recordings, and the Dream Labs dataset format |
+| `src/train.py` | Upload and fine-tuning through the Dream Labs API |
+| `src/batch.py` | Batches from the command line |
+| `tests/` | Unit tests (`python -m unittest discover tests`) |
 | `tools/screenshots.py` | Captures the pages for these docs (`docs/assets/screens/`), with the key and account hidden |
 
 ---

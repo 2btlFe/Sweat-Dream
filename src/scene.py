@@ -2,17 +2,17 @@
 
 Self-contained module; sim.py only calls add_arguments() and build_env() (the website side is seed_web.py + static/seed.js):
 
-    python sim.py "put apple into the bowl"                       a new random train seed (printed)
-    python sim.py "put apple into the bowl" --seed 42             the start scene of seed 42
-    python sim.py "put apple into the bowl" --seed 1000007 --split eval
-    python sim.py "put banana on the plate" --setting fruits_only --seed 42
-    python sim.py "put apple into the bowl" --default-scene       the package's fixed scene
+    python src/sim.py "put apple into the bowl"                       a new random train seed (printed)
+    python src/sim.py "put apple into the bowl" --seed 42             the start scene of seed 42
+    python src/sim.py "put apple into the bowl" --seed 1000007 --split eval
+    python src/sim.py "put banana on the plate" --setting fruits_only --seed 42
+    python src/sim.py "put apple into the bowl" --default-scene       the package's fixed scene
 
-    python scene.py 42 --image scene42.jpg     a seed's start scene as the website shows it (top camera + both
+    python src/scene.py 42 --image scene42.jpg     a seed's start scene as the website shows it (top camera + both
                                                wrist cameras), without running Dream (no API key needed);
                                                app.py's /api/preview uses this
-    python scene.py --check                    check that seeds still give the same scenes as recorded (REFERENCE)
-    python scene.py --build-reach-map          rebuild scene_reach_map.npz (only when the robot or table changes)
+    python src/scene.py --check                    check that seeds still give the same scenes as recorded (REFERENCE)
+    python src/scene.py --build-reach-map          rebuild scene_reach_map.npz (only when the robot or table changes)
 
 REPRODUCIBLE: the start scene is a pure function of (SCENE_VERSION, setting, seed). The task text does not
 change it, so different tasks on one seed start from the same scene. All randomness comes from rng_for(), which
@@ -110,7 +110,7 @@ SETTINGS = {
 
 # Fingerprints of a few seeds' scenes, per setting, and of the eval set. If they stop matching, the same seed no
 # longer gives the same scene (dreamlabs, the camera, the reach map or this code changed): check_reproducible()
-# says so. After a deliberate change, bump SCENE_VERSION and refresh with  python scene.py --check --update
+# says so. After a deliberate change, bump SCENE_VERSION and refresh with  python src/scene.py --check --update
 REFERENCE = {
     "default": {0: "708f417c96724ec9", 42: "e7a52824163b67c6", 999999: "089181774465bd66", 1000000: "0543c0df01006fcc", 1000049: "03ee1b9b4d840981"},
     "fruits_only": {0: "21c8d00ddf44d5b4", 42: "4e4cb352f8beae12"},
@@ -227,7 +227,7 @@ class Layout:
             self.outlines[name] = MultiPoint([tuple(p) for p in footprint]).convex_hull.simplify(0.001)
         self.arm_shadows = [self._arm_shadow(model, data, side) for side in ("left", "right")]
         if not REACH_MAP.exists():
-            sys.exit(f"{REACH_MAP.name} is missing: run  python scene.py --build-reach-map")
+            sys.exit(f"{REACH_MAP.name} is missing: run  python src/scene.py --build-reach-map")
         saved = np.load(REACH_MAP)
         self.reach = {"left": saved["left"], "right": saved["right"]}
         self.origin, self.cell = saved["origin"], float(saved["cell"])

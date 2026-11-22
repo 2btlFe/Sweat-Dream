@@ -93,7 +93,7 @@ own fine-tuned model, on the YAM two-arm robot in a MuJoCo scene.
 ```bash
 python3 -m venv ~/dream-env
 ~/dream-env/bin/pip install dreamlabs pyarrow av
-~/dream-env/bin/python app.py --port 8000
+~/dream-env/bin/python src/app.py --port 8000
 ```
 
 Open http://localhost:8000, sign in with your Dream API key (create one at
@@ -104,14 +104,19 @@ server's memory only. Every page and option is described in the [usage guide](do
 
 | Path | What |
 | --- | --- |
-| `app.py` | The web server: pages, runs, batches, labels, datasets, the Train API |
-| `sim.py` | One episode in the simulator: Dream-1, the failure monitor, the recovery script, the recorder |
-| `monitor.py`, `recovery.py`, `teleop.py` | Failure detection, the rule-based script, and the arm control both use |
-| `judge.py` | Success rules per task type |
-| `scene.py`, `ood.py`, `seed_web.py` | Seeded scenes and scene settings (camera, light, arms, room) |
-| `recorder.py`, `lerobot_export.py` | Episode recordings and their export to LeRobot v2.1 |
-| `train.py` | Upload and fine-tuning through the Dream Labs API |
+| `src/` | The code; start the web app with `python src/app.py --port 8000` |
+| `src/app.py` | The web server: pages, runs, batches, labels, datasets, the Train API |
+| `src/sim.py` | One episode in the simulator: Dream-1, the failure monitor, the recovery script, the recorder |
+| `src/monitor.py`, `src/recovery.py`, `src/teleop.py` | Failure detection, the rule-based script, and the arm control both use |
+| `src/judge.py` | Success rules per task type |
+| `src/scene.py`, `src/ood.py`, `src/seed_web.py` | Seeded scenes and scene settings (camera, light, arms, room) |
+| `src/recorder.py`, `src/lerobot_export.py` | Episode recordings and their export to LeRobot v2.1 |
+| `src/train.py` | Upload and fine-tuning through the Dream Labs API |
+| `src/batch.py` | Batches from the command line |
 | `static/` | The pages (start, sections, collect, train, test) |
+| `testsets/` | Test sets: fixed scenes to test a model on |
+| `tests/` | Unit tests (`python -m unittest discover tests`) |
+| `tools/` | Screenshots and the demo video for the docs |
 | `docs/` | The project page (GitHub Pages) and the usage guide |
 
 ## License and credits

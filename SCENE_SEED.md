@@ -57,7 +57,7 @@ v2의 시드 장면은 v3에서 다릅니다.
 
 ## 2. 사용법
 
-### 웹 화면 (`python app.py` → http://localhost:8000)
+### 웹 화면 (`python src/app.py` → http://localhost:8000)
 
 - **Seed 입력칸** (Run setup): 페이지를 열면 랜덤 시드가 채워져 있습니다. 숫자를 바꾸거나 **↻**로 새 시드를 뽑을 수 있습니다. 칸이 비어 있으면 Run할 때 먼저 채우므로, 어떤 실행이든 쓴 시드가 화면에 남습니다.
 - **Camera, robot & environment settings** (`YS`): 항목마다 **random** 체크가 있습니다 ("Camera to fine-tune" 선택 칸 제외). 체크한 항목은 시드에서 값을 뽑고, 슬라이더는 잠긴 채 뽑힌 값을 보여 줍니다. 체크하지 않은 항목은 슬라이더 값을 그대로 씁니다.
@@ -67,21 +67,21 @@ v2의 시드 장면은 v3에서 다릅니다.
 ### 명령줄
 
 ```bash
-python sim.py "put apple into the bowl"                                # 새 랜덤 학습 시드 (로그에 번호 출력)
-python sim.py "put apple into the bowl" --seed 42                      # 시드 42의 장면
-python sim.py "put apple into the bowl" --split eval                   # 고정 평가 시드 50개 중 하나
-python sim.py "put apple into the bowl" --seed 1000007 --split eval    # 평가 시드 (학습 시드면 거부)
-python sim.py "put banana on the plate" --setting fruits_only --seed 42   # 다른 세팅
-python sim.py "put apple into the bowl" --default-scene                # 원래의 고정 장면
-python sim.py "put apple into the bowl" --seed 42 --ood-random light,table --ood '{"blur_px": 2}'
+python src/sim.py "put apple into the bowl"                                # 새 랜덤 학습 시드 (로그에 번호 출력)
+python src/sim.py "put apple into the bowl" --seed 42                      # 시드 42의 장면
+python src/sim.py "put apple into the bowl" --split eval                   # 고정 평가 시드 50개 중 하나
+python src/sim.py "put apple into the bowl" --seed 1000007 --split eval    # 평가 시드 (학습 시드면 거부)
+python src/sim.py "put banana on the plate" --setting fruits_only --seed 42   # 다른 세팅
+python src/sim.py "put apple into the bowl" --default-scene                # 원래의 고정 장면
+python src/sim.py "put apple into the bowl" --seed 42 --ood-random light,table --ood '{"blur_px": 2}'
                                        # 조명·테이블은 시드에서 뽑고, 블러는 2로 고정
-python sim.py --preview start.jpg --seed 42 --ood-random light           # 초기 장면 이미지만 저장 (API 불필요)
+python src/sim.py --preview start.jpg --seed 42 --ood-random light           # 초기 장면 이미지만 저장 (API 불필요)
 
-python scene.py 42                          # 시드 42의 물체 위치·방향·난이도 출력 (API 불필요)
-python scene.py 42 --setting fruits_only    # 다른 세팅으로
-python scene.py 42 --image scene42.jpg      # 초기 장면 이미지 저장 (API 불필요)
-python scene.py --check                     # 재현성 점검 (기록된 장면·평가 세트와 같은지)
-python scene.py --build-reach-map           # 팔 도달 영역 지도 다시 만들기 (로봇·테이블이 바뀔 때만)
+python src/scene.py 42                          # 시드 42의 물체 위치·방향·난이도 출력 (API 불필요)
+python src/scene.py 42 --setting fruits_only    # 다른 세팅으로
+python src/scene.py 42 --image scene42.jpg      # 초기 장면 이미지 저장 (API 불필요)
+python src/scene.py --check                     # 재현성 점검 (기록된 장면·평가 세트와 같은지)
+python src/scene.py --build-reach-map           # 팔 도달 영역 지도 다시 만들기 (로봇·테이블이 바뀔 때만)
 ```
 
 실행 로그 예:
@@ -112,7 +112,7 @@ Scene controls: {"blur_px": 2, "light": 0.3, "table": "gray"} (from the seed: li
 - `yaw_deg`: 회전 범위
 - `position_sigma`: 정식 위치 중심 가우시안의 폭 (m)
 
-**세팅마다 장면이 독립적입니다.** 세팅의 설정값이 난수 흐름에 들어가므로, 새 세팅을 추가하거나 한 세팅을 고쳐도 다른 세팅의 시드 장면은 바뀌지 않습니다. 같은 시드라도 세팅이 다르면 다른 장면이 됩니다. 세팅을 추가하면 `REFERENCE`에도 기준 시드를 넣어 주세요 (`python scene.py --check --update`).
+**세팅마다 장면이 독립적입니다.** 세팅의 설정값이 난수 흐름에 들어가므로, 새 세팅을 추가하거나 한 세팅을 고쳐도 다른 세팅의 시드 장면은 바뀌지 않습니다. 같은 시드라도 세팅이 다르면 다른 장면이 됩니다. 세팅을 추가하면 `REFERENCE`에도 기준 시드를 넣어 주세요 (`python src/scene.py --check --update`).
 
 ### `YS` 장면 설정과 시드
 `YS`의 설정은 카메라 시점 프리셋, 카메라별 위치·각도·화각, 팔 초기 관절 각도(양팔 각 6개), 블러, 조명, 테이블입니다.
@@ -162,14 +162,14 @@ brightness = rng.uniform(0.6, 1.4)          # 시드 42면 항상 같은 값
 | 값 고정 | 뽑은 위치·각도를 반올림한 뒤 적용합니다. 미리보기와 실행이 같은 값을 씁니다. |
 | reset 후에도 유지 | `qpos0`까지 바꿔서 `env.reset()` 뒤에도 시드 장면이 남습니다. |
 | 시드가 항상 보임 | 로그에 `Scene: seed N (…, setting …)`이 찍히고, 웹은 빈칸으로 Run해도 시드를 먼저 채웁니다. |
-| 환경 변화 감지 | 세팅별 기준 시드의 장면 지문(`REFERENCE`), 평가 세트 지문, 랜덤 장면 설정 지문(`CONTROLS_FINGERPRINT`)을 코드에 넣어 두었습니다. 실행과 미리보기 때마다 확인하고, 다르면 **WARNING**을 출력합니다. `python scene.py --check`로 직접 확인할 수도 있습니다. |
-| 규칙을 일부러 바꿀 때 | `SCENE_VERSION`을 올리고 `python scene.py --check --update` 출력으로 `REFERENCE`, `EVAL_FINGERPRINT`, `EVAL_SEEDS`, `CONTROLS_FINGERPRINT`를 갱신합니다. |
+| 환경 변화 감지 | 세팅별 기준 시드의 장면 지문(`REFERENCE`), 평가 세트 지문, 랜덤 장면 설정 지문(`CONTROLS_FINGERPRINT`)을 코드에 넣어 두었습니다. 실행과 미리보기 때마다 확인하고, 다르면 **WARNING**을 출력합니다. `python src/scene.py --check`로 직접 확인할 수도 있습니다. |
+| 규칙을 일부러 바꿀 때 | `SCENE_VERSION`을 올리고 `python src/scene.py --check --update` 출력으로 `REFERENCE`, `EVAL_FINGERPRINT`, `EVAL_SEEDS`, `CONTROLS_FINGERPRINT`를 갱신합니다. |
 | 도달 영역 지도 | `scene_reach_map.npz`는 반드시 커밋합니다. 다시 만들면 모든 장면이 바뀌므로 `SCENE_VERSION`도 올려야 합니다. |
 
 재현되는 것과 안 되는 것:
 - ✅ **초기 장면**: 물체 위치·방향, 그리고 안착 후 물리 상태까지 같습니다. 세팅·task와 무관하게 보장됩니다.
 - ❌ **Dream-1의 동작**: 서버 추론과, 실시간으로 동작하는 제어 루프의 네트워크 지연 때문에 매번 달라질 수 있습니다. 1-1 범위 밖입니다.
-- ⚠️ **다른 OS·CPU**: 장면 숫자는 같아야 하지만, 안착 후 물리 상태는 미세하게 다를 수 있습니다. 팀원은 처음에 `python scene.py --check`를 한 번 돌려 주세요.
+- ⚠️ **다른 OS·CPU**: 장면 숫자는 같아야 하지만, 안착 후 물리 상태는 미세하게 다를 수 있습니다. 팀원은 처음에 `python src/scene.py --check`를 한 번 돌려 주세요.
 
 ---
 
@@ -190,6 +190,8 @@ brightness = rng.uniform(0.6, 1.4)          # 시드 42면 항상 같은 값
 | `ood.py`, `static/ood.js` | 변경 없음 | `YS` 원본 그대로 |
 
 `dreamlabs` 패키지(site-packages)는 수정하지 않았습니다.
+
+이후 코드 파일(`*.py`, `scene_reach_map.npz`)은 `src/` 폴더로 옮겼습니다. `static/` 파일은 위치가 그대로입니다.
 
 ---
 

@@ -43,7 +43,7 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
-EPISODES_DIR = Path(__file__).resolve().parent / "episodes"
+EPISODES_DIR = Path(__file__).resolve().parent.parent / "episodes"  # episodes/ at the repository root
 CAMERAS = ("top", "left", "right")
 FPS = 5  # camera frames: one every 0.2 s of simulated time (the frames the model sees)
 BODIES = ["apple", "orange", "banana", "water_bottle", "bowl", "plate"]

@@ -24,7 +24,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "src"))  # the code is in src/
 os.chdir(ROOT)
 
 import subprocess  # noqa: E402

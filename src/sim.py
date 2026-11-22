@@ -1,19 +1,19 @@
 """Run one Dream-1 task in the Dream Labs simulator (headless) and save its trajectory.
 
-    python sim.py "put apple into the bowl" --seconds 60                  a new random seed (printed)
-    python sim.py "put apple into the bowl" --seed 42                     the start scene of seed 42 (scene.py)
-    python sim.py "put apple into the bowl" --seed 42 --ood-random light,table --ood '{"blur_px": 2}'
-    python sim.py --preview start.jpg --seed 42                           the start scene as a JPEG (no API call)
+    python src/sim.py "put apple into the bowl" --seconds 60                  a new random seed (printed)
+    python src/sim.py "put apple into the bowl" --seed 42                     the start scene of seed 42 (scene.py)
+    python src/sim.py "put apple into the bowl" --seed 42 --ood-random light,table --ood '{"blur_px": 2}'
+    python src/sim.py --preview start.jpg --seed 42                           the start scene as a JPEG (no API call)
 
 Run modes (KSY: monitor.py, recovery.py, teleop.py, recorder.py):
-    python sim.py "put apple into the bowl" --collect        data collection: Dream-1, then the recovery script when it
+    python src/sim.py "put apple into the bowl" --collect        data collection: Dream-1, then the recovery script when it
                                                              fails; no human. If the script gives up, the run ends there
-    python sim.py "put apple into the bowl" --recover human  test: a failure asks a human at once (T takes over / gives back)
-    python sim.py "put apple into the bowl" --teleop         human only: no Dream-1 until T (no API key or credits)
-    python sim.py --resume <run id> --resume-step 120        restart a recorded run at step 120, exactly as it was, with a
+    python src/sim.py "put apple into the bowl" --recover human  test: a failure asks a human at once (T takes over / gives back)
+    python src/sim.py "put apple into the bowl" --teleop         human only: no Dream-1 until T (no API key or credits)
+    python src/sim.py --resume <run id> --resume-step 120        restart a recorded run at step 120, exactly as it was, with a
                                                              human in control
-    python sim.py "put apple into the bowl" --plain          Dream-1 only: no monitor, script or human control
-    python sim.py "put apple into the bowl" --script-only    rule-based only: the recovery script does the whole task
+    python src/sim.py "put apple into the bowl" --plain          Dream-1 only: no monitor, script or human control
+    python src/sim.py "put apple into the bowl" --script-only    rule-based only: the recovery script does the whole task
                                                              from the first step (no Dream-1, no API key)
 Data collection options (faster successes): --stall-s 6 (hand over after 6 s without progress), --quick-fail (also a
 missed grasp or an object pushed away), --script-goal finish (the script finishes the task, not only picks it up),
@@ -92,7 +92,8 @@ from recovery import Recovery  # noqa: E402  recovery script (KSY)
 import teleop  # noqa: E402
 from teleop import STEP_S, Teleop, camera_position, select  # noqa: E402  human control (KSY)
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent  # the code (src/)
+ROOT = HERE.parent  # the repository: pages, data folders and test sets
 LIVE_FRAME = os.environ.get("LIVE_FRAME")
 STOP_FILE = os.environ.get("STOP_FILE")
 TELEOP_STATE = os.environ.get("TELEOP_STATE")
@@ -632,7 +633,7 @@ def start_ksy(env, args, meta, stop, source_dir):
         spec = judge.normalize_spec(json.loads(os.environ.get("JUDGE_SPEC") or "null"))
         if spec and spec["type"] == "goal":
             goal = spec
-            saved = json.loads((HERE / "runs" / "rules.json").read_text()) if (HERE / "runs" / "rules.json").exists() else {}
+            saved = json.loads((ROOT / "runs" / "rules.json").read_text()) if (ROOT / "runs" / "rules.json").exists() else {}
             tolerance = judge.normalize_rules(saved)["goal"]["tolerance_cm"]
     except (ValueError, OSError, TypeError, KeyError):
         pass
@@ -755,8 +756,8 @@ def resume_options(args):
     source = EPISODES_DIR / Path(args.resume).name
     if not (source / "steps.npz").exists():
         sys.exit(f"Stopped: no recording episodes/{source.name} to resume.")
-    original = json.loads((HERE / "runs" / source.name / "meta.json").read_text()) \
-        if (HERE / "runs" / source.name / "meta.json").exists() else {}
+    original = json.loads((ROOT / "runs" / source.name / "meta.json").read_text()) \
+        if (ROOT / "runs" / source.name / "meta.json").exists() else {}
     recorded = json.loads((source / "meta.json").read_text()) if (source / "meta.json").exists() else {}
     args.task = original.get("task") or recorded.get("task") or args.task
     args.teleop = True  # a resumed run starts with a human in control (T hands it to Dream-1)
@@ -888,7 +889,7 @@ def main():
     if key:
         os.environ["DREAM_API_KEY"] = key
 
-    run_dir = Path(os.environ.get("RUN_DIR") or HERE / "runs" / new_run_id())
+    run_dir = Path(os.environ.get("RUN_DIR") or ROOT / "runs" / new_run_id())
     run_dir.mkdir(parents=True, exist_ok=True)
     meta = {"id": run_dir.name, "task": args.task, "seconds": args.seconds,
             "seed": args.seed, "split": scene.split_of(args.seed) if args.seed is not None else None,

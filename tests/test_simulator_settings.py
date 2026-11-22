@@ -3,11 +3,14 @@
 import json
 import tempfile
 import threading
+import sys
 import unittest
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))  # the code is in src/
 
 import app
 import simulator_settings as settings
