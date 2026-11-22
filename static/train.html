@@ -28,26 +28,17 @@
   .account { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-3); }
   .page-head h1 { margin: 0; font-size: clamp(32px, 4.5vw, 48px); line-height: 1.05; letter-spacing: -.04em; font-weight: 700; }
   .page-head .sub { margin: 8px 0 0; color: var(--ink-3); }
-  .train-progress { display: grid; grid-template-columns: auto repeat(3, minmax(0, 1fr)) auto; gap: 4px; align-items: stretch; padding: 4px; border: 1px solid var(--rule); border-radius: 16px; background: #f3f2ef; }
-  .progress-step { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px; border-radius: 11px; color: var(--ink); text-decoration: none; }
-  .progress-step[aria-current="step"] { background: white; box-shadow: 0 1px 4px #0002; }
-  .progress-step .number { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 50%; color: var(--ink-2); font-size: 12px; }
-  .progress-step[aria-current="step"] .number { background: var(--ink); color: white; }
-  .train-progress .step-arrow { align-self: center; padding: 0; width: 32px; height: 36px; background: transparent; color: var(--ink); border: 0; }
-  .step-arrow:disabled { opacity: .3; }
+  .train-progress { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--rule); text-align: center; }
+  .train-progress .step-arrow { width: 44px; height: 44px; padding: 0; border: 1px solid var(--line); border-radius: 50%; font-size: 20px; background: var(--white); color: var(--ink); }
+  .step-arrow:disabled { opacity: .35; }
+  .train-shell { padding: clamp(12px, 3vw, 24px); background: var(--white); border: 1px solid var(--rule); border-radius: 18px; box-shadow: var(--soft-shadow); }
+  .step-menu { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 4px; border-bottom: 1px solid var(--rule); padding-bottom: 10px; margin-bottom: 12px; }
+  .progress-step { display: flex; align-items: center; justify-content: center; gap: .4em; min-height: 44px; padding: 6px; border-radius: 8px; color: var(--ink); text-decoration: none; text-align: center; font: 600 15px/1.25 var(--font); }
+  .progress-step strong { font: inherit; }
+  .progress-step:hover, .progress-step[aria-current="step"] { background: var(--grey-2); }
+  @media (max-width: 520px) { .progress-step { flex-direction: column; font-size: 13px; gap: 2px; } }
   section.step[hidden] { display: none; }
-  @media (max-width: 620px) { .train-progress .number, .train-progress small { display: none; } .progress-step { justify-content: center; padding: 6px 0; } }
-  .progress-step .progress-copy { min-width: 0; display: grid; gap: 1px; }
-  .progress-step strong { font-size: 13px; line-height: 1.2; }
-  .progress-step small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-3); font-size: 11px; }
-  .progress-step:hover { border-color: var(--stage-color); }
-  .progress-step:focus-visible { outline: 2px solid var(--ochre); outline-offset: 2px; }
-  .stage-upload { --stage-color: #e8bd66; }
-  .stage-train { --stage-color: #93b9e6; }
-  .stage-models { --stage-color: #9fd3ae; }
-  section.step { margin-top: 14px; padding: 18px 20px; background: var(--white); border: 1px solid var(--rule);
-                 border-top: 3px solid var(--stage-color); border-radius: 18px; box-shadow: var(--soft-shadow); }
-  section.step.grey { background: var(--white); }
+  section.step { padding: 4px clamp(8px, 2vw, 24px) 12px; margin: 0; border: 0; box-shadow: none; background: transparent; }
   section.step h2 { margin: 0 0 12px; font-size: 18px; font-weight: 650; line-height: 1.25; letter-spacing: -.01em; }
   section.step .eyebrow { margin: 0 0 8px; color: var(--ink-3); font: 600 12px/1.3 var(--font); letter-spacing: 0; }
   section.step .lead { margin: 0 0 12px; max-width: 820px; }
@@ -81,6 +72,7 @@
   .chip.bad { background: var(--sherbert-wash); color: var(--error); }
   .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 20px; align-items: start; }
   .grid-column { display: grid; gap: 12px; min-width: 0; }
+  @media (min-width: 621px) { .grid-column:first-child { align-self: stretch; align-content: space-between; } }
   @media (max-width: 620px) { .grid { grid-template-columns: minmax(0, 1fr); } }
   select { width: 100%; height: 48px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--white); color: var(--ink); font: inherit; }
   #dataset { appearance: none; padding-right: 48px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%235a5a5a' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 22px center; }
@@ -106,9 +98,9 @@
   .credits { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-left: 14px; border-left: 1px solid rgba(255, 159, 77, .35); }
   .credits .hint { margin: 0; }
   .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 16px; }
-  .train-checkout .actions { margin: 0; justify-content: flex-end; }
+  .train-submit { grid-column: -2 / -1; margin: 0; justify-content: flex-end; }
   #startTrain { min-height: 44px; white-space: nowrap; }
-  @media (max-width: 620px) { .train-checkout { grid-template-columns: 1fr; } .train-checkout .actions { justify-content: stretch; } #startTrain { width: 100%; } .credits { width: 100%; padding: 8px 0 0; border-left: 0; border-top: 1px solid rgba(255, 159, 77, .35); } }
+  @media (max-width: 620px) { .train-checkout { grid-template-columns: 1fr; } .train-submit { justify-content: stretch; } #startTrain { width: 100%; } .credits { width: 100%; padding: 8px 0 0; border-left: 0; border-top: 1px solid rgba(255, 159, 77, .35); } }
   .note { font-size: 14px; color: var(--ink-3); }
   .error { margin-top: 14px; }
   .empty { padding: 18px; color: var(--ink-3); font-size: 14px; }
@@ -132,13 +124,17 @@
     <h1>Train Custom Model!</h1>
     <p class="sub">Upload a dataset you collected to Dream Labs, then fine-tune Dream-1 on it. Uploading is free; training is charged.</p>
   </header>
-  <nav class="train-progress" aria-label="Training steps">
-    <button type="button" class="step-arrow" id="previousStep" aria-label="Previous step">←</button>
-    <a class="progress-step stage-upload" href="#uploadTitle" id="uploadProgress" data-state="waiting"><span class="number">1</span><span class="progress-copy"><strong>Dataset</strong><small id="uploadProgressText">Checking datasets…</small></span></a>
-    <a class="progress-step stage-train" href="#trainTitle" id="trainProgress" data-state="waiting"><span class="number">2</span><span class="progress-copy"><strong>Configure</strong><small id="trainProgressText">Choose training settings</small></span></a>
-    <a class="progress-step stage-models" href="#jobsTitle" id="jobsProgress" data-state="waiting"><span class="number">3</span><span class="progress-copy"><strong>Models</strong><small id="jobsProgressText">Checking jobs…</small></span></a>
-    <button type="button" class="step-arrow" id="nextStep" aria-label="Next step">→</button>
+  <div class="train-shell">
+  <nav class="step-menu" aria-label="Training steps">
+    <a class="progress-step" href="#uploadTitle"><span>1</span><strong>Upload Dataset</strong></a>
+    <a class="progress-step" href="#trainTitle"><span>2</span><strong>Configure Training</strong></a>
+    <a class="progress-step" href="#jobsTitle"><span>3</span><strong>Train Model</strong></a>
   </nav>
+  <div class="train-progress">
+    <button type="button" class="step-arrow" id="previousStep" aria-label="Previous step">←</button>
+    <strong id="stepCaption" aria-live="polite" aria-atomic="true">Step 1 of 3 · Upload Dataset</strong>
+    <button type="button" class="step-arrow" id="nextStep" aria-label="Next step">→</button>
+  </div>
   <div class="error" id="pageError" role="alert" hidden></div>
 
   <section class="dl-card step stage-upload" aria-labelledby="uploadTitle">
@@ -160,7 +156,7 @@
     </div>
   </section>
 
-  <section class="dl-card grey step stage-train" aria-labelledby="trainTitle">
+  <section class="dl-card step stage-train" aria-labelledby="trainTitle">
     <p class="eyebrow">Step 2 · Train</p>
     <h2 id="trainTitle">Train a model</h2>
     <p class="lead muted small">Pick a processed dataset on Dream Labs and how long to train. The model gets the name <code>dream-1-ft:&lt;account&gt;-&lt;name&gt;</code>.</p>
@@ -214,10 +210,10 @@
               <a href="https://platform.dreamlabs.ai/billing" target="_blank" rel="noopener noreferrer">Dream Labs Billing ↗</a>
             </div>
           </div>
-          <div class="actions">
-            <button type="button" class="dark" id="startTrain" disabled>Start training…</button>
-          </div>
         </div>
+      </div>
+      <div class="actions train-submit">
+        <button type="button" class="dark" id="startTrain" disabled>Start training…</button>
       </div>
     </div>
   </section>
@@ -233,6 +229,7 @@
       </table>
     </div>
   </section>
+  </div>
 </main>
 
 <dialog id="confirm" aria-labelledby="confirmTitle">
@@ -328,22 +325,6 @@ function updatePrice() {
   $("suffixHint").textContent = !$("suffix").value ? "Enter a name to start training. Lowercase letters, numbers and hyphens only."
     : !suffixOk ? "Use lowercase letters, numbers and hyphens (up to 40 characters)."
     : "This name will appear in your model ID.";
-  updateProgress();
-}
-
-function updateProgress() {
-  const processed = state?.account?.datasets?.filter(d => d.status === "processed").length || 0;
-  const local = state?.local?.filter(d => !d.hidden).length || 0;
-  const jobs = state?.account?.jobs?.length || 0;
-  const ready = !$("startTrain").disabled;
-  $("uploadProgress").dataset.state = processed ? "ready" : "waiting";
-  $("uploadProgressText").textContent = processed ? `${processed} dataset${processed === 1 ? "" : "s"} ready`
-    : local ? "Upload a saved dataset" : "Collect a dataset";
-  $("trainProgress").dataset.state = ready ? "ready" : "waiting";
-  $("trainProgressText").textContent = ready ? "Ready to train"
-    : !$("dataset").value ? "Choose a dataset" : !$("suffix").value ? "Name your model" : "Check training settings";
-  $("jobsProgress").dataset.state = jobs ? "ready" : "waiting";
-  $("jobsProgressText").textContent = jobs ? `${jobs} job${jobs === 1 ? "" : "s"} tracked` : "No jobs yet";
 }
 
 function renderJobs() {
@@ -365,7 +346,7 @@ async function load() {
     state = await api("/api/train");
     $("pageError").hidden = !state.account_error;
     $("pageError").textContent = state.account_error ? "Dream Labs could not be read: " + state.account_error : "";
-    renderLocal(); renderTrain(); renderJobs(); updateProgress();
+    renderLocal(); renderTrain(); renderJobs();
   } catch (err) {
     if (err.message !== "Signed out") { $("pageError").hidden = false; $("pageError").textContent = err.message; }
   }
@@ -452,10 +433,11 @@ api("/api/status").then(s => {
 }).catch(() => load());
 $("signOut").onclick = async () => { await api("/api/key", { key: "" }).catch(() => {}); location.href = "/"; };
 
-const stepLinks = Array.from(document.querySelectorAll(".train-progress a"));
+const stepLinks = Array.from(document.querySelectorAll(".step-menu a"));
 let currentStep;
 function showStep(index) {
   currentStep = index;
+  $("stepCaption").textContent = `Step ${index + 1} of ${stepLinks.length} · ${stepLinks[index].querySelector("strong").textContent}`;
   stepLinks.forEach((link, i) => {
     document.querySelector(link.hash).closest("section").hidden = i !== index;
     if (i === index) link.setAttribute("aria-current", "step");
