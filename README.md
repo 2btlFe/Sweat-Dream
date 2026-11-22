@@ -90,3 +90,7 @@ Sweet Dream is licensed under the [Apache License 2.0](LICENSE); see [NOTICE](NO
   recentered and rescaled by Dream Labs, rendered here in simulation.
 - Dream Labs, Dream-1 and the Dream Labs cloud mark (from which the Sweet Dream icon is drawn) are Dream Labs' names
   and marks, not covered by this license. Sweet Dream is not made or endorsed by Dream Labs.
+
+## Acknowledgements
+
+We thank [Nota AI GmbH](https://www.nota.ai) and [Dream Labs](https://dreamlabs.ai) for their support of this project.
