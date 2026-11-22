@@ -5,7 +5,7 @@
 <h1 align="center">Sweet Dream</h1>
 <p align="center"><b>Clean Data, Better Dream</b>: collect clean robot data in simulation, fine-tune Dream-1 on it, and test the result.</p>
 <p align="center">
-  <a href="https://2btlfe.github.io/Sweat-Dream/">Project page</a> ·
+  <a href="https://2btlfe.github.io/Sweet-Dream/">Project page</a> ·
   <a href="docs/USAGE.md">Usage guide</a> ·
   <a href="https://platform.dreamlabs.ai/api-documentation/">Dream Labs API</a>
 </p>
