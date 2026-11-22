@@ -24,6 +24,20 @@ Open http://localhost:8000. The site has several pages:
   whether it accepts the key (it lists the models: free, nothing runs). The key is kept in memory only.
 - **Sections** (`/sections`): **Collect Custom Dataset!** (the page below), **Train Custom Model!** and
   **Test the model!** (coming soon). **Sign out** clears the key.
+- **Train Custom Model!** (`/train`, `train.py`), with the signed-in key:
+  1. **Upload a dataset**: every dataset saved with the Dream Labs format (`datasets/<folder>/dream_format/`) is
+     listed; **Upload** checks it here (nothing sent), registers the robot once as `yam-sim` (from `embodiment.json`,
+     reused after that) and uploads it under the name given (free). Dream Labs then processes it (a few minutes);
+     the page follows it. The outcome is kept in `datasets/<folder>/dream_upload.json`.
+  2. **Train**: a processed dataset, a model name, the steps (500 to 10,000), the training data (mixed with Dream
+     Labs data, or yours only) and the learning-rate schedule; the price shows as you choose ($0.20 a step at the
+     time of writing). **Start training…** asks first: the price is held from your credits and a queued job cannot
+     be cancelled. The server refuses a start whose price is not the one shown.
+  3. **Your training jobs**: read from Dream Labs every 30 s (status, phase, step, loss, and the model id
+     `dream-1-ft:<account>-<name>` when it is done), so they show again after a restart.
+  **Hide** takes a saved dataset off the list (a `.hidden` file in its folder; nothing is deleted); **Show hidden**
+  lists them again, faded, with **Unhide**.
+  Credits and the current price are on the Dream Labs Billing page (an API key cannot read them).
 - **Collect Custom Dataset!** (`/collect`): runs, batches, labels and datasets, as follows.
 
 1. The API key from the sign-in is used (no key box here): the top right shows its last characters, and **Sign out**

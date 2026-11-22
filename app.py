@@ -40,6 +40,7 @@ from pathlib import Path
 
 import judge
 import lerobot_export  # the Dream Labs dataset format (LeRobot v2.1) for saved datasets
+import train  # Train Custom Model!: upload a saved dataset to Dream Labs and fine-tune Dream-1 on it
 import ood
 import seed_web
 import simulator_settings as sim_settings  # the seed (scene.py): seed field, random scene controls
@@ -47,7 +48,8 @@ import simulator_settings as sim_settings  # the seed (scene.py): seed field, ra
 HERE = Path(__file__).resolve().parent
 PAGE = HERE / "static" / "index.html"  # the Collect Custom Dataset! page (/collect)
 # The pages: / signs in with the API key, /sections picks a section, /collect is the simulator and datasets page.
-PAGES = {"/": "start.html", "/sections": "sections.html", "/collect": "index.html", "/index.html": "index.html"}
+PAGES = {"/": "start.html", "/sections": "sections.html", "/collect": "index.html", "/index.html": "index.html",
+         "/train": "train.html"}
 RUNS = HERE / "runs"
 RULES = RUNS / "rules.json"
 SETTINGS = RUNS / "simulator_settings.json"  # the robot and room picked on the page (simulator_settings.py)
@@ -953,6 +955,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(RUNNER.status())
         if path == "/api/datasets":
             return self.send_json({"datasets": list_datasets()})
+        if path == "/api/train":  # the Train page: saved datasets, and what Dream Labs has (datasets, jobs, queue)
+            if not PAGE_KEY["value"]:
+                return self.send_json({"error": "Sign in with your API key first (the start page)."}, 401)
+            reply = {"local": train.local_datasets(DATASETS), "account": None, "account_error": None}
+            try:
+                reply["account"] = train.account(PAGE_KEY["value"])
+            except Exception as error:  # noqa: BLE001  Dream Labs could not be reached, or refused the key
+                reply["account_error"] = f"{type(error).__name__}: {error}"
+            return self.send_json(reply)
         if path == "/api/folders":  # ?path=/abs/folder: the folders in it, to choose where to save a dataset
             query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
             try:
@@ -1166,6 +1177,25 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"folder": shown_path(folder), "count": manifest["count"],
                                    "labels": manifest["labels"], "skipped": manifest["skipped"],
                                    "dream_format": manifest.get("dream_format")})
+        if self.path == "/api/train/hide":  # {"folder", "hidden"}: hide a saved dataset on the Train page, or show it
+            try:
+                train.set_hidden(DATASETS, str(body.get("folder") or ""), bool(body.get("hidden")))
+            except ValueError as error:
+                return self.send_json({"error": str(error)}, 400)
+            return self.send_json({"ok": True})
+        if self.path in ("/api/train/upload", "/api/train/start"):
+            if not PAGE_KEY["value"]:
+                return self.send_json({"error": "Sign in with your API key first (the start page)."}, 401)
+            try:
+                if self.path == "/api/train/upload":  # {"folder", "name"}: check and upload in the background (free)
+                    train.start_upload(PAGE_KEY["value"], DATASETS, str(body.get("folder") or ""), str(body.get("name") or ""))
+                    return self.send_json({"ok": True})
+                # {"dataset", "suffix", "steps", "price", "lr_schedule", "base_share"}: a charged job, not cancellable
+                return self.send_json({"job": train.start_job(PAGE_KEY["value"], body)})
+            except ValueError as error:
+                return self.send_json({"error": str(error)}, 400)
+            except Exception as error:  # noqa: BLE001  Dream Labs refused it (payment_required, conflict, ...)
+                return self.send_json({"error": f"{type(error).__name__}: {error}"}, 502)
         if self.path == "/api/runs/delete":  # {"run_ids": [...]}: finished runs and their recordings, for good
             run_ids = body.get("run_ids")
             if not isinstance(run_ids, list) or not run_ids or any(not isinstance(r, str) for r in run_ids):

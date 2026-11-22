@@ -48,3 +48,14 @@ button.outline:hover, .button.outline:hover { background: var(--grey-2); }
 .muted { color: var(--ink-3); }
 .small { font-size: 14px; }
 .error { color: var(--error); background: var(--sherbert-wash); border: 1px solid rgba(201, 71, 74, .25); border-radius: 12px; padding: 10px 14px; font-size: 14px; margin: 12px 0 0; }
+
+/* Dream Labs content blocks (dreamlabs.ai "Build with Dream-1"): a pixel-font label, a 22px title, cards in sand or
+   light grey with a white edge and a soft shadow. Bitcount Single (Google Fonts) is their pixel face. */
+:root { --font-pixel: "Bitcount Single", "Space Mono", ui-monospace, monospace; }
+.eyebrow { font-family: var(--font-pixel); font-size: 18px; font-weight: 400; letter-spacing: .02em; color: var(--ink); margin: 0 0 14px; }
+.dl-card { background: var(--sand); border: 1px solid rgba(255, 255, 255, 0.9); border-radius: var(--radius); padding: 24px;
+           box-shadow: 0 1px 2px rgba(28, 28, 28, .05), 0 10px 30px rgba(28, 28, 28, .05); }
+.dl-card.grey { background: var(--grey-2); }
+.dl-card.white { background: var(--grey-1); }
+.dl-card h2 { font-size: 22.4px; font-weight: 500; letter-spacing: -0.045em; line-height: 1.1; margin: 0 0 6px; }
+.section-title { font-size: clamp(32px, 4.4vw, 41px); font-weight: 400; letter-spacing: -0.028em; line-height: 1.02; margin: 0; }
