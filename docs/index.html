@@ -211,7 +211,8 @@
       scenes, failed runs thrown away, success checked by hand. Sweet Dream turns the YAM simulator into a data factory,
       one app that <a href="#collect">collects</a> diverse, successful episodes, <a href="#train">fine-tunes</a> Dream-1
       on them through the Dream Labs API, and <a href="#test">tests</a> the result against the base model in the same
-      scenes.</p>
+      scenes. On 50 held-out apple starts, our fine-tune succeeds <b>74%</b> of the time, against <b>2%</b> for
+      Dream-1 base.</p>
     <ul class="points">
       <li><b>Diversity on demand.</b> One seed fixes the layout; room, light, camera and table change per episode, and
         every scene can be reproduced.</li>
@@ -397,7 +398,7 @@
       <thead><tr><th>Model</th><th>Successes</th><th>Success rate</th></tr></thead>
       <tbody>
         <tr><td>Dream-1 (base)</td><td class="num">1 / 50</td><td class="num">2%</td></tr>
-        <tr><td>Sweet Dream fine-tune (ours)</td><td class="num">— / 50</td><td class="num">—</td></tr>
+        <tr><td><b>Sweet Dream fine-tune (ours)</b></td><td class="num"><b>37 / 50</b></td><td class="num"><b>74%</b></td></tr>
       </tbody>
     </table>
   </div>
