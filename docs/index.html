@@ -23,11 +23,9 @@
   :focus-visible { outline: 2px solid var(--ochre); outline-offset: 3px; }
   .container { max-width: 960px; margin: 0 auto; padding: 0 20px; }
   .hero { padding: 56px 0 36px; text-align: center; }
-  .geometry { position: relative; width: 72px; aspect-ratio: 2; margin: 0 auto 22px; }
-  .geometry::before, .geometry::after { position: absolute; content: ""; width: 50%; height: 100%; }
-  .geometry::before { left: 0; border-radius: 50%; background: var(--sun); }
-  .geometry::after { right: 0; border: 1px solid var(--ink); border-radius: 0 50% 50% 0; }
+  .logo { display: block; width: 72px; height: 72px; margin: 0 auto 18px; }
   .publication-title { color: var(--ink); font-size: clamp(32px, 5.4vw, 52px); font-weight: 700; line-height: 1.05; margin: 0; letter-spacing: -.05em; }
+  .tagline { margin: 14px 0 0; color: var(--ochre); font-size: clamp(18px, 2.4vw, 22px); font-weight: 650; letter-spacing: .01em; }
   .link-blocks { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 26px; }
   .button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 16px; border: 1px solid transparent;
             border-radius: var(--radius); background: var(--sun); color: var(--ink); font-size: 15px; font-weight: 650; text-decoration: none; }
@@ -80,6 +78,11 @@
   #train .chapter-no { background: var(--step-2); }
   #test .chapter-no { background: var(--step-3); }
   .screens { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 10px 0 18px; }
+  .screens.four { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .screens.four figcaption { font-size: 12px; }
+  .gif-soon { aspect-ratio: 16 / 9; display: grid; place-content: center; text-align: center; border: 1.5px dashed #d5d0c4; border-radius: 4px; color: #635f53; font-weight: 600; }
+  .gif-soon small { font-weight: 400; }
+  @media (max-width: 760px) { .screens.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .screens.one { grid-template-columns: minmax(0, 1fr); max-width: 760px; margin-left: auto; margin-right: auto; }
   @media (max-width: 760px) { .screens { grid-template-columns: minmax(0, 1fr); } }
   .screen { margin: 0; }
@@ -120,13 +123,14 @@
 
 <section class="hero">
   <div class="container">
-    <div class="geometry" aria-hidden="true"></div>
+    <img class="logo" src="assets/logo.svg" alt="" width="72" height="72">
     <h1 class="publication-title">Sweet Dream:<br>Diverse Data for Custom Dream&#8209;1 Fine&#8209;Tuning</h1>
+    <p class="tagline">Better Data, Better Dream</p>
     <div class="link-blocks">
-      <a class="button" href="https://github.com/2btlFe/Sweet-Dream">
+      <a class="button" href="https://github.com/2btlFe/Sweet-Dream/tree/v3.0">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
         Code</a>
-      <a class="button" href="https://github.com/2btlFe/Sweet-Dream/blob/v2.0/docs/USAGE.md">
+      <a class="button" href="https://github.com/2btlFe/Sweet-Dream/blob/v3.0/docs/USAGE.md">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 1.75C2 .78 2.78 0 3.75 0h6.59c.46 0 .9.18 1.23.51l2.92 2.92c.33.33.51.77.51 1.23v9.59A1.75 1.75 0 0113.25 16h-9.5A1.75 1.75 0 012 14.25V1.75zm1.75-.25a.25.25 0 00-.25.25v12.5c0 .14.11.25.25.25h9.5a.25.25 0 00.25-.25V6h-2.75A1.75 1.75 0 019 4.25V1.5H3.75zm6.75.06V4.25c0 .14.11.25.25.25h2.69L10.5 1.56z"/></svg>
         Usage guide</a>
       <a class="button" href="https://platform.dreamlabs.ai/api-documentation/">
@@ -139,14 +143,14 @@
 <section class="teaser" id="demo">
   <div class="container">
     <video class="demo" src="assets/videos/demo.mp4" poster="assets/videos/demo-poster.jpg" controls playsinline preload="metadata"></video>
-    <p class="demo-note">A 90-second tour of Sweet Dream, with narration: sign in, collect a run, save a dataset, train, test.</p>
+    <p class="demo-note">A two-minute tour of Sweet Dream, with narration: sign in, define success, collect a run, save a dataset, train, test.</p>
   </div>
 </section>
 
 <section>
   <h2 class="tldr">We introduce <b>Sweet Dream</b>, a tool that provides a full pipeline for building <b>diverse</b> robot
     datasets in simulation to fine-tune Dream-1: seeded scenes varied in layout, room, light and camera, failed runs
-    finished by a rule-based recovery script, every run labeled by success rules, and datasets saved in the format
+    finished by a recovery script or a person, every run labeled by the success you define, and datasets saved in the format
     Dream Labs trains on, then uploaded, fine-tuned and tested from the same app.</h2>
 </section>
 
@@ -163,6 +167,12 @@
 <section class="section" id="overview">
   <div class="container content">
     <h2 class="title">Overview</h2>
+    <div class="screens four">
+      <figure class="screen"><img src="assets/gifs/diverse-scenes.gif" alt="One view cutting through six collected runs: Kitchen, Sunny apartment, Cottage, Walnut study, Evening den and YAM tabletop, each with its own light and camera" loading="lazy"><figcaption><b>Diverse demonstrations:</b> six rooms, lights and cameras</figcaption></figure>
+      <figure class="screen"><img src="assets/gifs/define-success.gif" alt="The Task dialog: the apple is dragged into the bowl in the goal scene, then distance, still time and release are set" loading="lazy"><figcaption><b>Define success:</b> set what success means for any task, here the apple in the bowl</figcaption></figure>
+      <figure class="screen"><img src="assets/gifs/human-takeover.gif" alt="Dream-1 reaches toward the apple and stalls; a human takes over with T, picks up the apple and puts it into the bowl" loading="lazy"><figcaption><b>Human recovery:</b> Dream-1 stalls, a person presses T and finishes</figcaption></figure>
+      <figure class="screen"><div class="gif-soon" role="img" aria-label="Apple task: Dream-1 base and our fine-tune side by side, coming soon">Base vs ours<br><small>coming soon</small></div><figcaption><b>Base vs ours:</b> Dream-1 and our fine-tune on the same apple scene</figcaption></figure>
+    </div>
     <div class="figure">
       <svg viewBox="0 0 1000 300" role="img" aria-labelledby="pipeTitle">
         <title id="pipeTitle">Pipeline: seeded scenes, Dream-1 runs with failure monitor and recovery, success rules, dataset, fine-tune, test</title>
@@ -193,10 +203,21 @@
         </g>
       </svg>
     </div>
-    <p>Sweet Dream is a local web app around a MuJoCo simulation of the YAM two-arm robot, in three chapters that follow
-      the loop above: <a href="#collect">collect</a> a dataset of successful, varied episodes;
-      <a href="#train">train</a> a custom Dream-1 on it through the Dream Labs API; and <a href="#test">test</a> the new
-      model in the same scenes against Dream-1. You sign in once with your Dream API key; every chapter uses it.</p>
+    <p><b>A fine-tuned Dream-1 is only as good as the data behind it</b>, and good robot data is slow to collect: same
+      scenes, failed runs thrown away, success checked by hand. Sweet Dream turns the YAM simulator into a data factory,
+      one app that <a href="#collect">collects</a> diverse, successful episodes, <a href="#train">fine-tunes</a> Dream-1
+      on them through the Dream Labs API, and <a href="#test">tests</a> the result against the base model in the same
+      scenes.</p>
+    <ul class="points">
+      <li><b>Diversity on demand.</b> One seed fixes the layout; room, light, camera and table change per episode, and
+        every scene can be reproduced.</li>
+      <li><b>Success, your way.</b> Define what success means for any task: drag objects into a goal scene and set the
+        tolerances. Every run is labeled by it, with no code.</li>
+      <li><b>No wasted runs.</b> When Dream-1 fails, a recovery script or a person (press T) finishes the task, and every
+        step is recorded with who was in control.</li>
+      <li><b>Closed loop, one app.</b> Collect, export a LeRobot dataset, fine-tune, and test on held-out seeds published
+        on Hugging Face, all with one API key.</li>
+    </ul>
   </div>
 </section>
 
@@ -206,22 +227,16 @@
     <h2 class="title">Collect Custom Dataset</h2>
     <ul class="points">
       <li><b>Diverse scenes.</b> A seed sets the object layout; room, light, camera, blur and table can be changed too.</li>
-      <li><b>Failures become successes.</b> When Dream-1 gets stuck, a rule-based script finishes the task.</li>
-      <li><b>Ready to train.</b> Success rules label every run; the good ones are saved in the Dream Labs format.</li>
+      <li><b>Failures become successes.</b> When Dream-1 gets stuck, a rule-based script or a person (press T) finishes the task.</li>
+      <li><b>Your own success.</b> Drag objects to where they should end up and set the distance, still time and
+        release; every run is judged by that goal scene.</li>
+      <li><b>Guided setup.</b> Four steps with arrows: task and robot, scene, run settings, review. One run or a batch of up to 4 at once.</li>
+      <li><b>Ready to train.</b> Every run is labeled; the good ones are saved in the Dream Labs format.</li>
     </ul>
     <div class="screens">
-      <figure class="screen"><img src="assets/screens/03-collect.png" alt="The Collect page: model, run setup and the camera view" loading="lazy"><figcaption>The Collect page: model, run setup and the camera view</figcaption></figure>
-      <figure class="screen"><img src="assets/screens/04-collect-batch.png" alt="A batch: episodes, seeds, scene per episode, and the runs" loading="lazy"><figcaption>A batch: episodes, seeds, scene per episode, and the runs</figcaption></figure>
+      <figure class="screen"><img src="assets/screens/03-collect.png" alt="The Collect page: step 1 of the guided setup, task and robot, beside the camera feeds" loading="lazy"><figcaption>Step 1 of 4: model, robot, room and task, beside the camera feeds</figcaption></figure>
+      <figure class="screen"><img src="assets/screens/04-collect-batch.png" alt="Step 3 of the guided setup: a batch with seed, episodes, run mode and scene per episode, above the runs list" loading="lazy"><figcaption>Step 3 of 4: a batch with seed, episodes, run mode and scene per episode</figcaption></figure>
     </div>
-    <h3 class="title">Results</h3>
-    <table class="results">
-      <thead><tr><th>Setting</th><th>Episodes</th><th>Success</th></tr></thead>
-      <tbody>
-        <tr><td>Rule-based only, "put the banana on the plate", varied camera, light and room</td><td>68 valid</td><td class="num">66 (97%)</td></tr>
-        <tr><td>Data collection (Dream-1 + recovery), failures handed to the script sooner, same 3 seeds</td><td>3</td><td class="num">1 → 3</td></tr>
-        <tr><td>Rule-based script on 4 pick-and-place tasks × 5 seeds, after the reach and hand-over fixes</td><td>20</td><td class="num">4 → 7</td></tr>
-      </tbody>
-    </table>
 
     <h4 class="title">Same seed, a different environment</h4>
     <p>Same task and seed: the default scene on the left, a changed one on the right. Use the arrows or swipe.</p>
@@ -345,19 +360,14 @@
     <h2 class="title">Train Custom Model</h2>
     <p>Fine-tune Dream-1 on a collected dataset from the app, with the key you signed in with.</p>
     <div class="screens">
-      <figure class="screen"><img src="assets/screens/06-train.png" alt="Step 1: upload a saved dataset" loading="lazy"><figcaption>Step 1: upload a saved dataset</figcaption></figure>
-      <figure class="screen"><img src="assets/screens/07-train-model.png" alt="Step 2: pick the steps and see the price" loading="lazy"><figcaption>Step 2: pick the steps and see the price</figcaption></figure>
+      <figure class="screen"><img src="assets/screens/06-train.png" alt="Train step 1, Dataset: saved datasets with Upload, and Import dataset ZIP" loading="lazy"><figcaption>Step 1 · Dataset: upload a saved dataset or import a ZIP</figcaption></figure>
+      <figure class="screen"><img src="assets/screens/07-train-model.png" alt="Train step 2, Configure: dataset, model name, steps, data mix, learning rate schedule and the estimated price" loading="lazy"><figcaption>Step 2 · Configure: steps, data mix and schedule, with the price</figcaption></figure>
     </div>
     <div class="steps">
-      <div class="step"><p class="step-no">1 · Upload</p><p>Pick a saved dataset and upload it. Free.</p></div>
-      <div class="step"><p class="step-no">2 · Process</p><p>Dream Labs prepares it in a few minutes. Free.</p></div>
-      <div class="step"><p class="step-no">3 · Train</p><p>Choose the steps and see the price. Once started, it can't be cancelled.</p></div>
-      <div class="step"><p class="step-no">4 · Follow</p><p>Watch the progress; the finished model appears here.</p></div>
+      <div class="step"><p class="step-no">1 · Dataset</p><p>Upload a saved dataset or import a ZIP; Dream Labs processes it in a few minutes. Free.</p></div>
+      <div class="step"><p class="step-no">2 · Configure</p><p>Name the model, pick 500 to 10,000 steps, the data mix (50% Dream-1 data or yours only) and the schedule. The price shows first; a started job can't be cancelled.</p></div>
+      <div class="step"><p class="step-no">3 · Models</p><p>Follow the jobs; the finished <code>dream-1-ft</code> model appears here and in the Model bar.</p></div>
     </div>
-    <h3 class="title">Results</h3>
-    <p>Our banana dataset, <b>50 unique seeds and 5,078 frames</b> in two rooms, passed the Dream Labs validator and was
-      uploaded and <b>processed</b> from the Train page, ready for a fine-tuning job. Training runs and their curves will be
-      added here.</p>
   </div>
 </section>
 
@@ -369,13 +379,23 @@
       the model's. A <b>Model</b> bar lists the models your key can run, the public Dream-1 betas and your fine-tunes, and
       every run records which one it used. A fine-tune that is still starting up is waited for (up to 10 minutes, not
       counted in the run's time).</p>
-    <p>Runs and batches use the same seeded scenes as collection, including the fixed <b>evaluation set of 50 seeds</b>, so
-      a fine-tuned model and Dream-1 can be compared start for start.</p>
+    <p>Setup follows the same four guided steps as Collect. Runs and batches can use a <b>test set</b>, a
+      <code>testset.json</code> of fixed starts (ours are on Hugging Face), so a fine-tuned model and Dream-1 are compared
+      start for start.</p>
     <div class="screens one">
-      <figure class="screen"><img src="assets/screens/08-test.png" alt="The Test page: pick a fine-tune in the Model bar and run it alone" loading="lazy"><figcaption>The Test page: pick a fine-tune in the Model bar and run it alone</figcaption></figure>
+      <figure class="screen"><img src="assets/screens/08-test.png" alt="The Test page: step 1 of the guided setup with the Model bar, beside the camera feeds" loading="lazy"><figcaption>The Test page: pick a fine-tune in the Model bar, then set up the run in four steps</figcaption></figure>
     </div>
     <h3 class="title">Results</h3>
-    <p>The comparison of our fine-tuned model with Dream-1 on the evaluation seeds will be added here.</p>
+    <p>Success rate on test set 10 of the apple task, <b>"Put the apple into the bowl"</b>: 50 fixed starts
+      (<a href="https://huggingface.co/datasets/Dangni/sweet-dream-apple" target="_blank" rel="noopener">Dangni/sweet-dream-apple</a>
+      on Hugging Face, batch seed 10), every model on its own with no recovery script.</p>
+    <table class="results">
+      <thead><tr><th>Model</th><th>Successes</th><th>Success rate</th></tr></thead>
+      <tbody>
+        <tr><td>Dream-1 (base)</td><td class="num">1 / 50</td><td class="num">2%</td></tr>
+        <tr><td>Sweet Dream fine-tune (ours)</td><td class="num">— / 50</td><td class="num">—</td></tr>
+      </tbody>
+    </table>
   </div>
 </section>
 
@@ -386,7 +406,7 @@
 ~/dream-env/bin/pip install dreamlabs pyarrow av
 ~/dream-env/bin/python app.py --port 8000
 # open http://localhost:8000 and sign in with your Dream API key</code></pre>
-    <p style="margin-top: 12px">Every page and option is described in the <a href="https://github.com/2btlFe/Sweet-Dream/blob/v2.0/docs/USAGE.md">usage guide</a>.</p>
+    <p style="margin-top: 12px">Every page and option is described in the <a href="https://github.com/2btlFe/Sweet-Dream/blob/v3.0/docs/USAGE.md">usage guide</a>.</p>
   </div>
 </section>
 
@@ -404,8 +424,8 @@
 
 <footer>
   <div class="container">
-    <p>Sweet Dream is licensed under the <a href="https://github.com/2btlFe/Sweet-Dream/blob/v2.0/LICENSE">Apache License 2.0</a>
-      (<a href="https://github.com/2btlFe/Sweet-Dream/blob/v2.0/NOTICE">NOTICE</a>). Built on the
+    <p>Sweet Dream is licensed under the <a href="https://github.com/2btlFe/Sweet-Dream/blob/v3.0/LICENSE">Apache License 2.0</a>
+      (<a href="https://github.com/2btlFe/Sweet-Dream/blob/v3.0/NOTICE">NOTICE</a>). Built on the
       <a href="https://github.com/dreamlabs-co/dreamlabs">Dream Labs library</a> (Apache-2.0).</p>
     <p>Videos: YAM robot meshes by <a href="https://github.com/i2rt-robotics/i2rt">I2RT Robotics</a> (MIT); the apple and banana are from the
       <a href="https://ycb-benchmarks.s3.amazonaws.com/index.html">YCB Object and Model Set</a> by Calli, Singh, Walsman, Srinivasa, Abbeel and Dollar

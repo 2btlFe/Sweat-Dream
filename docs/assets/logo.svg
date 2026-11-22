@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+  <title id="t">Sweet Dream: a sun in a pale halo, the mark on the app's start page</title>
+  <!-- The soft theme's mark (static/theme.css, .geometry): a 52 px sun-wash circle with a sun circle 10 px inside it. -->
+  <defs>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#b99434" flood-opacity=".16"/>
+    </filter>
+  </defs>
+  <circle cx="32" cy="32" r="26" fill="#fff8df"/>
+  <circle cx="32" cy="32" r="16" fill="#f6e7a9" filter="url(#glow)"/>
+</svg>
