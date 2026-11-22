@@ -116,6 +116,76 @@ def eval_seeds():
     return []
 
 
+## Test sets: a testset.json each (the start seeds, the task, its judge, the time limit and the scene settings), in
+## folders under testsets/ (e.g. testsets/sweet-dream-apple/batchseed07_50/testset.json, as on Hugging Face). A batch
+## on a test set runs exactly those starts, so models are compared on the same scenes.
+TESTSETS = HERE / "testsets"
+TESTSET_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
+def check_testset(data):
+    """@return The test set's settings, checked. @throws ValueError When a part is missing or malformed."""
+    if not isinstance(data, dict):
+        raise ValueError("A test set is a JSON object.")
+    episodes = data.get("episodes")
+    if not isinstance(episodes, list) or not episodes:
+        raise ValueError("The test set has no episodes.")
+    seeds = [e.get("seed") if isinstance(e, dict) else None for e in episodes]
+    if not all(isinstance(s, int) and 0 <= s < 1_000_000 for s in seeds):
+        raise ValueError("Every episode needs a seed from 0 to 999999.")
+    if len(seeds) > MAX_BATCH:
+        raise ValueError(f"A test set has at most {MAX_BATCH} episodes.")
+    task = data.get("task")
+    if not isinstance(task, str) or not task.strip():
+        raise ValueError("The test set names no task.")
+    parse_task_list([{"prompt": task, "judge": data.get("judge")}], FULL_TABLE)  # the judge must be one we can run
+    return {"name": str(data.get("name") or ""), "task": task.strip(), "judge": data.get("judge"), "seeds": seeds,
+            "seconds": min(300, max(10, int(float(data.get("seconds") or 60)))),
+            "scene_settings": data.get("scene_settings") or {}, "ood_random": list(data.get("ood_random") or []),
+            "robot": str(data.get("robot") or "yam"), "room": str(data.get("room") or "yam_tabletop"),
+            "batch_seed": data.get("batch_seed")}
+
+
+def list_testsets():
+    """@return Every test set under testsets/: its id (the folder, relative), name, task, judge and size."""
+    found = []
+    if TESTSETS.is_dir():
+        for path in sorted(TESTSETS.rglob("testset.json")):
+            folder = path.parent.relative_to(TESTSETS).as_posix()
+            try:
+                ts = check_testset(read_json(path))
+            except (ValueError, TypeError, AttributeError) as error:
+                found.append({"id": folder, "error": str(error)})
+                continue
+            found.append({"id": folder, "name": ts["name"] or path.parent.name, "task": ts["task"], "judge": ts["judge"],
+                          "count": len(ts["seeds"]), "seconds": ts["seconds"], "room": ts["room"],
+                          "batch_seed": ts["batch_seed"], "settings": bool(ts["scene_settings"] or ts["ood_random"])})
+    return found
+
+
+def load_testset(testset_id):
+    """@return The checked test set in testsets/<testset_id>/testset.json. @throws ValueError For an unknown id."""
+    path = (TESTSETS / str(testset_id or "") / "testset.json").resolve()
+    if TESTSETS.resolve() not in path.parents or not path.is_file():
+        raise ValueError("Pick a test set.")
+    ts = check_testset(read_json(path))
+    ts["id"] = path.parent.relative_to(TESTSETS.resolve()).as_posix()
+    return ts
+
+
+def save_testset(data, filename=""):
+    """Keep an uploaded testset.json under testsets/uploaded/<its name>/. @return Its id."""
+    ts = check_testset(data)
+    name = ts["name"] or Path(str(filename)).stem or "testset"
+    name = re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-.")[:64] or "testset"
+    if not TESTSET_NAME_RE.match(name):
+        raise ValueError("Give the test set a name of letters, digits, '.', '_' or '-'.")
+    folder = TESTSETS / "uploaded" / name
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "testset.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
+    return f"uploaded/{name}"
+
+
 def read_json(path, default=None):
     try:
         return json.loads(Path(path).read_text(encoding="utf-8"))
@@ -739,7 +809,7 @@ class Batch:
             return set(self.active)
 
     def start(self, tasks, seeds, seconds, changes, random_names, split, robot=(), mode="plain", workers=1,
-              collection=None, original_of=None, original=False, batch_seed=None, vary_scene=False):
+              collection=None, original_of=None, original=False, batch_seed=None, vary_scene=False, testset=None):
         """@param seeds One seed per episode. @param changes, random_names The scene settings, and the ones drawn
         from each seed. @param split "train" or "eval" (shown on the page). @param workers Episodes at once.
         @param vary_scene Each episode's room is drawn from its seed (seed_web.episode_room)."""
@@ -753,6 +823,7 @@ class Batch:
                      "seconds": seconds, "seeds": seeds, "seed": seeds[0], "split": split, "ood": changes,
                      "ood_random": random_names, "rules": current_rules(), "robot": list(robot), "mode": mode,
                      "workers": workers, "collection": collection, "original_of": original_of, "original": original or bool(original_of), "batch_seed": batch_seed, "vary_scene": bool(vary_scene),
+                     "testset": testset and {"id": testset["id"], "name": testset["name"] or testset["id"]},
                      "model": MODEL["value"], "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
                      "started": time.time(), "ended": None, "current": None, "active": [], "stopped_reason": None,
                      "durations": [], "invalid_in_a_row": 0}
@@ -796,7 +867,8 @@ class Batch:
                "LIVE_FRAME": str(live_frame(run_id)),  # its camera view, for the page (/api/live.jpg?run=...)
                **({"ORIGINAL": "1"} if info.get("original") else {}),
                **({"BATCH_SEED": str(info["batch_seed"])} if info.get("batch_seed") is not None else {}),
-               **({"ORIGINAL_OF": info["original_of"]} if info.get("original_of") else {})}
+               **({"ORIGINAL_OF": info["original_of"]} if info.get("original_of") else {}),
+               **({"TESTSET": info["testset"]["id"]} if info.get("testset") else {})}
         if PAGE_KEY["value"]:
             env["DREAM_API_KEY"] = PAGE_KEY["value"]
         env["DREAM_MODEL"] = info["model"]  # the model when the batch started, whatever the page picks meanwhile
@@ -1086,6 +1158,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"models": list_models(), "model": MODEL["value"]})
             except RuntimeError as error:
                 return self.send_json({"error": str(error), "model": MODEL["value"]}, 400)
+        if path == "/api/testsets":  # the test sets under testsets/, for a batch on exactly their starts
+            return self.send_json({"testsets": list_testsets()})
         if path == "/api/rules":
             return self.send_json(current_rules())
         if path == "/api/simulator-settings":
@@ -1183,6 +1257,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"error": "Invalid request."}, 400)
         if not isinstance(body, dict):
             return self.send_json({"error": "Expected a JSON object."}, 400)
+        if self.path == "/api/testsets":  # {testset: <testset.json's content>, filename}: keep an uploaded test set
+            try:
+                testset_id = save_testset(body.get("testset"), body.get("filename") or "")
+            except (ValueError, TypeError, AttributeError) as error:
+                return self.send_json({"error": str(error)}, 400)
+            return self.send_json({"id": testset_id, "testsets": list_testsets()})
         if self.path == "/api/preview":
             return self.preview(body)
         if self.path == "/api/goal-preview":
@@ -1356,7 +1436,16 @@ class Handler(BaseHTTPRequestHandler):
                     random_names = sorted(set(random_names) | set(VARY_CONTROLS))
                 robot = robot_args(changes, ["--ood-random"] if random_names else [], None)
                 split = body.get("split") or "train"
-                if split == "eval":  # the fixed evaluation seeds, in order
+                testset = None
+                if split == "testset":  # exactly the test set's starts, task, judge, time limit and scene settings
+                    testset = load_testset(body.get("testset"))
+                    tasks = parse_task_list([{"prompt": testset["task"], "judge": testset["judge"]}], FULL_TABLE)
+                    seeds, count, seconds = testset["seeds"], len(testset["seeds"]), testset["seconds"]
+                    changes = ood.validate(testset["scene_settings"])
+                    random_names, vary = testset["ood_random"], False
+                    seed_web.seeding_args({"ood_random": random_names}, ood.FIELDS)
+                    robot = ["--robot", testset["robot"], "--room", testset["room"]]
+                elif split == "eval":  # the fixed evaluation seeds, in order
                     seeds = eval_seeds()[:count]
                     if len(seeds) < count:
                         raise ValueError(f"There are {len(seeds)} eval seeds.")
@@ -1367,7 +1456,7 @@ class Handler(BaseHTTPRequestHandler):
                         raise ValueError("Train seeds are 0 to 999999.")
                     seeds = [seed_web.episode_seed(first, i) for i in range(count)]  # one seed is the whole batch
                 else:
-                    raise ValueError("Seeds must be 'train' or 'eval'.")
+                    raise ValueError("Seeds must be 'train', 'testset' or 'eval'.")
                 mode = body.get("mode") or "collect"
                 if mode not in ("collect", "script", "plain", "original"):
                     raise ValueError("A batch runs in data collection, rule-based only, Dream-1 only or original mode.")
@@ -1383,7 +1472,7 @@ class Handler(BaseHTTPRequestHandler):
                 collection, _args = collection_args(body.get("collection"))
                 BATCH.start(tasks, seeds, seconds, changes, random_names, split, robot, mode, workers, collection,
                             original=original, batch_seed=first if split == "train" else None,
-                            vary_scene=vary and not original)
+                            vary_scene=vary and not original, testset=testset)
             except (ValueError, TypeError, AttributeError) as error:
                 return self.send_json({"error": str(error)}, 400)
             except RuntimeError as error:

@@ -587,6 +587,28 @@ def read_meta(folder):
         return None
 
 
+def record_plain(env, args, meta):
+    """Model-only runs (--plain, the Test page): record the episode as the other modes do (episodes/<id>: steps,
+    the three camera videos, events), with no failure monitor, recovery script or human control. Every step is the
+    model's once its first chunk arrives, and "hold" before that."""
+    global RECORDER
+    RECORDER = EpisodeRecorder(env, args.task, mode="dream",
+                               extra={"recover": None, "time_limit_s": args.seconds, "resumed_from": None,
+                                      "run": meta["id"], "seed": meta["seed"], "room": meta["room"], "plain": True})
+    RECORDER.id, RECORDER.dir = meta["id"], EPISODES_DIR / meta["id"]  # one id: runs/<id> and episodes/<id>
+    step = env.step
+    no_hands, no_grips = np.full((2, 3), np.nan), np.full(2, np.nan)  # no human targets in a model-only run
+
+    def recorded_step(left, right):
+        RECORDER.before_step()
+        result = step(left, right)
+        RECORDER.after_step(left, right, "dream" if DREAM_STARTED[0] else "hold", no_hands, no_grips, None)
+        return result
+
+    env.step = recorded_step
+    print(f"  Recording: episodes/{RECORDER.id}", flush=True)
+
+
 def start_ksy(env, args, meta, stop, source_dir):
     """KSY's control loop on the built scene: every action goes through the human controller (teleop.py), which
     passes Dream-1's on or replaces them; every step is watched by the failure monitor (monitor.py), which stops
@@ -885,12 +907,13 @@ def main():
             "batch_id": os.environ.get("BATCH_ID"), "original": os.environ.get("ORIGINAL") == "1",
             "batch_seed": int(os.environ["BATCH_SEED"]) if os.environ.get("BATCH_SEED") else None,
             "original_of": os.environ.get("ORIGINAL_OF") or None,
+            "testset": os.environ.get("TESTSET") or None,  # the test set this start came from (app.py batches)
             "judge": (json.loads(os.environ["JUDGE_SPEC"]) if os.environ.get("JUDGE_SPEC")
                       else {"pairs": json.loads(os.environ["JUDGE_PAIRS"])} if os.environ.get("JUDGE_PAIRS") else None)}
 
     def save(env=None):
         if RECORDER is not None and not RECORDER.closed:
-            saved = RECORDER.close(MONITOR.status() if MONITOR else {}, None if not meta["error"] else meta["error"])
+            saved = RECORDER.close(MONITOR.status() if MONITOR else None, None if not meta["error"] else meta["error"])
             if saved:
                 meta["episode"] = RECORDER.id
                 meta["steps_by_source"] = (read_meta(saved) or {}).get("steps_by_source")
@@ -937,6 +960,8 @@ def main():
         threading.Thread(target=watch, daemon=True).start()
     if KSY:
         start_ksy(env, args, meta, stop, source_dir)
+    elif args.plain and not openyam and not partial and not args.no_record:
+        record_plain(env, args, meta)
 
     print(f"Starting the simulator: {args.task} ({args.seconds:g} s)"
           + {"human": " · you have the arms (T hands them to Dream-1)", "resumed": " · you have the arms",

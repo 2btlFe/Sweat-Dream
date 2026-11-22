@@ -281,6 +281,10 @@ class EpisodeRecorder:
             "final_stage": status.get("stage"),
             "failures_seen": [e for e in events if e["kind"] == "monitor"],
             "judge": "monitor.py (online stage rules); replace with the team's shared judge when it exists",
+        } if monitor_status is not None else {
+            # A run without the failure monitor (model only): its verdict is the rules' (runs/<id>/label.json).
+            "label": None, "final_stage": None, "failures_seen": [],
+            "judge": "none online (model only); see runs/<id>/label.json",
         }
         (self.dir / "outcome.json").write_text(json.dumps(outcome, indent=2))
         return self.dir
