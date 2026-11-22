@@ -15,10 +15,15 @@ https://platform.dreamlabs.ai/api-documentation/fine-tuning/
 from __future__ import annotations
 
 import json
+import os
 import re
+import shutil
+import stat
+import tempfile
 import threading
+import zipfile
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 PRICE_PER_STEP = 0.20  # USD, at the time of writing; the Billing page shows the current price
 STEPS = (500, 10000)  # a multiple of 100 in this range
@@ -28,6 +33,9 @@ EMBODIMENT_NAME = "yam-sim"
 HIDDEN = ".hidden"  # a saved dataset's folder holds this file while it is hidden on the Train page (it stays on disk)
 UPLOADS = {}  # folder name -> {"state": "checking" | "uploading" | "done" | "failed", "name", "error", "dataset_id"}
 LOCK = threading.Lock()
+MAX_ARCHIVE_BYTES = 2 * 1024**3
+MAX_EXTRACTED_BYTES = 4 * 1024**3
+MAX_ARCHIVE_FILES = 20_000
 
 
 def _iso(value):
@@ -46,6 +54,84 @@ def suggested_name(folder):
     banana-rule-based-only-50."""
     words = re.sub(r"^\d{8}-\d{6}-", "", folder)
     return (re.sub(r"[^a-z0-9]+", "-", words.lower()).strip("-") or "dataset")[:64]
+
+
+def import_dataset_zip(root, archive, filename):
+    """Import a saved Sweet Dream or LeRobot ZIP into local datasets; no Dream Labs call is made."""
+    from dream import datasets
+
+    root = Path(root)
+    root.mkdir(parents=True, exist_ok=True)
+    stem = re.sub(r"^\d{8}-\d{6}-", "", Path(filename).stem.lower())
+    slug = re.sub(r"[^a-z0-9]+", "-", stem).strip("-")[:40] or "imported-dataset"
+    with tempfile.TemporaryDirectory(prefix=".dataset-import-", dir=root) as temporary:
+        stage = Path(temporary) / "stage"
+        stage.mkdir()
+        try:
+            with zipfile.ZipFile(archive) as bundle:
+                files = []
+                for item in bundle.infolist():
+                    if item.is_dir():
+                        continue
+                    path = PurePosixPath(item.filename)
+                    if (not path.parts or path.is_absolute() or ".." in path.parts or "\\" in item.filename
+                            or stat.S_IFMT(item.external_attr >> 16) == stat.S_IFLNK):
+                        raise ValueError("The ZIP contains an unsafe path or link.")
+                    if "__MACOSX" in path.parts or path.name == ".DS_Store" or path.name.startswith("._"):
+                        continue
+                    files.append((item, path))
+                if not files or len(files) > MAX_ARCHIVE_FILES:
+                    raise ValueError("The ZIP is empty or contains too many files.")
+                if sum(item.file_size for item, _ in files) > MAX_EXTRACTED_BYTES:
+                    raise ValueError("The uncompressed dataset is too large.")
+                roots = {path.parts[0] for _, path in files}
+                strip_root = len(roots) == 1 and all(len(path.parts) > 1 for _, path in files)
+                paths = [(item, PurePosixPath(*path.parts[1:]) if strip_root else path) for item, path in files]
+                names = {str(path) for _, path in paths}
+                saved = "dream_format/meta/info.json" in names
+                raw = "meta/info.json" in names
+                if not (saved or raw) or "embodiment.json" not in names:
+                    raise ValueError("The ZIP needs embodiment.json and either dream_format/meta/info.json or meta/info.json.")
+                for item, path in paths:
+                    if str(path) not in ("manifest.json", "embodiment.json") and not (
+                            path.parts[0] == "dream_format" if saved else path.parts[0] in ("meta", "data", "videos")):
+                        continue
+                    dest = stage / (path if saved or path.parts[0] in ("manifest.json", "embodiment.json")
+                                    else PurePosixPath("dream_format") / path)
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    if dest.exists():
+                        raise ValueError(f"The ZIP contains duplicate file paths: {path}")
+                    with bundle.open(item) as source, dest.open("wb") as target:
+                        shutil.copyfileobj(source, target, 1024 * 1024)
+        except zipfile.BadZipFile as error:
+            raise ValueError("The selected file is not a valid ZIP archive.") from error
+
+        embodiment = _read(stage / "embodiment.json", {})
+        config = embodiment.get("config") if isinstance(embodiment, dict) else None
+        if not isinstance(config, dict):
+            raise ValueError("embodiment.json must contain a robot config.")
+        report = datasets.validate_dataset(stage / "dream_format", config)
+        if not report.ok:
+            raise ValueError(f"Dream Labs dataset validation failed: {report.error}")
+        manifest = _read(stage / "manifest.json", {})
+        if not isinstance(manifest, dict):
+            manifest = {}
+        manifest["runs"] = [run for run in manifest.get("runs", []) if isinstance(run, dict)] if isinstance(
+            manifest.get("runs"), list) else []
+        manifest.update({"name": slug, "created_at": datetime.now().isoformat(timespec="seconds"),
+                         "count": report.episodes,
+                         "dream_format": {"folder": "dream_format/", "episodes": report.episodes,
+                                          "frames": report.frames, "check": {"ok": True, "error": None}}})
+        (stage / "manifest.json").write_text(json.dumps(manifest, indent=2))
+        stem = datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + slug
+        with LOCK:
+            folder = root / stem
+            number = 2
+            while folder.exists():
+                folder = root / f"{stem}-{number}"
+                number += 1
+            os.replace(stage, folder)
+    return folder.name, report.episodes
 
 
 def local_datasets(root):
@@ -80,7 +166,7 @@ def set_hidden(root, folder, hidden):
 
 
 def account(key):
-    """What Dream Labs has for this key: embodiments, datasets, fine-tuning jobs, the queue (all free reads)."""
+    """What Dream Labs has for this key: embodiments, datasets and fine-tuning jobs (all free reads)."""
     from dream import datasets, fine_tuning
 
     return {
@@ -89,7 +175,6 @@ def account(key):
                       "size_bytes": d.size_bytes, "error": d.error, "created_at": _iso(d.created_at)}
                      for d in datasets.list_datasets(api_key=key)],
         "jobs": fine_tuning.list(api_key=key),
-        "queue": fine_tuning.queue(api_key=key),
         "price_per_step": PRICE_PER_STEP,
         "steps": {"min": STEPS[0], "max": STEPS[1], "every": 100, "default": 1000},
     }

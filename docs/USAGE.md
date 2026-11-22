@@ -26,13 +26,17 @@ Open http://localhost:8000. The site has several pages:
   **Test Custom Model!** (`/test`). **Sign out** clears the key.
 - **Train Custom Model!** (`/train`, `train.py`), with the signed-in key:
   1. **Upload a dataset**: every dataset saved with the Dream Labs format (`datasets/<folder>/dream_format/`) is
-     listed; **Upload** checks it here (nothing sent), registers the robot once as `yam-sim` (from `embodiment.json`,
+     listed. **Import dataset ZIP** accepts a Sweet Dream saved dataset ZIP, or a LeRobot ZIP with `embodiment.json`;
+     it validates locally and adds a row. **Upload** checks the row again, registers the robot once as `yam-sim`
+     (from `embodiment.json`,
      reused after that) and uploads it under the name given (free). Dream Labs then processes it (a few minutes);
      the page follows it. The outcome is kept in `datasets/<folder>/dream_upload.json`.
-  2. **Train**: a processed dataset, a model name, the steps (500 to 10,000), the training data (mixed with Dream
-     Labs data, or yours only) and the learning-rate schedule; the price shows as you choose ($0.20 a step at the
-     time of writing). **Start training…** asks first: the price is held from your credits and a queued job cannot
-     be cancelled. The server refuses a start whose price is not the one shown.
+  2. **Train**: a processed dataset, a new model name, the steps (500 to 10,000), and `base_share` (0.5 for half
+     Dream-1 general training data and half your episodes, or 0.0 for only your data). The learning-rate schedule
+     uses the default constant setting. The estimated price shows as you choose ($0.20 a step at the time of writing). Billing shows
+     your current balance; the page links there. **Start training…** asks first: the price is held from your credits
+     and a queued job cannot be cancelled. The server refuses a start whose price is not the
+     one shown.
   3. **Your training jobs**: read from Dream Labs every 30 s (status, phase, step, loss, and the model id
      `dream-1-ft:<account>-<name>` when it is done), so they show again after a restart.
   **Hide** takes a saved dataset off the list (a `.hidden` file in its folder; nothing is deleted); **Show hidden**
