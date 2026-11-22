@@ -1142,13 +1142,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(PAGE.with_name("icon.svg").read_bytes(), "image/svg+xml")
         if path in ("/ood.js", "/seed.js"):
             return self.send(PAGE.with_name(path[1:]).read_bytes(), "text/javascript; charset=utf-8")
+        if path in ("/assets/collect-demo.png", "/assets/test-third-person.png"):
+            return self.send((HERE / "static" / path.lstrip("/")).read_bytes(), "image/png")
         if path == "/api/ood":
             return self.send_json(ood.GROUPS)
         if path == "/api/status":
             return self.send_json(RUNNER.status())
         if path == "/api/datasets":
             return self.send_json({"datasets": list_datasets()})
-        if path == "/api/train":  # the Train page: saved datasets, and what Dream Labs has (datasets, jobs, queue)
+        if path == "/api/train":  # the Train page: saved datasets and Dream Labs datasets/jobs
             if not PAGE_KEY["value"]:
                 return self.send_json({"error": "Sign in with your API key first (the start page)."}, 401)
             reply = {"local": train.local_datasets(DATASETS), "account": None, "account_error": None}
@@ -1293,6 +1295,38 @@ class Handler(BaseHTTPRequestHandler):
             PREVIEW_LOCK.release()
 
     def do_POST(self):
+        if self.path == "/api/train/import":  # ZIP bytes from a local file; no Dream Labs call
+            if not PAGE_KEY["value"]:
+                return self.send_json({"error": "Sign in with your API key first (the start page)."}, 401)
+            try:
+                size = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                size = 0
+            if not 0 < size <= train.MAX_ARCHIVE_BYTES:
+                return self.send_json({"error": "Choose a ZIP file smaller than 2 GB."}, 400)
+            DATASETS.mkdir(exist_ok=True)
+            incoming = None
+            try:
+                with tempfile.NamedTemporaryFile(prefix=".incoming-", suffix=".zip", dir=DATASETS,
+                                                 delete=False) as target:
+                    incoming = Path(target.name)
+                    remaining = size
+                    while remaining:
+                        chunk = self.rfile.read(min(1024 * 1024, remaining))
+                        if not chunk:
+                            raise ValueError("The ZIP upload ended before the whole file arrived.")
+                        target.write(chunk)
+                        remaining -= len(chunk)
+                filename = urllib.parse.unquote(self.headers.get("X-File-Name") or "dataset.zip")
+                folder, episodes = train.import_dataset_zip(DATASETS, incoming, filename)
+                return self.send_json({"folder": folder, "episodes": episodes})
+            except (ValueError, OSError) as error:
+                return self.send_json({"error": str(error)}, 400)
+            except Exception as error:  # noqa: BLE001  unsupported ZIP compression or dataset parser error
+                return self.send_json({"error": f"Could not import dataset: {type(error).__name__}: {error}"}, 400)
+            finally:
+                if incoming is not None:
+                    incoming.unlink(missing_ok=True)
         try:
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
         except ValueError:

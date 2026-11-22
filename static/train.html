@@ -12,7 +12,7 @@
   if (selectedTheme === "soft" || selectedTheme === "bauhaus") {
     sessionStorage.setItem("sweetDreamTheme", selectedTheme);
   }
-  if (sessionStorage.getItem("sweetDreamTheme") === "soft") {
+  if (sessionStorage.getItem("sweetDreamTheme") !== "bauhaus") {
     document.documentElement.dataset.theme = "soft";
   }
 </script>
@@ -43,36 +43,48 @@
   td { padding: 12px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
   tr:last-child td { border-bottom: 0; }
   td .sub { display: block; color: var(--ink-3); font-size: 13px; margin-top: 2px; }
-  .table-wrap { overflow-x: auto; background: var(--white); border: 1px solid var(--line-soft); border-radius: 4px; }
+  .table-wrap { overflow-x: auto; background: var(--white); border: 1px solid var(--line-soft); border-radius: 12px; }
   .upload-cell { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; min-width: 300px; }
   .upload-cell input { height: 38px; flex: 1 1 180px; font-size: 14px; }
   button.small, .button.small { height: 38px; padding: 0 16px; font-size: 14px; }
-  .chip { display: inline-block; padding: 2px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; white-space: nowrap; background: var(--grey-2); color: var(--ink-2); }
+  .chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; background: var(--grey-2); color: var(--ink-2); }
   .chip.ok { background: var(--grass-wash); color: var(--grass-text); }
   .chip.busy { background: #fdf3c4; color: #7a5c00; }
   .chip.bad { background: var(--sherbert-wash); color: var(--error); }
   .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; }
   @media (max-width: 760px) { .grid { grid-template-columns: minmax(0, 1fr); } }
-  select { width: 100%; height: 48px; padding: 0 14px; border: 1px solid var(--line); border-radius: 4px; background: var(--white); color: var(--ink); font: inherit; }
-  .toggle { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; background: var(--white); }
-  .toggle button { height: 46px; border: 0; border-radius: 0; background: transparent; color: var(--ink-2); padding: 0 10px; font-size: 15px; }
-  .toggle button:hover { background: var(--clay); border: 0; }
-  .toggle button.on { background: var(--ink); color: var(--white); }
+  select { width: 100%; height: 48px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--white); color: var(--ink); font: inherit; }
+  #dataset { appearance: none; padding-right: 48px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%235a5a5a' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 22px center; }
+  .share-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .field-label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 500; color: var(--ink-2); }
+  .share-choice { position: relative; display: block; margin: 0; cursor: pointer; }
+  .share-choice input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .share-card { display: block; min-height: 76px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--white); }
+  .share-card strong { display: block; font-size: 15px; }
+  .share-card small { display: block; margin-top: 5px; color: var(--ink-3); font-size: 12px; }
+  .share-choice input:checked + .share-card { border-color: var(--ink); background: var(--clay); box-shadow: inset 0 0 0 1px var(--ink); }
+  .share-choice input:focus-visible + .share-card { outline: 3px solid var(--creamsicle-deep); outline-offset: 2px; }
+  @media (max-width: 520px) { .share-options { grid-template-columns: 1fr; } }
   .hint { font-size: 13px; color: var(--ink-3); margin: 6px 0 0; }
-  .price { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-top: 22px; padding: 16px 18px; border-radius: 4px; background: var(--creamsicle-wash); border: 1px solid rgba(255, 159, 77, .35); }
-  .price b { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; }
+  .price { margin-top: 22px; padding: 16px 18px; border-radius: 12px; background: var(--creamsicle-wash); border: 1px solid rgba(255, 159, 77, .35); }
+  .price .eyebrow { margin: 0 0 8px; }
+  .price b { display: block; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; }
+  .price .note { display: block; margin-top: 2px; }
+  .credits { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255, 159, 77, .35); }
+  .credits .hint { margin: 0; }
   .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 16px; }
   .note { font-size: 14px; color: var(--ink-3); }
   .error { margin-top: 14px; }
   .empty { padding: 18px; color: var(--ink-3); font-size: 14px; }
-  code { font-size: 13px; background: var(--grey-2); padding: 1px 6px; border-radius: 4px; }
-  dialog { width: min(520px, calc(100vw - 32px)); border: 1px solid var(--line-soft); border-radius: 4px; padding: 24px; color: var(--ink); background: var(--white); }
+  code { font-size: 13px; background: var(--grey-2); padding: 1px 6px; border-radius: 6px; }
+  dialog { width: min(520px, calc(100vw - 32px)); border: 1px solid var(--line-soft); border-radius: 16px; padding: 24px; color: var(--ink); background: var(--white); }
   dialog::backdrop { background: rgba(28, 28, 28, .45); }
   dialog h3 { margin: 0 0 10px; font-size: 20px; font-weight: 500; }
   dialog ul { margin: 10px 0 0; padding-left: 20px; }
   dialog li { margin: 4px 0; }
-  .progress { height: 6px; border-radius: 4px; background: var(--grey-2); overflow: hidden; margin-top: 6px; max-width: 220px; }
+  .progress { height: 6px; border-radius: 999px; background: var(--grey-2); overflow: hidden; margin-top: 6px; max-width: 220px; }
   .progress span { display: block; height: 100%; background: var(--creamsicle-deep); }
+  .jobs-card { background: #f5fcf6; border: 0; box-shadow: 0 2px 4px rgba(23, 100, 58, .06), 0 12px 30px rgba(23, 100, 58, .08); }
 </style>
 </head>
 <body class="site">
@@ -85,7 +97,7 @@
 </header>
 <main>
   <div class="intro">
-    <a class="back" href="/sections">← Sections</a>
+    <a class="back" href="/sections">← Sweet Dream · Sections</a>
     <h1 class="section-title">Train Custom Model!</h1>
     <p class="tagline">Upload a dataset you collected to Dream Labs, then fine-tune Dream-1 on it. Uploading is free; training is charged.</p>
   </div>
@@ -94,9 +106,14 @@
   <section class="dl-card step" aria-labelledby="uploadTitle">
     <div class="step-head">
       <div><p class="eyebrow">Step 1 · Upload</p><h2 id="uploadTitle">Upload a dataset</h2></div>
-      <button type="button" class="outline" id="showHidden" hidden>Show hidden</button>
+      <div class="actions" style="margin-top: 0">
+        <button type="button" class="outline" id="showHidden" hidden>Show hidden</button>
+        <button type="button" class="outline" id="importZip">Import dataset ZIP</button>
+        <input type="file" id="importFile" accept=".zip,application/zip" hidden>
+      </div>
     </div>
-    <p class="lead muted small">Datasets saved on the collect page with the Dream Labs format. Each is checked here first (nothing is sent), then uploaded under the name you give it. Dream Labs then processes it, which takes a few minutes.</p>
+    <p class="lead muted small">Use a dataset saved on Collect, or import a ZIP containing the Dream Labs format and embodiment.json. Import checks it locally; then use its row's Upload button to send it to Dream Labs.</p>
+    <p class="hint" id="importStatus" role="status" hidden></p>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Saved dataset</th><th>Episodes</th><th>Uploaded to Dream Labs</th></tr></thead>
@@ -116,9 +133,9 @@
         <p class="hint" id="datasetHint"></p>
       </div>
       <div>
-        <label for="suffix">Model name</label>
-        <input id="suffix" maxlength="40" placeholder="banana-plate-v1" spellcheck="false" autocomplete="off">
-        <p class="hint">Lowercase letters, numbers and hyphens; a new name for every job.</p>
+        <label for="suffix">Name your new model</label>
+        <input id="suffix" maxlength="40" placeholder="e.g. my-first-model" spellcheck="false" autocomplete="off">
+        <p class="hint" id="suffixHint">Enter a name to start training. Lowercase letters, numbers and hyphens only.</p>
       </div>
       <div>
         <label for="steps">Training steps</label>
@@ -126,32 +143,31 @@
         <p class="hint">A multiple of 100 from 500 to 10,000. About 7 to 8 hours for 1,000 steps.</p>
       </div>
       <div>
-        <label>Training data</label>
-        <div class="toggle" role="group" aria-label="Training data">
-          <button type="button" id="mixOn" class="on" aria-pressed="true" title="Half of each batch from Dream-1's own training data: keeps more of what it does in general">Mix in Dream Labs data</button>
-          <button type="button" id="mixOff" aria-pressed="false" title="Only your episodes: fits them more closely, can lose general skill">My data only</button>
+        <div id="shareLabel" class="field-label">Training data mix</div>
+        <div class="share-options" role="radiogroup" aria-labelledby="shareLabel">
+          <label class="share-choice"><input type="radio" name="baseShare" value="0.5" checked>
+            <span class="share-card"><strong>Balanced mix</strong><small>50% my data · 50% Dream-1</small></span></label>
+          <label class="share-choice"><input type="radio" name="baseShare" value="0">
+            <span class="share-card"><strong>My data only</strong><small>100% my data</small></span></label>
         </div>
-      </div>
-      <div>
-        <label>Learning rate</label>
-        <div class="toggle" role="group" aria-label="Learning-rate schedule">
-          <button type="button" id="lrConstant" class="on" aria-pressed="true" title="The default; a model trained this way can be trained further later">Constant</button>
-          <button type="button" id="lrCosine" aria-pressed="false" title="Lowers the learning rate to 0 by the last step: best for one task, cannot be trained further">Cosine (one task)</button>
-        </div>
-      </div>
-      <div>
-        <label>Queue</label>
-        <p class="note" id="queue" style="margin: 12px 0 0">…</p>
+        <p class="hint">Dream-1 share: 0.5 or 0.0. The mixed data stays on Dream Labs.</p>
       </div>
     </div>
-    <div class="price"><b id="price">$0</b><span class="note" id="priceNote"></span></div>
+    <div class="price" aria-label="Estimated billing">
+      <p class="eyebrow">Estimated billing</p>
+      <b id="price">$0</b>
+      <span class="note" id="priceNote"></span>
+      <div class="credits">
+        <span class="hint">Available credits are shown in</span>
+        <a href="https://platform.dreamlabs.ai/billing" target="_blank" rel="noopener noreferrer">Dream Labs Billing ↗</a>
+      </div>
+    </div>
     <div class="actions">
       <button type="button" class="dark" id="startTrain" disabled>Start training…</button>
-      <span class="note" id="startNote"></span>
     </div>
   </section>
 
-  <section class="dl-card white step" aria-labelledby="jobsTitle">
+  <section class="dl-card jobs-card step" aria-labelledby="jobsTitle">
     <p class="eyebrow">Step 3 · Models</p>
     <h2 id="jobsTitle">Your training jobs</h2>
     <p class="lead muted small">Read from Dream Labs every 30 seconds, so they are here again after a restart. A finished job's model can be tested in Step 3.</p>
@@ -191,7 +207,7 @@ async function api(path, body) {
   return data;
 }
 
-let state = null, mix = 0.5, schedule = "constant", timer = null;
+let state = null, timer = null;
 
 const STATUS = { ready_to_process: ["waiting to process", "busy"], processing: ["processing", "busy"], processed: ["processed", "ok"],
                  failed: ["failed", "bad"], queued: ["queued", "busy"], running: ["training", "busy"], succeeded: ["done", "ok"], cancelled: ["cancelled", "bad"] };
@@ -241,11 +257,8 @@ function renderTrain() {
     : `<option value="">No processed dataset yet</option>`;
   if (processed.some(d => d.name === chosen)) $("dataset").value = chosen;
   const waiting = acct ? acct.datasets.filter(d => d.status === "ready_to_process" || d.status === "processing").length : 0;
-  $("datasetHint").textContent = waiting ? `${waiting} more processing; they show here when done.` : "";
-  if (acct) {
-    const q = acct.queue || {};
-    $("queue").textContent = `${q.jobs_ahead_of_new ?? "?"} jobs ahead of a new one · ${q.slots_free ?? "?"} of ${q.slots_total ?? "?"} training slots free`;
-  }
+  $("datasetHint").textContent = waiting ? `${waiting} more processing; they show here when done.`
+    : !processed.length ? "Upload a dataset and wait for it to be processed." : "";
   updatePrice();
 }
 
@@ -253,11 +266,13 @@ function updatePrice() {
   const per = state?.account?.price_per_step ?? 0.2, steps = Number($("steps").value) || 0;
   const valid = steps >= 500 && steps <= 10000 && steps % 100 === 0;
   $("price").textContent = valid ? `$${(steps * per).toFixed(2)}` : "—";
-  $("priceNote").textContent = valid ? `${steps.toLocaleString("en-US")} steps × $${per.toFixed(2)} (the price at the time of writing; Billing on Dream Labs shows the current one and your credits)` : "Steps are a multiple of 100 from 500 to 10,000.";
+  $("priceNote").textContent = valid ? `${steps.toLocaleString("en-US")} steps × $${per.toFixed(2)} per step` : "Steps must be a multiple of 100 from 500 to 10,000.";
   const suffixOk = /^[a-z0-9-]{1,40}$/.test($("suffix").value);
   const ready = valid && suffixOk && !!$("dataset").value;
   $("startTrain").disabled = !ready;
-  $("startNote").textContent = !$("dataset").value ? "Upload a dataset and wait for it to be processed." : !suffixOk ? "Give the model a name." : "";
+  $("suffixHint").textContent = !$("suffix").value ? "Enter a name to start training. Lowercase letters, numbers and hyphens only."
+    : !suffixOk ? "Use lowercase letters, numbers and hyphens (up to 40 characters)."
+    : "This name will appear in your model ID.";
 }
 
 function renderJobs() {
@@ -291,6 +306,28 @@ async function load() {
 }
 
 $("showHidden").onclick = () => { showHidden = !showHidden; renderLocal(); };
+$("importZip").onclick = () => $("importFile").click();
+$("importFile").onchange = async () => {
+  const file = $("importFile").files[0];
+  if (!file) return;
+  $("importFile").value = "";
+  $("importZip").disabled = true;
+  $("importStatus").hidden = false;
+  $("importStatus").textContent = `Checking ${file.name} locally…`;
+  try {
+    const response = await fetch("/api/train/import", { method: "POST", headers: {
+      "Content-Type": "application/zip", "X-File-Name": encodeURIComponent(file.name) }, body: file });
+    const result = await response.json().catch(() => ({}));
+    if (response.status === 401) { location.replace("/"); return; }
+    if (!response.ok) throw new Error(result.error || response.statusText);
+    $("importStatus").textContent = `${result.episodes} episodes imported. Use Upload on the new row to send them to Dream Labs.`;
+    await load();
+  } catch (error) {
+    $("importStatus").textContent = `Import failed: ${error.message}`;
+  } finally {
+    $("importZip").disabled = false;
+  }
+};
 $("localRows").addEventListener("click", async e => {
   const h = e.target.closest("button[data-hide]");
   if (!h) return;
@@ -308,28 +345,23 @@ $("localRows").onclick = async e => {
   load();
 };
 
-const setToggle = (pairs, on) => { for (const [id, v] of pairs) { $(id).classList.toggle("on", v === on); $(id).setAttribute("aria-pressed", v === on); } };
-$("mixOn").onclick = () => { mix = 0.5; setToggle([["mixOn", 0.5], ["mixOff", 0]], mix); };
-$("mixOff").onclick = () => { mix = 0; setToggle([["mixOn", 0.5], ["mixOff", 0]], mix); };
-$("lrConstant").onclick = () => { schedule = "constant"; setToggle([["lrConstant", "constant"], ["lrCosine", "cosine"]], schedule); };
-$("lrCosine").onclick = () => { schedule = "cosine"; setToggle([["lrConstant", "constant"], ["lrCosine", "cosine"]], schedule); };
 for (const id of ["steps", "suffix", "dataset"]) $(id).addEventListener("input", updatePrice);
 $("suffix").addEventListener("input", () => { $("suffix").value = $("suffix").value.toLowerCase(); updatePrice(); });
 
 $("startTrain").onclick = () => {
-  const steps = Number($("steps").value), per = state.account.price_per_step;
+  const steps = Number($("steps").value), per = state.account.price_per_step, share = Number(document.querySelector('input[name="baseShare"]:checked').value);
   $("confirmText").innerHTML = `Fine-tune Dream-1 on <b>${esc($("dataset").value)}</b> for <b>${steps.toLocaleString("en-US")} steps</b> as <code>${esc($("suffix").value)}</code>`
-    + ` (${mix ? "mixed with Dream Labs data" : "your data only"}, ${schedule} learning rate). Price: <b>$${(steps * per).toFixed(2)}</b>.`;
+    + ` (base_share=${share.toFixed(1)}: ${share ? "half your data, half Dream-1 general data" : "your data only"}). Estimated price: <b>$${(steps * per).toFixed(2)}</b>.`;
   $("confirmYes").textContent = `Start · $${(steps * per).toFixed(2)}`;
   $("confirm").showModal();
 };
 $("confirmNo").onclick = () => $("confirm").close();
 $("confirmYes").onclick = async () => {
-  const steps = Number($("steps").value);
+  const steps = Number($("steps").value), share = Number(document.querySelector('input[name="baseShare"]:checked').value);
   $("confirmYes").disabled = true;
   try {
     await api("/api/train/start", { dataset: $("dataset").value, suffix: $("suffix").value, steps,
-                                    price: Math.round(steps * state.account.price_per_step * 100) / 100, lr_schedule: schedule, base_share: mix });
+                                    price: Math.round(steps * state.account.price_per_step * 100) / 100, lr_schedule: "constant", base_share: share });
     $("confirm").close();
     $("suffix").value = "";
   } catch (err) {

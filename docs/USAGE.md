@@ -127,13 +127,13 @@ Fine-tune Dream-1 on a dataset you saved, without leaving the app. It uses the k
 
 | Step | What you do | Cost |
 | --- | --- | --- |
-| **1. Upload** | Every saved dataset is listed. Give it a name and press **Upload**. It is checked first. | Free |
+| **1. Upload** | Saved datasets are listed. You can also **Import dataset ZIP** from Sweet Dream, or a LeRobot ZIP with `embodiment.json`. Import validates locally and adds a row; give it a name and press **Upload** to send it to Dream Labs. | Free |
 | **2. Process** | Dream Labs prepares it (a few minutes). Wait until it says **processed**. | Free |
-| **3. Train** | Pick the dataset, a model name and the steps (500 to 10,000). The price shows before you start. | $0.20 per step* |
+| **3. Train** | Pick the dataset, name your new model, set the steps (500 to 10,000), and choose the data mix: 50% Dream-1 data (`base_share=0.5`) or your data only (`base_share=0.0`). The estimated price shows before you start. | $0.20 per step* |
 | **4. Follow** | Your jobs show their progress. When one is done, its model name (`dream-1-ft:...`) appears. | — |
 
 \* At the time of writing; 1,000 steps take about 7 to 8 hours. A started job **cannot be cancelled**. Check your
-credits on the Dream Labs [Billing](https://platform.dreamlabs.ai/billing) page.
+credits on the Dream Labs [Billing](https://platform.dreamlabs.ai/billing) page; an API key cannot read the balance.
 
 **Hide** removes a dataset from the list (nothing is deleted); **Show hidden** brings it back.
 
