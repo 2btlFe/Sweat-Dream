@@ -18,9 +18,15 @@ Get an API key at https://platform.dreamlabs.ai.
 python app.py
 ```
 
-Open http://localhost:8000.
+Open http://localhost:8000. The site has several pages:
 
-1. Paste your API key → **Use key**. It is kept in memory only; **Clear** removes it.
+- **Start** (`/`): **Sweet Dream** and a sign-in box. Paste your Dream API key → **Sign in**: Dream Labs is asked
+  whether it accepts the key (it lists the models: free, nothing runs). The key is kept in memory only.
+- **Sections** (`/sections`): **Collect Custom Dataset!** (the page below), **Train Custom Model!** and
+  **Test the model!** (coming soon). **Sign out** clears the key.
+- **Collect Custom Dataset!** (`/collect`): runs, batches, labels and datasets, as follows.
+
+1. The API key from the sign-in is used; the box at the top can change it (**Use key**) or remove it (**Clear**).
 2. **Robot** and **Room**: the list offers the team's target robot, YAM (`simulator_settings.TARGET_ROBOTS`; add
    `"openyam"` there to offer it again). YAM (with the seed scenes and scene settings below) or OpenYAM (on the Dream Labs Sandbox
    table; needs [Node.js](https://nodejs.org) to fetch it, and a seed only shifts its objects by up to 2 cm). The other

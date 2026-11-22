@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sweet Dream</title>
+<link rel="stylesheet" href="/theme.css">
+<style>
+  main { min-height: 100vh; display: grid; place-items: center; padding: 48px 16px; }
+  .start { width: min(440px, 100%); text-align: center; }
+  .login { margin-top: 40px; text-align: left; }
+  .login h2 { font-size: 18px; margin: 0 0 4px; letter-spacing: -.01em; }
+  .login .lead { margin: 0 0 18px; }
+  .row { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  .row button { flex: 1 1 140px; }
+  .signed { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--well); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex: none; }
+  .help { margin: 16px 0 0; }
+</style>
+</head>
+<body>
+<main>
+  <div class="start">
+    <h1 class="brand">Sweet <span>Dream</span></h1>
+    <p class="tagline">Collect data, fine-tune and test Dream-1 in the simulator.</p>
+
+    <section class="panel login" aria-labelledby="loginTitle">
+      <h2 id="loginTitle">Sign in</h2>
+      <p class="lead muted small">Enter your Dream API key. It stays in this computer's memory while the server runs; it is not saved to disk.</p>
+
+      <div id="signedIn" hidden>
+        <div class="signed"><span class="dot" aria-hidden="true"></span><span>Signed in with the key ending <b id="keyHint"></b></span></div>
+        <div class="row">
+          <button type="button" id="continue">Continue</button>
+          <button type="button" class="ghost" id="other">Use another key</button>
+        </div>
+      </div>
+
+      <form id="loginForm" autocomplete="off" hidden>
+        <label for="apiKey">Dream API key</label>
+        <input id="apiKey" type="password" placeholder="dl_live_…" spellcheck="false" autocomplete="off" required>
+        <div class="error" id="loginError" role="alert" hidden></div>
+        <div class="row">
+          <button type="submit" id="signIn">Sign in</button>
+        </div>
+        <p class="help muted small">No key yet? Create one at <a href="https://platform.dreamlabs.ai/api-keys" target="_blank" rel="noopener">platform.dreamlabs.ai/api-keys</a>.</p>
+      </form>
+    </section>
+  </div>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+
+async function api(path, body) {
+  const options = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  const res = await fetch(path, options);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+function show(key) {
+  const signed = !!key?.source;
+  $("signedIn").hidden = !signed;
+  $("loginForm").hidden = signed;
+  if (signed) $("keyHint").textContent = "…" + key.hint;
+  else $("apiKey").focus();
+}
+
+$("loginForm").onsubmit = async e => {
+  e.preventDefault();
+  $("loginError").hidden = true;
+  $("signIn").disabled = true;
+  $("signIn").textContent = "Checking the key…";
+  try {
+    await api("/api/key", { key: $("apiKey").value.trim(), verify: true });
+    location.href = "/sections";
+  } catch (err) {
+    $("loginError").textContent = err.message;
+    $("loginError").hidden = false;
+  }
+  $("signIn").disabled = false;
+  $("signIn").textContent = "Sign in";
+};
+$("continue").onclick = () => { location.href = "/sections"; };
+$("other").onclick = () => { $("apiKey").value = ""; show(null); };
+
+api("/api/status").then(s => show(s.key)).catch(() => show(null));
+</script>
+</body>
+</html>

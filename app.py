@@ -45,7 +45,9 @@ import seed_web
 import simulator_settings as sim_settings  # the seed (scene.py): seed field, random scene controls
 
 HERE = Path(__file__).resolve().parent
-PAGE = HERE / "static" / "index.html"
+PAGE = HERE / "static" / "index.html"  # the Collect Custom Dataset! page (/collect)
+# The pages: / signs in with the API key, /sections picks a section, /collect is the simulator and datasets page.
+PAGES = {"/": "start.html", "/sections": "sections.html", "/collect": "index.html", "/index.html": "index.html"}
 RUNS = HERE / "runs"
 RULES = RUNS / "rules.json"
 SETTINGS = RUNS / "simulator_settings.json"  # the robot and room picked on the page (simulator_settings.py)
@@ -177,6 +179,21 @@ def key_problem(key):
         return "That is not a Dream API key: it has spaces or line breaks in it."
     if not KEY_RE.match(key):
         return "That is not a Dream API key: it is too short or has characters a key does not have."
+    return None
+
+
+def key_refused(key):
+    """Ask Dream Labs whether it accepts the key, by listing the models (free: nothing runs, nothing is billed).
+    @return Why the key cannot be used, or None when Dream Labs accepted it."""
+    import dream
+    from dream import models
+
+    try:
+        models.list_models(api_key=key)
+    except dream.DreamAuthError:
+        return "Dream Labs refused this key. Check it on platform.dreamlabs.ai/api-keys."
+    except Exception as error:  # noqa: BLE001  the service could not be reached, or answered something else
+        return f"Could not check the key with Dream Labs ({type(error).__name__}). Check the connection and try again."
     return None
 
 
@@ -922,8 +939,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split("?", 1)[0]
-        if path in ("/", "/index.html"):
-            return self.send(PAGE.read_bytes(), "text/html; charset=utf-8")
+        if path in PAGES:
+            return self.send(PAGE.with_name(PAGES[path]).read_bytes(), "text/html; charset=utf-8")
+        if path == "/theme.css":
+            return self.send(PAGE.with_name("theme.css").read_bytes(), "text/css; charset=utf-8")
         if path in ("/ood.js", "/seed.js"):
             return self.send(PAGE.with_name(path[1:]).read_bytes(), "text/javascript; charset=utf-8")
         if path == "/api/ood":
@@ -1169,6 +1188,8 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/key":
             key = str(body.get("key") or "").strip()
             problem = key and key_problem(key)
+            if key and not problem and body.get("verify"):  # the sign-in page: Dream Labs must accept it
+                problem = key_refused(key)
             if problem:  # the key in use (if any) stays as it was
                 return self.send_json({"error": problem}, 400)
             PAGE_KEY["value"] = key or None
