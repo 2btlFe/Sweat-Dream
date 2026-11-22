@@ -920,7 +920,7 @@ class Batch:
         folder.mkdir(parents=True, exist_ok=True)
         self.folder = folder
         self._write_summary()
-        return folder.relative_to(HERE).as_posix()
+        return folder.relative_to(ROOT).as_posix()
 
     def _file_episode(self, index, run_id, seed, verdict):
         """Put a finished episode in the batch's folder and record it in batch.json."""
@@ -1180,7 +1180,12 @@ def run_options(body):
         scene = parse_scene(body.get("scene"))
     except (TypeError, AttributeError) as error:
         raise ValueError(f"Scene: {error}") from error
-    seeding = () if scene else seed_web.seeding_args(body, ood.FIELDS)
+    if scene:
+        seeding = ()
+    elif body.get("default_scene") is True:  # the page's Default scene: the simulator's fixed layout, no seed
+        seeding = ("--default-scene",)
+    else:
+        seeding = seed_web.seeding_args(body, ood.FIELDS)
     return changes, seeding, scene, robot_args(changes, seeding, scene)
 
 
@@ -1616,9 +1621,13 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError("A batch runs in data collection, rule-based only, Dream-1 only or original mode.")
                 if mode == "script" and "openyam" in robot:
                     raise ValueError("The rule-based script needs YAM.")
-                original = mode == "original"
-                if original:  # the seed and the environment fixed (default scene and settings); the recovery stays
-                    seeds, changes, random_names, split, mode = [None] * count, {}, [], "default", "collect"
+                # Original, or the page's Default scene: the seed and the environment fixed (the simulator's default
+                # scene and settings every episode). Original is Default with the recovery script (data collection).
+                original = mode == "original" or (body.get("default_scene") is True and split == "train")
+                if mode == "original":
+                    mode = "collect"
+                if original:
+                    seeds, changes, random_names, split, vary = [None] * count, {}, [], "default", False
                     robot = robot_args(changes, [], None)
                 workers = int(body.get("workers") or 1)
                 if not 1 <= workers <= MAX_WORKERS:

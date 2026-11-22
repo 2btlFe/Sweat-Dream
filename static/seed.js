@@ -65,11 +65,8 @@ export function initSeed(onChange) {
       <div><label for="seed">Seed</label><input id="seed" type="number" min="0" step="1" placeholder="new on Run"></div>
       <button id="newSeed" type="button" title="New random seed" aria-label="New random seed">↻</button>
     </div>
-    <p class="muted seed-note">Same seed, same start: the object layout and every setting marked <em>random</em>
-      come from it (random camera settings apply to the workspace camera). In a batch the seed is the whole batch:
-      every episode gets its own layout from it.</p>
-    <label class="seed-advance"><input type="checkbox" id="seedAdvance" checked> Next seed after each run or batch,
-      so every start differs (each run keeps its seed: <em>Same start</em> in its detail brings it back)</label>`;
+    <p class="muted seed-note">Same seed → same scene. In a batch, one seed covers every episode.</p>
+    <label class="seed-advance"><input type="checkbox" id="seedAdvance" checked> New seed after each run</label>`;
   $("examples").before(...row.children);
   newSeed();
   $("seed").addEventListener("input", onChange);
