@@ -6,10 +6,10 @@
 <p align="center"><b>Diverse Data for Custom Dream-1 Fine-Tuning</b></p>
 <p align="center">Collect diverse robot data in simulation, fine-tune a custom Dream-1 on it, and test the result.</p>
 <p align="center">
-  <a href="https://2btlfe.github.io/Sweet-Dream/#demo">▶ Demo video</a> ·
-  <a href="https://2btlfe.github.io/Sweet-Dream/">Project page</a> ·
-  <a href="docs/USAGE.md">Usage guide</a> ·
-  <a href="https://platform.dreamlabs.ai/api-documentation/">Dream Labs API</a>
+  <a href="https://2btlfe.github.io/Sweet-Dream/#demo"><img src="docs/assets/buttons/demo-video.svg" height="40" alt="Demo video"></a>
+  <a href="https://2btlfe.github.io/Sweet-Dream/"><img src="docs/assets/buttons/project-page.svg" height="40" alt="Project page"></a>
+  <a href="docs/USAGE.md"><img src="docs/assets/buttons/usage-guide.svg" height="40" alt="Usage guide"></a>
+  <a href="https://platform.dreamlabs.ai/api-documentation/"><img src="docs/assets/buttons/dream-labs-api.svg" height="40" alt="Dream Labs API"></a>
 </p>
 
 ---
