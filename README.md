@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/icon.svg" width="120" alt="Sweet Dream icon: a sleeping cloud">
+  <img src="docs/assets/logo.svg" width="96" alt="Sweet Dream logo: a sun in a pale halo">
 </p>
 
 <h1 align="center">Sweet Dream</h1>
@@ -30,11 +30,11 @@ two-arm robot:
 | Start · sign in | Start · pick a section |
 | --- | --- |
 | ![Start page: sign in with the Dream API key](docs/assets/screens/01-start.png) | ![Sections: Collect, Train, Test](docs/assets/screens/02-sections.png) |
-| **1. Collect** · run setup, model and camera view | **1. Collect** · a batch with its settings and the runs |
-| ![Collect page](docs/assets/screens/03-collect.png) | ![Batch settings](docs/assets/screens/04-collect-batch.png) |
-| **1. Collect** · a run's video, verdict and settings | **2. Train** · upload saved datasets |
+| **1. Collect** · the setup in four steps, beside the camera feeds | **1. Collect** · Run settings for a batch, and the runs |
+| ![Collect page: setup steps and camera feeds](docs/assets/screens/03-collect.png) | ![Collect page: Run settings for a batch](docs/assets/screens/04-collect-batch.png) |
+| **1. Collect** · a run's video, verdict and label | **2. Train** · upload a saved dataset or import a ZIP |
 | ![A run's detail](docs/assets/screens/05-collect-run.png) | ![Train page: datasets](docs/assets/screens/06-train.png) |
-| **2. Train** · pick the steps and see the price | **3. Test** · run a fine-tune on its own |
+| **2. Train** · pick the dataset, steps and data mix, and see the price | **3. Test** · run a fine-tune on its own |
 | ![Train page: training form](docs/assets/screens/07-train-model.png) | ![Test page](docs/assets/screens/08-test.png) |
 
 ## Highlights

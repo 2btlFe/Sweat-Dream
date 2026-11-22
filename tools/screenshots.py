@@ -30,6 +30,22 @@ SIZE = {"width": 1280, "height": 800}
 # A run with a recording to show in the run detail (a success in a hand-set scene); the newest success otherwise.
 DETAIL_RUN = os.environ.get("SHOT_RUN", "20261122-111638-9099")
 
+FIX = r"""s => s.replace(/byeongcheol\.lee/gi, "your-account").replace(/…[A-Za-z0-9_-]{4}\b/g, "…abcd")
+                .replace(/dream-1-ft:[0-9a-f]{8}-/g, "dream-1-ft:xxxxxxxx-")"""
+# Text the page writes later (the key hint arrives after the page loads) is masked as it appears, not only before a shot.
+KEEP_MASKED = """(() => {
+  const fix = %s;
+  const mask = root => {
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let n; (n = w.nextNode());) { const v = fix(n.nodeValue); if (v !== n.nodeValue) n.nodeValue = v; }
+  };
+  document.addEventListener("DOMContentLoaded", () => {
+    mask(document.body);
+    new MutationObserver(ms => { for (const m of ms) mask(m.target.nodeType === 3 ? m.target.parentNode : m.target); })
+      .observe(document.body, { subtree: true, childList: true, characterData: true });
+  });
+})()""" % FIX
+
 MASK = """() => {
   const fix = s => s.replace(/byeongcheol\\.lee/gi, "your-account").replace(/…[A-Za-z0-9_-]{4}\\b/g, "…abcd")
                     .replace(/dream-1-ft:[0-9a-f]{8}-/g, "dream-1-ft:xxxxxxxx-");
@@ -56,6 +72,7 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page(viewport=SIZE, device_scale_factor=1)
+        page.add_init_script(KEEP_MASKED)
 
         def shot(name, settle=1500, clip=None):
             page.mouse.move(2, 2)  # no hover highlight on a button under the cursor
@@ -94,9 +111,11 @@ def main():
                                            "height": min(780, SIZE["height"] - max(0, box["y"] - 12))})
 
         # 4. Collect: a batch, with its settings.
+        # The batch settings are in the setup's third step, Run settings.
         page.evaluate("() => window.scrollTo(0, 0)")
+        page.click("#stageNav button:nth-child(3)")
         page.click("#modeBatch")
-        page.evaluate("() => { const f = document.getElementById('batchForm'); window.scrollTo(0, f.getBoundingClientRect().top + scrollY - 160); }")
+        page.evaluate("() => { const w = document.getElementById('wizard'); window.scrollTo(0, w.getBoundingClientRect().top + scrollY - 24); }")
         shot("04-collect-batch", 1200)
 
         # 6-7. Train: the saved datasets, then the training form and jobs.
