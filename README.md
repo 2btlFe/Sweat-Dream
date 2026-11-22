@@ -88,17 +88,6 @@ own fine-tuned model, on the YAM two-arm robot in a MuJoCo scene.
 - **Ready to train.** Saved datasets pass Dream Labs' own checks (`dream.datasets.validate_dataset`) and upload from
   the Train page.
 
-## Results so far
-
-| What | Result |
-| --- | --- |
-| Rule-based only batch, "put the banana on the plate", varied scenes | **66 of 68** valid episodes succeeded (97%) |
-| Rule-based script on 4 pick-and-place tasks x 5 seeds, after the reach and hand-over fixes | 4 of 20 -> **7 of 20** succeeded |
-| Data collection (Dream-1 + recovery), faster failure hand-off, same 3 seeds | 1 of 3 -> **3 of 3** succeeded |
-| Banana dataset (50 unique seeds, 5,078 frames at 5 fps) | Passed the Dream Labs checks; uploaded and **processed** by Dream Labs |
-
-Fine-tuning runs and their test results will be added here.
-
 ## Quick start
 
 ```bash
