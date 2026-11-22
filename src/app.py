@@ -25,6 +25,7 @@ import json
 import ast
 import os
 import urllib.parse
+import urllib.request
 import re
 import secrets
 import shutil
@@ -186,6 +187,47 @@ def save_testset(data, filename=""):
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "testset.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
     return f"uploaded/{name}"
+
+
+HUB = "https://huggingface.co"
+HUB_REPO_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,95}/[A-Za-z0-9][A-Za-z0-9_.-]{0,95}$")
+
+
+def _hub_get(url):
+    with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "sweet-dream"}), timeout=30) as reply:
+        return reply.read()
+
+
+def fetch_hub_testsets(repo):
+    """Download the test sets of a public Hugging Face dataset (every <folder>/testset.json at its top level, as in
+    Dangni/sweet-dream-banana) to testsets/hf/<owner>__<name>/<folder>/, checked like any test set.
+    @return The ids of the test sets fetched. @throws ValueError For a bad name, an unreachable repo or no test set."""
+    repo = str(repo or "").strip().removeprefix(f"{HUB}/datasets/").strip("/")
+    if not HUB_REPO_RE.match(repo):
+        raise ValueError("Give a Hugging Face dataset as owner/name, e.g. Dangni/sweet-dream-banana.")
+    base = f"{HUB}/api/datasets/{repo}/tree/main"
+    try:
+        top = json.loads(_hub_get(base))
+        paths = [e["path"] for e in top if e.get("type") == "file" and e["path"] == "testset.json"]
+        for folder in (e["path"] for e in top if e.get("type") == "directory"):
+            inner = json.loads(_hub_get(f"{base}/{urllib.parse.quote(folder)}"))
+            paths += [e["path"] for e in inner if e.get("type") == "file" and e["path"].endswith("/testset.json")]
+    except (OSError, ValueError, KeyError, TypeError) as error:  # urllib errors are OSErrors
+        raise ValueError(f"Could not read {repo} on Hugging Face (public datasets only): {error}") from error
+    if not paths:
+        raise ValueError(f"{repo} has no testset.json (at its top level or one folder down).")
+    ids, local = [], TESTSETS / "hf" / repo.replace("/", "__")
+    for path in paths:
+        try:
+            data = json.loads(_hub_get(f"{HUB}/datasets/{repo}/resolve/main/{urllib.parse.quote(path)}"))
+        except (OSError, ValueError) as error:
+            raise ValueError(f"Could not download {path} from {repo}: {error}") from error
+        check_testset(data)  # refuse a malformed one before keeping it
+        folder = local / Path(path).parent
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "testset.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
+        ids.append(folder.relative_to(TESTSETS).as_posix())
+    return ids
 
 
 def read_json(path, default=None):
@@ -1360,6 +1402,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"error": "Invalid request."}, 400)
         if not isinstance(body, dict):
             return self.send_json({"error": "Expected a JSON object."}, 400)
+        if self.path == "/api/testsets/hub":  # {repo: "owner/name"}: fetch that Hugging Face dataset's test sets
+            try:
+                ids = fetch_hub_testsets(body.get("repo"))
+            except ValueError as error:
+                return self.send_json({"error": str(error)}, 400)
+            return self.send_json({"ids": ids, "testsets": list_testsets()})
         if self.path == "/api/testsets":  # {testset: <testset.json's content>, filename}: keep an uploaded test set
             try:
                 testset_id = save_testset(body.get("testset"), body.get("filename") or "")
