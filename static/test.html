@@ -7,15 +7,25 @@
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<script>
+  const selectedTheme = new URLSearchParams(location.search).get("theme");
+  if (selectedTheme === "soft" || selectedTheme === "bauhaus") {
+    sessionStorage.setItem("sweetDreamTheme", selectedTheme);
+  }
+  if (sessionStorage.getItem("sweetDreamTheme") === "soft") {
+    document.documentElement.dataset.theme = "soft";
+  }
+</script>
+<link rel="stylesheet" href="/theme.css">
 <style>
-  /* Dream Labs' palette (dreamlabs.ai, as in theme.css): white page, ink text, creamsicle pill buttons, washes. */
+  /* Shared Sweet Dream workspace palette. */
   :root {
     color-scheme: light;
-    --bg: #ffffff; --panel: #fafafa; --well: #ffffff;
-    --line: rgba(28, 28, 28, 0.16); --text: #1c1c1c; --muted: #6b6767;
-    --accent: #ff9f4d; --accent-text: #1c1c1c; --accent-soft: #fff4ea; --accent-ink: #9c4f24;
-    --btn: #ffb87b; --btn-hover: #ffb06c; --ink: #1c1c1c; --ink-hover: #383636;
+    --bg: var(--paper); --panel: var(--white); --well: var(--white);
+    --line: var(--rule); --text: var(--ink); --muted: var(--ink-3);
+    --accent: var(--sun); --accent-text: var(--ink); --accent-soft: var(--sun-wash); --accent-ink: var(--ochre);
+    --btn: var(--well); --btn-hover: #eeebe2;
     --danger: #c9474a; --warn-bg: #fdf3c4; --warn: #7a5c00;
     --ok: #1f7a46; --ok-bg: #eefbf1; --bad: #c9474a; --bad-bg: #fff4f4; --touch: #3b86d1;
   }
@@ -25,7 +35,7 @@
   #runsTable th[aria-label="In the dataset"], #runsTable td:has(> .pick) { display: none; }
   .test-how { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
   .test-how b { color: var(--text); }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 Figtree, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
   main { max-width: 1440px; margin: 0 auto; padding: 36px clamp(16px, 4vw, 56px) 48px; }
   header { margin-bottom: 24px; }
   header .topline { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
@@ -44,7 +54,7 @@
   .sub { color: var(--muted); margin: 8px 0 0; }
   .workspace { display: grid; grid-template-columns: minmax(410px, 1fr) minmax(0, 1.1fr); gap: 16px 20px; align-items: start; }
   .col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-  .panel { min-width: 0; background: var(--panel); border: 1px solid rgba(28, 28, 28, 0.08); border-radius: 16px; padding: 20px; }
+  .panel { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
   .row { display: grid; grid-template-columns: minmax(0, 1fr) 72px; gap: 10px; }
   .hrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .grid3 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr); gap: 10px; align-items: start; }
@@ -54,7 +64,7 @@
   input[type="checkbox"], input[type="radio"] { width: auto; flex: none; accent-color: var(--accent); }
   button, summary, input, select { outline-offset: 3px; }
   :focus-visible { outline: 2px solid var(--accent); }
-  button { padding: 8px 16px; border: 1px solid var(--btn); border-radius: 999px; font: inherit; font-weight: 500; cursor: pointer; background: var(--btn); color: var(--ink); transition: background .15s, border-color .15s; }
+  button { padding: 8px 16px; border: 1px solid var(--line); border-radius: var(--radius); font: inherit; font-weight: 500; cursor: pointer; background: var(--btn); color: var(--ink); transition: background .15s, border-color .15s; }
   button:hover:not(:disabled) { background: var(--btn-hover); border-color: var(--btn-hover); }
   button:disabled { opacity: .45; cursor: default; }
   button.stop { background: #fc9ea0; border-color: #fc9ea0; color: var(--ink); }
@@ -353,6 +363,8 @@
     .grid3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
     .grid3 > :last-child { grid-column: 1 / -1; }
   }
+  #run { background: var(--accent); border-color: var(--accent); }
+  input[type="range"] { accent-color: var(--accent); }
 </style>
 </head>
 <body>
