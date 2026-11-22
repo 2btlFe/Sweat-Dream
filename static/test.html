@@ -634,12 +634,15 @@
       </table>
       <div id="detail" class="detail" hidden>
         <div>
+          <button id="detailVideoToggle" type="button" aria-pressed="false" title="Show the run's video (or its last frame when it was not recorded)">Show video</button>
+          <div id="detailMediaBox" hidden style="margin-top: 8px">
           <video id="detailVideo" class="view" controls muted playsinline preload="metadata" hidden></video>
           <img id="detailImage" class="view" alt="Last frame">
           <div class="legend"><span id="detailMedia">Last frame</span>
             <span class="cam-tabs" id="detailCams" hidden role="group" aria-label="Recording camera">
               <button data-cam="top" class="on">Top</button><button data-cam="left">Left wrist</button><button data-cam="right">Right wrist</button><button data-cam="last">Last frame</button>
             </span></div>
+          </div>
         </div>
         <div>
           <div id="detailHead"></div>
@@ -956,10 +959,17 @@ function renderRuns() {
 
 /** A recorded run plays its camera video (top / left / right wrist); otherwise, or on "Last frame", its last frame. */
 let detailCam = "top";
+// The picture (video, or the last frame) is hidden until asked for (Show video); the choice is kept for the next visit.
+let videoOn = false;
+try { videoOn = localStorage.getItem("testDetailVideo") === "on"; } catch {}
 function showDetailMedia(run) {
   const video = $("detailVideo"), img = $("detailImage"), recorded = !!run.episode;
-  const useVideo = recorded && detailCam !== "last";
+  const useVideo = recorded && videoOn && detailCam !== "last";
+  $("detailMediaBox").hidden = !videoOn;
+  $("detailVideoToggle").textContent = videoOn ? "Hide video" : "Show video";
+  $("detailVideoToggle").setAttribute("aria-pressed", videoOn);
   $("detailCams").hidden = !recorded;
+  if (!useVideo && !video.paused) video.pause();
   document.querySelectorAll("#detailCams [data-cam]").forEach(b => b.classList.toggle("on", b.dataset.cam === (recorded ? detailCam : "last")));
   $("detailMedia").textContent = useVideo ? "Recording" : "Last frame";
   const src = useVideo ? `/api/episodes/${run.episode}/${detailCam}.mp4` : "";
@@ -970,6 +980,12 @@ function showDetailMedia(run) {
   img.hidden = useVideo;
 }
 document.querySelectorAll("#detailCams [data-cam]").forEach(b => b.onclick = () => { detailCam = b.dataset.cam; renderDetail(); });
+$("detailVideoToggle").onclick = () => {
+  videoOn = !videoOn;
+  if (videoOn && detailCam === "last") detailCam = "top";
+  try { localStorage.setItem("testDetailVideo", videoOn ? "on" : "off"); } catch {}
+  renderDetail();
+};
 
 async function renderDetail() {
   const run = shownRuns().find(r => r.id === selected);
