@@ -32,7 +32,7 @@
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   /* Test page: no dataset picking (the + / − column) */
-  #runsTable th[aria-label="In the dataset"], #runsTable td:has(> .pick) { display: none; }
+  #runs .pick { display: none; }
   .test-how { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
   .test-how b { color: var(--text); }
   body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
@@ -250,7 +250,7 @@
   video.view { background: #1c1c1c; object-fit: contain; }
   .cam-tabs { display: inline-flex; gap: 4px; }
   .cam-tabs button { padding: 2px 8px; font-size: 11px; background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; }
-  .cam-tabs button.on { color: var(--accent-ink); border-color: var(--accent); }
+  .cam-tabs button[aria-pressed="true"] { background: var(--accent); color: var(--accent-text); font-weight: 600; border-color: var(--accent); }
   .batch-live { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
   .batch-live:empty { display: none; }
   .batch-live figure { margin: 0; }
@@ -394,6 +394,17 @@
   #reviewDetails details { border-top: 1px solid var(--line); padding: 8px 0; }
   #reviewDetails summary { cursor: pointer; font-size: 13px; font-weight: 600; }
   #wizard #reviewDetails dl { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); margin: 8px 0; font-size: 13px; }
+  .runs-browser { display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 2fr); gap:20px; align-items:start; margin-top:14px; }
+  .runs-browser .detail { margin:0; min-width:0; container-type:inline-size; }
+  .run-analysis { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; align-items:start; }
+  .run-analysis > div { min-width:0; border-top:1px solid var(--line); padding-top:10px; }
+  .run-analysis .label { margin:0 0 6px; }
+  @container (max-width: 530px) { .run-analysis { grid-template-columns:minmax(0,1fr); } }
+  .run-list-item { display:flex; align-items:center; gap:6px; border-bottom:1px solid var(--line); padding:4px; }
+  .run-list-item.sel { background:var(--accent-soft); border-radius:8px; }
+  .run-list-item .run-open { flex:1; min-width:0; padding:6px; text-align:left; background:transparent; border:0; overflow-wrap:anywhere; }
+  .run-open small { display:block; margin-top:4px; color:var(--muted); }
+  @media (max-width:760px) { .runs-browser { grid-template-columns:minmax(0,1fr); } }
 </style>
 </head>
 <body>
@@ -666,57 +677,64 @@
       <summary>Runs</summary>
       <div class="hrow" style="justify-content: space-between">
         <select id="runFilter" aria-label="Which runs" style="width: auto; max-width: 100%"></select>
-        <span class="hrow"><button id="saveLabels" class="ghost small">Save labels</button><button id="deleteShown" class="ghost small danger" title="Delete every run shown in the list, with its recording">Delete shown</button><button id="runOriginal" class="ghost small" hidden title="The baseline of this batch: the same task, judge and time limit, with the seed and the environment fixed (the simulator's default scene and settings every episode) and Dream-1 with the recovery script">Run as original</button></span>
+        <span class="hrow"><button id="saveLabels" title="Save labels across all filtered pages" class="ghost small">Save labels</button><button id="deleteShown" class="ghost small danger" title="Delete every run matching the filter, across all pages">Delete all filtered runs</button><button id="runOriginal" class="ghost small" hidden title="The baseline of this batch: the same task, judge and time limit, with the seed and the environment fixed (the simulator's default scene and settings every episode) and Dream-1 with the recovery script">Run as original</button></span>
       </div>
       <div class="muted small" id="runSummary" style="margin-top: 8px"></div>
       <div class="dataset-bar" role="group" aria-label="Dataset" hidden>
         <span class="small"><b id="pickedCount">0</b> picked for a dataset</span>
-        <button class="ghost small" id="pickSuccesses" title="Pick every success the list shows">+ Add successes</button>
+        <button class="ghost small" id="pickSuccesses" title="Pick every success matching the filter, across all pages">+ Add successes</button>
         <button class="ghost small" id="pickClear">Clear</button>
         <button class="ghost small danger" id="deletePicked" title="Delete the picked runs, with their recordings">Delete picked</button>
         <button class="small" id="saveDataset" style="margin-left: auto" title="Choose a folder on this computer and save the picked runs there">Save dataset…</button>
       </div>
       <div class="dataset-note" id="datasetNote" hidden></div>
-      <table id="runsTable" style="margin-top: 8px">
-        <thead><tr><th aria-label="In the dataset"></th><th>When</th><th>Task</th><th>Result</th><th class="hide-sm">Why</th><th class="hide-md">Label by</th></tr></thead>
-        <tbody id="runs"><tr><td colspan="6" class="muted">No runs yet.</td></tr></tbody>
-      </table>
+      <div class="runs-browser">
+        <div class="run-list-pane">
+          <div id="runs" aria-label="Run list"></div>
+      <nav id="runsPager" aria-label="Run history pages" hidden style="text-align:center; margin-top:10px">
+        <button class="ghost small" id="runsPrev" aria-label="Previous runs page">←</button>
+        <span class="small" id="runsRange" aria-live="polite"></span>
+        <button class="ghost small" id="runsNext" aria-label="Next runs page">→</button>
+      </nav>
+        </div>
       <div id="detail" class="detail" hidden>
         <div>
-          <button id="detailVideoToggle" type="button" aria-pressed="false" title="Show the run's video (or its last frame when it was not recorded)">Show video</button>
-          <div id="detailMediaBox" hidden style="margin-top: 8px">
           <video id="detailVideo" class="view" controls muted playsinline preload="metadata" hidden></video>
           <img id="detailImage" class="view" alt="Last frame">
           <div class="legend"><span id="detailMedia">Last frame</span>
             <span class="cam-tabs" id="detailCams" hidden role="group" aria-label="Recording camera">
-              <button data-cam="top" class="on">Top</button><button data-cam="left">Left wrist</button><button data-cam="right">Right wrist</button><button data-cam="last">Last frame</button>
+              <button data-cam="top" aria-pressed="true">Top</button><button data-cam="left">Left wrist</button><button data-cam="right">Right wrist</button><button data-cam="last">Last frame</button>
             </span></div>
-          </div>
         </div>
         <div>
           <div id="detailHead"></div>
-          <div class="hand">
-            <div class="label" style="margin: 0">Your label <span class="muted">(wins over the rules)</span></div>
-            <div class="hand-buttons" role="group" aria-label="Your label">
+          <ul class="checks" id="detailChecks"></ul>
+          <details class="hand" id="manualReview">
+            <summary>Manual review <span id="handState"></span></summary>
+            <div class="hand-buttons" role="group" aria-label="Manual review">
               <button data-hand="success">✓ Success<kbd>1</kbd></button>
               <button data-hand="failure">✗ Failure<kbd>2</kbd></button>
               <button data-hand="invalid">Invalid<kbd>3</kbd></button>
               <button data-hand="" class="ghost">Use the rules<kbd>0</kbd></button>
             </div>
             <input id="handNote" maxlength="300" placeholder="Note (optional), e.g. dropped it, then put it back">
-            <div class="muted small" id="handState" style="margin-top: 6px"></div>
-          </div>
-          <ul class="checks" id="detailChecks"></ul>
-          <div class="label" style="margin: 12px 0 0">How it was run</div>
+          </details>
+        </div>
+        <div class="run-analysis">
+          <div>
+          <div class="label">How it was run</div>
           <dl class="settings" id="detailSettings"></dl>
         </div>
         <div>
+          <div class="label">Distance to target</div>
           <svg class="chart" id="chart" viewBox="0 0 640 190" role="img" aria-label="Distance from each judged object to its target over time"></svg>
           <div class="chart-legend" id="chartLegend"></div>
+          </div>
         </div>
         <div class="hrow" style="justify-content: flex-end">
           <button id="deleteRun" class="ghost small danger" title="Delete this run's trajectory, labels and recording">Delete this run</button>
         </div>
+      </div>
       </div>
     </details>
   </section>
@@ -963,8 +981,34 @@ $("runFilter").onchange = e => { runFilter = e.target.value; renderRuns(); };
 
 function verdict(run) { return run.verdict || { label: "invalid", reason: "No evaluation" }; }
 
+const runsPerPage = 12;
+let runsPage = 0, lastRunsFilter;
+function changeRunsPage(by) {
+  runsPage += by;
+  selected = null;
+  renderRuns();
+}
+$("runsPrev").onclick = () => changeRunsPage(-1);
+$("runsNext").onclick = () => changeRunsPage(1);
+
 function renderRuns() {
   const list = shownRuns();
+  if (lastRunsFilter !== runFilter) {
+    lastRunsFilter = runFilter;
+    runsPage = 0;
+    selected = null;
+  }
+  const pages = Math.ceil(list.length / runsPerPage);
+  const index = list.findIndex(run => run.id === selected);
+  if (index >= 0) runsPage = Math.floor(index / runsPerPage);
+  runsPage = Math.max(0, Math.min(runsPage, pages - 1));
+  const start = runsPage * runsPerPage;
+  const page = list.slice(start, start + runsPerPage);
+  if (!page.some(run => run.id === selected)) selected = page[0]?.id ?? null;
+  $("runsPager").hidden = pages <= 1;
+  $("runsPrev").disabled = runsPage === 0;
+  $("runsNext").disabled = runsPage + 1 >= pages;
+  $("runsRange").textContent = list.length ? `${start + 1}–${start + page.length} of ${list.length}` : "";
   const n = label => list.filter(r => finalLabel(r) === label).length;
   const valid = n("success") + n("failure"), byHand = list.filter(r => handLabel(r)).length;
   $("runSummary").textContent = list.length
@@ -983,22 +1027,20 @@ function renderRuns() {
     }
   }
   showPicked();
-  if (!list.length) { $("runs").innerHTML = '<tr><td colspan="6" class="muted">No runs yet.</td></tr>'; $("detail").hidden = true; return; }
-  $("runs").innerHTML = list.map(run => {
-    const v = verdict(run), hand = handLabel(run);
-    const why = hand ? `${hand.reason}${hand.label !== v.label ? ` (rules: ${v.label})` : ""}` : words(v.reason);
-    const by = hand ? "hand" : run.label ? "rules (saved)" : "rules";
+  if (!list.length) { $("runs").textContent = "No runs yet."; $("detail").hidden = true; return; }
+  $("runs").innerHTML = page.map(run => {
     const on = picked.has(run.id);
-    return `<tr data-id="${esc(run.id)}" class="${run.id === selected ? "sel" : ""} ${on ? "picked" : ""}">
-      <td><button class="pick ${on ? "on" : ""}" data-pick="${esc(run.id)}" aria-pressed="${on}" title="${on ? "Take out of the dataset" : "Add to the dataset"}">${on ? "−" : "+"}</button></td>
-      <td>${when(run.started_at)}</td>
-      <td>${esc(run.task)}<span class="run-settings">${esc(settingsBrief(run))}</span></td>
-      <td>${chip(finalLabel(run))}${hand ? '<span class="by-hand" title="Labeled by hand">✋</span>' : ""}</td>
-      <td class="hide-sm">${esc(why)}</td>
-      <td class="hide-md"><span class="muted">${by}</span></td>
-    </tr>`;
+    return `<div class="run-list-item ${run.id === selected ? "sel" : ""}">
+      <button class="pick ${on ? "on" : ""}" data-pick="${esc(run.id)}" aria-pressed="${on}" aria-label="Pick ${esc(run.task)} for dataset">${on ? "−" : "+"}</button>
+      <button class="run-open" data-run="${esc(run.id)}" aria-current="${run.id === selected}">${esc(run.task)}
+        <small>${when(run.started_at)} · ${chip(finalLabel(run))}</small></button>
+    </div>`;
   }).join("");
-  for (const tr of $("runs").querySelectorAll("tr")) tr.onclick = () => { selected = tr.dataset.id; renderRuns(); };
+  for (const button of $("runs").querySelectorAll("[data-run]")) button.onclick = () => {
+    selected = button.dataset.run;
+    renderRuns();
+    $("runs").querySelector(".sel .run-open")?.focus({ preventScroll: true });
+  };
   for (const b of $("runs").querySelectorAll("[data-pick]")) b.onclick = e => {
     e.stopPropagation();
     togglePick(b.dataset.pick);
@@ -1008,18 +1050,17 @@ function renderRuns() {
 
 /** A recorded run plays its camera video (top / left / right wrist); otherwise, or on "Last frame", its last frame. */
 let detailCam = "top";
-// The picture (video, or the last frame) is hidden until asked for (Show video); the choice is kept for the next visit.
-let videoOn = false;
-try { videoOn = localStorage.getItem("testDetailVideo") === "on"; } catch {}
+let mediaRunId = null;
 function showDetailMedia(run) {
   const video = $("detailVideo"), img = $("detailImage"), recorded = !!run.episode;
-  const useVideo = recorded && videoOn && detailCam !== "last";
-  $("detailMediaBox").hidden = !videoOn;
-  $("detailVideoToggle").textContent = videoOn ? "Hide video" : "Show video";
-  $("detailVideoToggle").setAttribute("aria-pressed", videoOn);
+  if (mediaRunId !== run.id) {
+    mediaRunId = run.id;
+    detailCam = "top";
+  }
+  const useVideo = recorded && detailCam !== "last";
   $("detailCams").hidden = !recorded;
   if (!useVideo && !video.paused) video.pause();
-  document.querySelectorAll("#detailCams [data-cam]").forEach(b => b.classList.toggle("on", b.dataset.cam === (recorded ? detailCam : "last")));
+  document.querySelectorAll("#detailCams [data-cam]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.cam === (recorded ? detailCam : "last"))));
   $("detailMedia").textContent = useVideo ? "Recording" : "Last frame";
   const src = useVideo ? `/api/episodes/${run.episode}/${detailCam}.mp4` : "";
   if (video.dataset.src !== src) { video.dataset.src = src; if (src) video.src = src; else video.removeAttribute("src"); video.load(); }
@@ -1029,13 +1070,6 @@ function showDetailMedia(run) {
   img.hidden = useVideo;
 }
 document.querySelectorAll("#detailCams [data-cam]").forEach(b => b.onclick = () => { detailCam = b.dataset.cam; renderDetail(); });
-$("detailVideoToggle").onclick = () => {
-  videoOn = !videoOn;
-  if (videoOn && detailCam === "last") detailCam = "top";
-  try { localStorage.setItem("testDetailVideo", videoOn ? "on" : "off"); } catch {}
-  renderDetail();
-};
-
 async function renderDetail() {
   const run = shownRuns().find(r => r.id === selected);
   $("detail").hidden = !run;
@@ -1049,7 +1083,7 @@ async function renderDetail() {
                  run.ood_random?.length ? `random: ${run.ood_random.join(", ")}` : "",
                  (run.judge || v.spec) ? `${TYPE_UI[(run.judge || v.spec).type || "pick_place"]?.label || ""}: ${specText(run.judge || v.spec)}` : "not judged"].filter(Boolean).join(" · ");
   const hand = handLabel(run);
-  $("detailHead").innerHTML = `${chip(finalLabel(run))}${hand ? '<span class="by-hand">✋ by hand</span>' : ""} <strong>${esc(run.task)}</strong><div class="muted" style="font-size:13px">${when(run.started_at)} · ${fmt(run.sim_seconds || 0)} s · ${esc(extra)}</div>`
+  $("detailHead").innerHTML = `Automatic result ${chip(v.label)} · <strong>${esc(run.task)}</strong><div class="muted" style="font-size:13px">${when(run.started_at)} · ${fmt(run.sim_seconds || 0)} s · ${esc(extra)}</div>`
     + (run.seed != null && run.layout !== "custom" ? `<button class="ghost small" id="sameStart" title="Put seed ${run.seed} and its random settings back on the page (the settings not marked random are the page's)">Same start (seed ${run.seed})</button>` : "");
   if ($("sameStart")) $("sameStart").onclick = () => {
     if (customOn()) { $("customOn").checked = false; $("layoutBody").classList.add("off"); drawScene(); }
@@ -1060,10 +1094,8 @@ async function renderDetail() {
   };
   for (const b of document.querySelectorAll("[data-hand]")) b.classList.toggle("on", !!hand && b.dataset.hand === hand.label);
   $("detailSettings").innerHTML = settingsRows(run, v).map(([k, val]) => `<dt>${esc(k)}</dt><dd>${esc(val)}</dd>`).join("");
-  if ($("handNote").dataset.run !== run.id) { $("handNote").value = hand && hand.reason !== "set by hand" ? hand.reason : ""; $("handNote").dataset.run = run.id; }
-  $("handState").innerHTML = `Rules say ${chip(v.label)} ${esc(words(v.reason))}`
-    + (hand ? ` · you set ${chip(hand.label)} ${when(hand.saved_at)}` : " · not labeled by hand")
-    + ` · <kbd>J</kbd>/<kbd>K</kbd> next / previous run`;
+  if ($("handNote").dataset.run !== run.id) { $("manualReview").open = false; $("handNote").value = hand && hand.reason !== "set by hand" ? hand.reason : ""; $("handNote").dataset.run = run.id; }
+  $("handState").innerHTML = hand ? chip(hand.label) : "";
   $("detailChecks").innerHTML = (v.checks?.length ? v.checks : [{ ok: false, text: v.reason }])
     .map(c => `<li><span class="${c.ok ? "y" : c.ok === false ? "n" : "muted"}">${c.ok ? "✓" : c.ok === false ? "✗" : "–"}</span> ${esc(c.text)}</li>`).join("");
   // The per-step series (for the chart) is fetched for the selected run only.
@@ -1297,12 +1329,12 @@ function step(by) {
   const i = list.findIndex(r => r.id === selected);
   selected = list[Math.min(list.length - 1, Math.max(0, (i < 0 ? 0 : i + by)))].id;
   renderRuns();
-  document.querySelector("#runs tr.sel")?.scrollIntoView({ block: "nearest" });
+  document.querySelector("#runs .sel")?.scrollIntoView({ block: "nearest" });
 }
 document.addEventListener("keydown", e => {
   if (teleopOn || e.target.closest("input, textarea, select") || e.metaKey || e.ctrlKey || e.altKey || !selected || $("detail").hidden) return;
   const key = e.key.toLowerCase();
-  if (key in { 1: 1, 2: 1, 3: 1, 0: 1 }) { e.preventDefault(); setHand({ 1: "success", 2: "failure", 3: "invalid", 0: "" }[key]); }
+  if ($("manualReview").open && $("runsPanel").open && key in { 1: 1, 2: 1, 3: 1, 0: 1 }) { e.preventDefault(); setHand({ 1: "success", 2: "failure", 3: "invalid", 0: "" }[key]); }
   else if (key === "j") { e.preventDefault(); step(1); }
   else if (key === "k") { e.preventDefault(); step(-1); }
 });
