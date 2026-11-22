@@ -1,6 +1,6 @@
 /* Shared look of the Sweet Dream pages (start, sections), after dreamlabs.ai's style: white pages, ink text, pill
    buttons, creamsicle and black buttons, a sunshine highlight behind words, soft tinted cards. Figtree (Google Fonts)
-   stands in for their own typeface. The collect page (index.html) keeps its own styles for now. */
+   stands in for their own typeface. The collect page (index.html) uses the same palette in its own tokens. */
 :root {
   color-scheme: light;
   --ink: #1c1c1c; --ink-2: #3a3a3a; --ink-3: #6b6767; --ink-hover: #383636;
