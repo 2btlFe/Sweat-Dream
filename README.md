@@ -34,7 +34,7 @@ two-arm robot:
 | ![Collect page: setup steps and camera feeds](docs/assets/screens/03-collect.png) | ![Collect page: Run settings for a batch](docs/assets/screens/04-collect-batch.png) |
 | **1. Collect** · a run's video, verdict and label | **2. Train** · upload a saved dataset or import a ZIP |
 | ![A run's detail](docs/assets/screens/05-collect-run.png) | ![Train page: datasets](docs/assets/screens/06-train.png) |
-| **2. Train** · pick the dataset, steps and data mix, and see the price | **3. Test** · run a fine-tune on its own |
+| **2. Train** · pick the dataset, steps, data mix and learning rate, and see the price | **3. Test** · run a fine-tune on its own |
 | ![Train page: training form](docs/assets/screens/07-train-model.png) | ![Test page](docs/assets/screens/08-test.png) |
 
 ## Highlights

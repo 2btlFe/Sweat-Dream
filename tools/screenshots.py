@@ -120,11 +120,14 @@ def main():
         page.evaluate("() => { const w = document.getElementById('wizard'); window.scrollTo(0, w.getBoundingClientRect().top + scrollY - 24); }")
         shot("04-collect-batch", 1200)
 
-        # 6-7. Train: the saved datasets, then the training form and jobs.
+        # 6-7. Train: the saved datasets (step 1), then the training form (step 2).
         page.goto(base + "/train")
         page.wait_for_function("() => !document.getElementById('localRows').textContent.includes('Loading')", timeout=60000)
         shot("06-train", 800)
-        page.evaluate("() => { const t = document.getElementById('trainTitle'); window.scrollTo(0, t.getBoundingClientRect().top + scrollY - 70); }")
+        # Train shows one step at a time: the next-step arrow opens Configure, shown from the top of the page.
+        page.click("#nextStep")
+        page.wait_for_function("() => !document.getElementById('trainTitle').closest('section').hidden")
+        page.evaluate("() => window.scrollTo(0, 0)")
         shot("07-train-model", 800)
 
         # 8. Test.
