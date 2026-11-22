@@ -885,6 +885,7 @@ def main():
             "batch_id": os.environ.get("BATCH_ID"), "original": os.environ.get("ORIGINAL") == "1",
             "batch_seed": int(os.environ["BATCH_SEED"]) if os.environ.get("BATCH_SEED") else None,
             "original_of": os.environ.get("ORIGINAL_OF") or None,
+            "testset": os.environ.get("TESTSET") or None,  # the test set this start came from (app.py batches)
             "judge": (json.loads(os.environ["JUDGE_SPEC"]) if os.environ.get("JUDGE_SPEC")
                       else {"pairs": json.loads(os.environ["JUDGE_PAIRS"])} if os.environ.get("JUDGE_PAIRS") else None)}
 

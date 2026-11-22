@@ -1,0 +1,188 @@
+[
+  {
+    "file": "01-banana-plate-kitchen-seed41093.mp4",
+    "run": "20261122-111638-9099",
+    "task": "put the banana on the plate",
+    "label": "Banana → plate",
+    "room": "kitchen",
+    "room_label": "Kitchen",
+    "seed": 41093,
+    "scene_settings": {
+      "light": 1.6,
+      "camera_preset": "front"
+    },
+    "described": "light 1.6×, front view",
+    "mode": "rule-based only",
+    "result": "success",
+    "default_file": "01-default-seed41093.mp4",
+    "default_run": "20261122-113618-2776"
+  },
+  {
+    "file": "02-apple-bowl-sunny-apartment-seed228517.mp4",
+    "run": "20261122-111639-efc1",
+    "task": "put apple into the bowl",
+    "label": "Apple → bowl",
+    "room": "sunny_apartment",
+    "room_label": "Sunny apartment",
+    "seed": 228517,
+    "scene_settings": {
+      "light": 2.0,
+      "camera_preset": "left"
+    },
+    "described": "light 2×, left diagonal",
+    "mode": "rule-based only",
+    "result": "success",
+    "default_file": "02-default-seed228517.mp4",
+    "default_run": "20261122-113619-cf15"
+  },
+  {
+    "file": "03-banana-bowl-cottage-seed390442.mp4",
+    "run": "20261122-111704-5ff3",
+    "task": "put banana into the bowl",
+    "label": "Banana → bowl",
+    "room": "cottage",
+    "room_label": "Cottage",
+    "seed": 390442,
+    "scene_settings": {
+      "light": 0.5,
+      "camera_preset": "right"
+    },
+    "described": "light 0.5×, right diagonal",
+    "mode": "rule-based only",
+    "result": "success",
+    "default_file": "03-default-seed390442.mp4",
+    "default_run": "20261122-113620-08d3"
+  },
+  {
+    "file": "04-banana-plate-walnut-study-seed517006.mp4",
+    "run": "20261122-111707-c32a",
+    "task": "put the banana on the plate",
+    "label": "Banana → plate",
+    "room": "walnut_study",
+    "room_label": "Walnut study",
+    "seed": 517006,
+    "scene_settings": {
+      "light": 0.4,
+      "camera_preset": "overhead",
+      "table": "gray"
+    },
+    "described": "light 0.4×, overhead, gray table",
+    "mode": "rule-based only",
+    "result": "success",
+    "default_file": "04-default-seed517006.mp4",
+    "default_run": "20261122-113621-b56d"
+  },
+  {
+    "file": "05-apple-bowl-evening-den-seed604381.mp4",
+    "run": "20261122-111729-c27a",
+    "task": "put apple into the bowl",
+    "label": "Apple → bowl",
+    "room": "evening_den",
+    "room_label": "Evening den",
+    "seed": 604381,
+    "scene_settings": {
+      "light": 0.3,
+      "camera_fov_offset_deg": 15
+    },
+    "described": "light 0.3×, FOV +15°",
+    "mode": "rule-based only",
+    "result": "success",
+    "default_file": "05-default-seed604381.mp4",
+    "default_run": "20261122-113645-c70b"
+  },
+  {
+    "file": "06-banana-bowl-yam-tabletop-seed712950.mp4",
+    "run": "20261122-111734-3abc",
+    "task": "put banana into the bowl",
+    "label": "Banana → bowl",
+    "room": "yam_tabletop",
+    "room_label": "YAM tabletop",
+    "seed": 712950,
+    "scene_settings": {
+      "table": "gray",
+      "camera_pitch_deg": -20,
+      "camera_yaw_deg": 20
+    },
+    "described": "light 1×, tilt -20°, pan +20°, gray table",
+    "mode": "rule-based only",
+    "result": "success",
+    "default_file": "06-default-seed712950.mp4",
+    "default_run": "20261122-113646-4e1f"
+  },
+  {
+    "file": "07-banana-plate-kitchen-seed803190.mp4",
+    "run": "20261122-111906-b4a0",
+    "task": "put the banana on the plate",
+    "label": "Banana → plate",
+    "room": "kitchen",
+    "room_label": "Kitchen",
+    "seed": 803190,
+    "scene_settings": {
+      "blur_px": 4,
+      "camera_roll_deg": -12
+    },
+    "described": "light 1×, roll -12°, blur 4px",
+    "mode": "rule-based only",
+    "result": "success",
+    "default_file": "07-default-seed803190.mp4",
+    "default_run": "20261122-113648-fd69"
+  },
+  {
+    "file": "08-apple-bowl-cottage-seed915264.mp4",
+    "run": "20261122-111801-f6b0",
+    "task": "put apple into the bowl",
+    "label": "Apple → bowl",
+    "room": "cottage",
+    "room_label": "Cottage",
+    "seed": 915264,
+    "scene_settings": {
+      "light": 1.8,
+      "camera_preset": "overhead",
+      "camera_roll_deg": 15
+    },
+    "described": "light 1.8×, overhead, roll +15°",
+    "mode": "rule-based only",
+    "result": "success",
+    "default_file": "08-default-seed915264.mp4",
+    "default_run": "20261122-113649-368c"
+  },
+  {
+    "file": "09-banana-bowl-sunny-apartment-seed133771.mp4",
+    "run": "20261122-111817-ef77",
+    "task": "put banana into the bowl",
+    "label": "Banana → bowl",
+    "room": "sunny_apartment",
+    "room_label": "Sunny apartment",
+    "seed": 133771,
+    "scene_settings": {
+      "light": 0.7,
+      "camera_preset": "front",
+      "camera_fov_offset_deg": -15,
+      "table": "gray"
+    },
+    "described": "light 0.7×, front view, FOV -15°, gray table",
+    "mode": "rule-based only",
+    "result": "success",
+    "default_file": "09-default-seed133771.mp4",
+    "default_run": "20261122-113712-1f40"
+  },
+  {
+    "file": "10-banana-plate-walnut-study-seed268840.mp4",
+    "run": "20261122-111827-8d0d",
+    "task": "put the banana on the plate",
+    "label": "Banana → plate",
+    "room": "walnut_study",
+    "room_label": "Walnut study",
+    "seed": 268840,
+    "scene_settings": {
+      "light": 1.4,
+      "camera_preset": "left",
+      "camera_z_cm": 8
+    },
+    "described": "light 1.4×, left diagonal, raised 8 cm",
+    "mode": "rule-based only",
+    "result": "success",
+    "default_file": "10-default-seed268840.mp4",
+    "default_run": "20261122-113713-9208"
+  }
+]

@@ -3,244 +3,448 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sweet Dream · Clean Data, Better Dream</title>
+<title>Sweet Dream: Diverse Data for Custom Dream-1 Fine-Tuning</title>
 <meta name="description" content="Sweet Dream: collect clean robot data in simulation, fine-tune Dream-1 on it, and test the result.">
 <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bitcount+Single&family=Figtree:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap">
+<!-- Layout after the OpenVLA project page (openvla.github.io), itself from the Nerfies template; styles written here. -->
 <style>
-  :root {
-    color-scheme: light;
-    --ink: #1c1c1c; --ink-2: #3a3a3a; --ink-3: #6b6767; --white: #fff; --grey-1: #fafafa; --grey-2: #eeeeee;
-    --line: rgba(28, 28, 28, .16); --line-soft: rgba(28, 28, 28, .08);
-    --sand: #f5efdc; --clay: #f4f1ec; --creamsicle: #ffb87b; --creamsicle-wash: #fff4ea; --honey: #e8a200;
-    --lavender-wash: #f5f2fe; --grass-wash: #eefbf1; --grass-text: #17643a; --sunshine: #ffe885;
-    --pixel: "Bitcount Single", "Space Mono", ui-monospace, monospace;
-  }
+  :root { --text: #4a4a4a; --strong: #363636; --link: #3273dc; --band: #f5f5f5; --line: #dbdbdb; --honey: #e8a200; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--white); color: var(--ink); font: 17px/1.6 Figtree, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
-  a { color: var(--ink); }
-  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 40px); }
-  header.hero { text-align: center; padding: 72px 0 40px; }
-  .title { display: inline-flex; align-items: center; gap: .18em; font-size: clamp(44px, 9vw, 92px); font-weight: 600; letter-spacing: -.03em; line-height: 1; margin: 0; white-space: nowrap; }
-  .title img { width: 1.6em; height: 1.6em; }
-  .sweet { color: var(--honey); }
-  .subtitle { font-size: clamp(20px, 2.6vw, 28px); letter-spacing: -.02em; margin: 18px 0 0; color: var(--ink-2); }
-  .authors { margin: 22px 0 0; font-size: 17px; color: var(--ink-2); }
-  .affil { font-size: 15px; color: var(--ink-3); margin: 4px 0 0; }
-  .links { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 26px; }
-  .pill { display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 24px; border-radius: 999px; text-decoration: none; font-size: 16px; border: 1px solid var(--ink); }
-  .pill.dark { background: var(--ink); color: var(--white); }
-  .pill.cream { background: var(--creamsicle); border-color: var(--creamsicle); }
-  section { padding: 44px 0; }
-  .eyebrow { font-family: var(--pixel); font-size: 18px; letter-spacing: .02em; margin: 0 0 10px; }
-  h2 { font-size: clamp(30px, 4.2vw, 41px); font-weight: 400; letter-spacing: -.028em; line-height: 1.05; margin: 0 0 18px; }
-  h3 { font-size: 22px; font-weight: 500; letter-spacing: -.03em; margin: 0 0 8px; line-height: 1.15; }
-  p { margin: 0 0 14px; }
-  .lead { font-size: 20px; line-height: 1.55; color: var(--ink-2); max-width: 860px; }
-  .card { background: var(--sand); border: 1px solid rgba(255, 255, 255, .9); border-radius: 16px; padding: 24px;
-          box-shadow: 0 1px 2px rgba(28, 28, 28, .05), 0 10px 30px rgba(28, 28, 28, .05); }
-  .card.grey { background: var(--grey-2); } .card.cream { background: var(--creamsicle-wash); }
-  .card.lav { background: var(--lavender-wash); } .card.grass { background: var(--grass-wash); }
-  .grid { display: grid; gap: 18px; }
-  .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  @media (max-width: 860px) { .g2, .g3 { grid-template-columns: minmax(0, 1fr); } }
-  .videos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-  @media (max-width: 860px) { .videos { grid-template-columns: minmax(0, 1fr); } }
-  figure { margin: 0; }
-  video { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 14px; background: var(--ink); display: block; }
-  figcaption { font-size: 14px; color: var(--ink-3); margin-top: 8px; }
-  .pipeline { width: 100%; height: auto; display: block; }
-  .card ul { margin: 6px 0 0; padding-left: 20px; } .card li { margin: 4px 0; }
-  table { width: 100%; border-collapse: collapse; font-size: 16px; background: var(--white); border-radius: 12px; overflow: hidden; }
-  th, td { text-align: left; padding: 14px 16px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
-  th { font-weight: 500; color: var(--ink-3); background: var(--grey-1); }
-  tr:last-child td { border-bottom: 0; }
-  .big { font-size: 26px; font-weight: 600; letter-spacing: -.02em; white-space: nowrap; }
-  .muted { color: var(--ink-3); } .small { font-size: 14px; }
-  .table-wrap { overflow-x: auto; border: 1px solid var(--line-soft); border-radius: 12px; }
-  pre { background: var(--ink); color: #f2f2f2; padding: 18px 20px; border-radius: 14px; overflow-x: auto; font-size: 14px; line-height: 1.6; margin: 0; }
-  code { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
-  footer { border-top: 1px solid var(--line-soft); padding: 28px 0 48px; color: var(--ink-3); font-size: 14px; }
-  footer p { margin: 0 0 8px; } footer a { color: var(--ink-2); }
-  .ack-title { margin: 22px 0 6px; font-size: 16px; font-weight: 600; color: var(--ink); }
+  body { margin: 0; background: #fff; color: var(--text); font: 16px/1.6 "Google Sans", "Noto Sans", system-ui, sans-serif; }
+  a { color: var(--link); text-decoration: none; } a:hover { text-decoration: underline; }
+  .container { max-width: 960px; margin: 0 auto; padding: 0 20px; }
+  .hero { padding: 56px 0 32px; text-align: center; }
+  .logo { width: 84px; height: 84px; display: block; margin: 0 auto 6px; }
+  .publication-title { color: #111; font-size: clamp(32px, 5.4vw, 48px); font-weight: 600; line-height: 1.15; margin: 0; letter-spacing: -.01em; }
+  .publication-authors { font-size: 20px; margin: 18px 0 0; }
+  .publication-authors .author { white-space: nowrap; }
+  .note { font-size: 14px; color: #7a7a7a; margin: 4px 0 0; }
+  .link-blocks { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
+  .button { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px; border-radius: 999px; background: #363636; color: #fff; font-size: 16px; }
+  .button:hover { background: #2f2f2f; text-decoration: none; }
+  .button svg { width: 16px; height: 16px; fill: currentColor; }
+  .teaser { background: var(--band); padding: 28px 0; }
+  .teaser-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border-radius: 6px; overflow: hidden; }
+  .teaser-grid video { border-radius: 0; }
+  .tldr { text-align: center; font-size: 20px; font-weight: 400; line-height: 1.55; color: var(--text); max-width: 900px; margin: 0 auto; padding: 30px 20px 10px; }
+  .tldr b { color: var(--strong); }
+  section.section { padding: 34px 0 10px; }
+  h2.title { color: var(--strong); font-size: 32px; font-weight: 600; margin: 0 0 16px; line-height: 1.2; }
+  h3.title { color: var(--strong); font-size: 22px; font-weight: 600; margin: 28px 0 10px; }
+  h4.title { color: var(--strong); font-size: 16px; font-weight: 700; margin: 18px 0 8px; }
+  .content p { margin: 0 0 14px; text-align: justify; }
+  .content b { color: var(--strong); }
+  video { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #222; border-radius: 4px; }
+  .figure { background: var(--band); border-radius: 10px; padding: 18px; margin: 6px 0 16px; }
+  .figure svg { width: 100%; height: auto; display: block; }
+  .rollouts { background: var(--band); border-radius: 10px; padding: 10px 10px 12px; margin: 8px 0 16px; display: grid; gap: 10px; }
+  .rollouts.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .rollouts.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .rollouts.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+  .gallery figure { display: flex; flex-direction: column; justify-content: flex-end; }
+  .gallery figcaption { font-size: 13px; line-height: 1.3; }
+  .gallery figcaption span { display: block; font-size: 12px; color: #7a7a7a; }
+  .rollouts figure { margin: 0; text-align: center; }
+  .rollouts figcaption { font-size: 15px; margin-bottom: 6px; color: var(--strong); }
+  @media (max-width: 760px) { .teaser-grid, .rollouts.cols-3, .rollouts.cols-4, .rollouts.cols-5 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  table.results { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 15px; }
+  table.results th, table.results td { border-bottom: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+  table.results th { color: var(--strong); font-weight: 600; background: #fafafa; }
+  table.results td.num { white-space: nowrap; color: var(--strong); font-weight: 600; }
+  pre { background: var(--band); padding: 18px 20px; border-radius: 6px; overflow-x: auto; font-size: 14px; line-height: 1.5; color: var(--strong); margin: 0; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .chapters { position: sticky; top: 0; z-index: 10; background: rgba(255, 255, 255, .94); backdrop-filter: blur(6px);
+              border-bottom: 1px solid var(--line); margin-top: 18px; }
+  .chapters .container { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; padding-top: 10px; padding-bottom: 10px; }
+  .chapters a { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; color: var(--strong); font-size: 15px; }
+  .chapters a:hover { background: var(--band); text-decoration: none; }
+  .chapters a.on { background: #363636; color: #fff; }
+  .chapters .n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--band); color: var(--strong); font-size: 13px; font-weight: 600; }
+  .chapters a.on .n { background: #fff; color: #363636; }
+  section[id] { scroll-margin-top: 64px; }
+  .chapter { border-top: 1px solid var(--line); margin-top: 26px; }
+  .chapter-no { text-transform: uppercase; letter-spacing: .08em; font-size: 13px; font-weight: 600; color: #7a7a7a; margin: 0 0 4px; }
+  .screens { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 10px 0 18px; }
+  .screens.one { grid-template-columns: minmax(0, 1fr); max-width: 760px; margin-left: auto; margin-right: auto; }
+  @media (max-width: 760px) { .screens { grid-template-columns: minmax(0, 1fr); } }
+  .screen { margin: 0; }
+  .screen img { width: 100%; display: block; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+  .screen figcaption { font-size: 14px; color: #7a7a7a; margin-top: 6px; text-align: center; }
+  .pairs { position: relative; background: var(--band); border-radius: 10px; padding: 14px 52px 12px; margin: 8px 0 18px; }
+  .pair-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none; }
+  .pair-track::-webkit-scrollbar { display: none; }
+  .pair-slide { flex: 0 0 100%; scroll-snap-align: start; }
+  .pair-title { text-align: center; margin: 0 0 8px; color: var(--strong); }
+  .pair-videos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .pair-videos figure { margin: 0; }
+  .pair-videos figcaption { font-size: 14px; margin-bottom: 6px; color: var(--text); min-height: 2.6em; }
+  .pair-videos .tag { display: inline-block; margin-right: 8px; padding: 1px 9px; border-radius: 999px; background: #e6e6e6; color: var(--strong); font-size: 12px; font-weight: 600; }
+  .pair-videos .tag.changed { background: #363636; color: #fff; }
+  .pair-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; border-radius: 50%; border: 0; background: #363636; color: #fff; font-size: 24px; line-height: 1; cursor: pointer; }
+  .pair-nav:hover { background: #222; } .pair-nav:disabled { opacity: .3; cursor: default; }
+  .pair-nav.prev { left: 8px; } .pair-nav.next { right: 8px; }
+  .pair-dots { display: flex; gap: 6px; justify-content: center; margin-top: 12px; }
+  .pair-dots button { width: 9px; height: 9px; padding: 0; border-radius: 50%; border: 0; background: #c8c8c8; cursor: pointer; }
+  .pair-dots button.on { background: #363636; }
+  @media (max-width: 760px) { .pairs { padding: 12px 10px; } .pair-nav { display: none; } .pair-videos { grid-template-columns: minmax(0, 1fr); } }
+  .points { margin: 4px 0 16px; padding-left: 20px; } .points li { margin: 6px 0; }
+  .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 6px 0 10px; }
+  @media (max-width: 860px) { .steps { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  .step { background: var(--band); border-radius: 10px; padding: 14px 16px; }
+  .step p { margin: 0; font-size: 15px; text-align: left; }
+  .step .step-no { font-weight: 600; color: var(--strong); margin-bottom: 6px; }
+  footer { margin-top: 40px; padding: 30px 0 48px; background: #fafafa; font-size: 14px; color: #7a7a7a; }
+  footer p { margin: 0 0 8px; } footer h5 { margin: 16px 0 6px; font-size: 15px; color: var(--strong); }
 </style>
 </head>
 <body>
-<header class="hero wrap">
-  <h1 class="title"><img src="assets/icon.svg" alt=""><span><span class="sweet">Sweet</span> Dream</span></h1>
-  <p class="subtitle">Clean Data, Better Dream</p>
-  <p class="authors">ByeongCheol Lee · Eunbin · Dang · Seogyoung Hwang · Se Yeon Kim</p>
-  <p class="affil">Built on Dream-1 and the Dream Labs API</p>
-  <div class="links">
-    <a class="pill dark" href="https://github.com/2btlFe/Sweat-Dream">Code</a>
-    <a class="pill cream" href="https://github.com/2btlFe/Sweat-Dream/blob/v2.0/docs/USAGE.md">Usage guide</a>
-    <a class="pill" href="https://platform.dreamlabs.ai/api-documentation/">Dream Labs API</a>
-  </div>
-</header>
 
-<main class="wrap">
-  <section>
-    <div class="videos">
-      <figure><video src="assets/videos/banana-tabletop-1.mp4" autoplay muted loop playsinline></video>
-        <figcaption>Rule-based episode, YAM tabletop, seed 151282.</figcaption></figure>
-      <figure><video src="assets/videos/banana-evening-den.mp4" autoplay muted loop playsinline></video>
-        <figcaption>The same task in the Evening den room, with a varied camera and light.</figcaption></figure>
-      <figure><video src="assets/videos/banana-tabletop-2.mp4" autoplay muted loop playsinline></video>
-        <figcaption>Another seed: a new object layout from the same batch seed.</figcaption></figure>
+<section class="hero">
+  <div class="container">
+    <img class="logo" src="assets/icon.svg" alt="Sweet Dream icon: a sleeping cloud">
+    <h1 class="publication-title">Sweet Dream:<br>Diverse Data for Custom Dream&#8209;1 Fine&#8209;Tuning</h1>
+    <p class="note" style="margin-top: 14px">Built on Dream-1 and the Dream Labs API</p>
+    <div class="link-blocks">
+      <a class="button" href="https://github.com/2btlFe/Sweet-Dream">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        Code</a>
+      <a class="button" href="https://github.com/2btlFe/Sweet-Dream/blob/v2.0/docs/USAGE.md">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 1.75C2 .78 2.78 0 3.75 0h6.59c.46 0 .9.18 1.23.51l2.92 2.92c.33.33.51.77.51 1.23v9.59A1.75 1.75 0 0113.25 16h-9.5A1.75 1.75 0 012 14.25V1.75zm1.75-.25a.25.25 0 00-.25.25v12.5c0 .14.11.25.25.25h9.5a.25.25 0 00.25-.25V6h-2.75A1.75 1.75 0 019 4.25V1.5H3.75zm6.75.06V4.25c0 .14.11.25.25.25h2.69L10.5 1.56z"/></svg>
+        Usage guide</a>
+      <a class="button" href="https://platform.dreamlabs.ai/api-documentation/">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.72 3.22a.75.75 0 011.06 1.06L2.06 8l3.72 3.72a.75.75 0 11-1.06 1.06L.47 8.53a.75.75 0 010-1.06l4.25-4.25zm6.56 0a.75.75 0 10-1.06 1.06L13.94 8l-3.72 3.72a.75.75 0 101.06 1.06l4.25-4.25a.75.75 0 000-1.06l-4.25-4.25z"/></svg>
+        Dream Labs API</a>
     </div>
-    <p class="small muted" style="margin-top: 10px">"Put the banana on the plate", workspace camera, 5 frames per second (the frames Dream-1 sees).</p>
-  </section>
+  </div>
+</section>
 
-  <section>
-    <p class="eyebrow">Overview</p>
-    <h2>Fine-tuning is only as good as the data.</h2>
-    <p class="lead">Dream-1 can be prompted with a task and fine-tuned on your own episodes. For that to help, the episodes have
-      to be successes, varied enough to generalize, labeled honestly, and in the exact format the trainer reads.
-      <b>Sweet Dream</b> is a local web app that does this loop end to end in a MuJoCo simulation of the YAM two-arm robot:
-      it collects episodes from seeded, varied scenes, turns failures into successes with a rule-based recovery script,
-      labels every run with success rules, saves the chosen runs in the Dream Labs format, uploads them, fine-tunes
-      Dream-1, and tests the new model in the same scenes.</p>
-  </section>
+<section class="teaser">
+  <div class="container">
+    <div class="teaser-grid">
+      <video src="assets/videos/gallery/02-apple-bowl-sunny-apartment-seed228517.mp4" autoplay muted loop playsinline></video>
+      <video src="assets/videos/gallery/05-apple-bowl-evening-den-seed604381.mp4" autoplay muted loop playsinline></video>
+      <video src="assets/videos/gallery/08-apple-bowl-cottage-seed915264.mp4" autoplay muted loop playsinline></video>
+    </div>
+  </div>
+</section>
 
-  <section>
-    <p class="eyebrow">Pipeline</p>
-    <h2>Collect, train, test.</h2>
-    <div class="card grey">
-      <svg class="pipeline" viewBox="0 0 1000 300" role="img" aria-labelledby="pipeTitle">
-        <title id="pipeTitle">Pipeline: seeded scenes, Dream-1 run with failure monitor and recovery, success rules, dataset, upload and fine-tune, test</title>
-        <defs>
-          <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
-            <path d="M0 0L10 5L0 10z" fill="#1c1c1c"/>
-          </marker>
-        </defs>
-        <g font-family="Figtree, sans-serif" font-size="17" fill="#1c1c1c" text-anchor="middle">
-          <rect x="10" y="40" width="160" height="96" rx="16" fill="#fff"/>
-          <text x="90" y="80" font-weight="600">Seeded scenes</text>
-          <text x="90" y="104" font-size="14" fill="#6b6767">layout, camera,</text>
-          <text x="90" y="122" font-size="14" fill="#6b6767">light, room</text>
+<section>
+  <h2 class="tldr">We introduce <b>Sweet Dream</b>, a local web app that collects <b>clean</b> robot episodes in simulation for
+    fine-tuning Dream-1: seeded and varied scenes, failures turned into successes by a rule-based recovery script,
+    every run labeled by success rules, and datasets saved in the exact format Dream Labs trains on, then uploaded,
+    fine-tuned and tested from the same app.</h2>
+</section>
 
-          <rect x="215" y="40" width="190" height="96" rx="16" fill="#fff4ea"/>
-          <text x="310" y="80" font-weight="600">Dream-1 runs</text>
-          <text x="310" y="104" font-size="14" fill="#6b6767">single or batch,</text>
-          <text x="310" y="122" font-size="14" fill="#6b6767">up to 4 at once</text>
+<nav class="chapters" aria-label="Chapters">
+  <div class="container">
+    <a href="#overview">Overview</a>
+    <a href="#collect"><span class="n">1</span>Collect Custom Dataset</a>
+    <a href="#train"><span class="n">2</span>Train Custom Model</a>
+    <a href="#test"><span class="n">3</span>Test Custom Model</a>
+  </div>
+</nav>
 
-          <rect x="215" y="190" width="190" height="96" rx="16" fill="#f5f2fe"/>
-          <text x="310" y="228" font-weight="600">Failure monitor</text>
-          <text x="310" y="252" font-size="14" fill="#6b6767">→ rule-based</text>
-          <text x="310" y="270" font-size="14" fill="#6b6767">recovery script</text>
-
-          <rect x="450" y="40" width="160" height="96" rx="16" fill="#fff"/>
-          <text x="530" y="80" font-weight="600">Success rules</text>
-          <text x="530" y="104" font-size="14" fill="#6b6767">+ hand labels,</text>
-          <text x="530" y="122" font-size="14" fill="#6b6767">pick the runs</text>
-
-          <rect x="655" y="40" width="150" height="96" rx="16" fill="#fff"/>
-          <text x="730" y="80" font-weight="600">Dataset</text>
-          <text x="730" y="104" font-size="14" fill="#6b6767">LeRobot v2.1,</text>
-          <text x="730" y="122" font-size="14" fill="#6b6767">checked</text>
-
-          <rect x="850" y="40" width="140" height="96" rx="16" fill="#1c1c1c"/>
-          <text x="920" y="80" font-weight="600" fill="#fff">Fine-tune</text>
-          <text x="920" y="104" font-size="14" fill="#d5d5d5">upload, train</text>
-          <text x="920" y="122" font-size="14" fill="#d5d5d5">on Dream Labs</text>
-
-          <rect x="850" y="190" width="140" height="96" rx="16" fill="#eefbf1"/>
-          <text x="920" y="230" font-weight="600">Test</text>
-          <text x="920" y="254" font-size="14" fill="#6b6767">same scenes,</text>
-          <text x="920" y="272" font-size="14" fill="#6b6767">vs Dream-1</text>
+<section class="section" id="overview">
+  <div class="container content">
+    <h2 class="title">Overview</h2>
+    <div class="figure">
+      <svg viewBox="0 0 1000 300" role="img" aria-labelledby="pipeTitle">
+        <title id="pipeTitle">Pipeline: seeded scenes, Dream-1 runs with failure monitor and recovery, success rules, dataset, fine-tune, test</title>
+        <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#363636"/></marker></defs>
+        <g font-family="Noto Sans, sans-serif" font-size="17" fill="#363636" text-anchor="middle">
+          <rect x="10" y="40" width="160" height="96" rx="12" fill="#fff" stroke="#dbdbdb"/>
+          <text x="90" y="80" font-weight="600">Seeded scenes</text><text x="90" y="104" font-size="14" fill="#7a7a7a">layout, camera,</text><text x="90" y="122" font-size="14" fill="#7a7a7a">light, room</text>
+          <rect x="215" y="40" width="190" height="96" rx="12" fill="#fff4ea" stroke="#f3cfa6"/>
+          <text x="310" y="80" font-weight="600">Dream-1 runs</text><text x="310" y="104" font-size="14" fill="#7a7a7a">single or batch,</text><text x="310" y="122" font-size="14" fill="#7a7a7a">up to 4 at once</text>
+          <rect x="215" y="190" width="190" height="96" rx="12" fill="#f5f2fe" stroke="#d7cdf1"/>
+          <text x="310" y="228" font-weight="600">Failure monitor</text><text x="310" y="252" font-size="14" fill="#7a7a7a">→ rule-based</text><text x="310" y="270" font-size="14" fill="#7a7a7a">recovery script</text>
+          <rect x="450" y="40" width="160" height="96" rx="12" fill="#fff" stroke="#dbdbdb"/>
+          <text x="530" y="80" font-weight="600">Success rules</text><text x="530" y="104" font-size="14" fill="#7a7a7a">+ hand labels,</text><text x="530" y="122" font-size="14" fill="#7a7a7a">pick the runs</text>
+          <rect x="655" y="40" width="150" height="96" rx="12" fill="#fff" stroke="#dbdbdb"/>
+          <text x="730" y="80" font-weight="600">Dataset</text><text x="730" y="104" font-size="14" fill="#7a7a7a">LeRobot v2.1,</text><text x="730" y="122" font-size="14" fill="#7a7a7a">checked</text>
+          <rect x="850" y="40" width="140" height="96" rx="12" fill="#363636"/>
+          <text x="920" y="80" font-weight="600" fill="#fff">Fine-tune</text><text x="920" y="104" font-size="14" fill="#dbdbdb">upload, train</text><text x="920" y="122" font-size="14" fill="#dbdbdb">on Dream Labs</text>
+          <rect x="850" y="190" width="140" height="96" rx="12" fill="#eefbf1" stroke="#c3f2cc"/>
+          <text x="920" y="230" font-weight="600">Test</text><text x="920" y="254" font-size="14" fill="#7a7a7a">same scenes,</text><text x="920" y="272" font-size="14" fill="#7a7a7a">vs Dream-1</text>
         </g>
-        <g stroke="#1c1c1c" stroke-width="2.4" fill="none" marker-end="url(#arrow)">
-          <path d="M172 88H211"/>
-          <path d="M407 88H446"/>
-          <path d="M612 88H651"/>
-          <path d="M807 88H846"/>
-          <path d="M920 138V186"/>
-          <path d="M290 138V186" stroke-dasharray="6 5"/>
-          <path d="M330 188V140" stroke-dasharray="6 5"/>
+        <g stroke="#363636" stroke-width="2.4" fill="none" marker-end="url(#arrow)">
+          <path d="M172 88H211"/><path d="M407 88H446"/><path d="M612 88H651"/><path d="M807 88H846"/><path d="M920 138V186"/>
+          <path d="M290 138V186" stroke-dasharray="6 5"/><path d="M330 188V140" stroke-dasharray="6 5"/>
           <path d="M848 214H396V140" stroke-dasharray="6 5"/>
         </g>
-        <g font-family="Figtree, sans-serif" font-size="13" fill="#6b6767">
-          <text x="236" y="166">fails</text>
-          <text x="338" y="166">recovers</text>
-          <text x="560" y="206">the new model goes back into the runs</text>
+        <g font-family="Noto Sans, sans-serif" font-size="13" fill="#7a7a7a">
+          <text x="236" y="166">fails</text><text x="338" y="166">recovers</text><text x="560" y="206">the new model goes back into the runs</text>
         </g>
       </svg>
     </div>
-  </section>
+    <p>Sweet Dream is a local web app around a MuJoCo simulation of the YAM two-arm robot, in three chapters that follow
+      the loop above: <a href="#collect">collect</a> a dataset of successful, varied episodes;
+      <a href="#train">train</a> a custom Dream-1 on it through the Dream Labs API; and <a href="#test">test</a> the new
+      model in the same scenes against Dream-1. You sign in once with your Dream API key; every chapter uses it.</p>
+  </div>
+</section>
 
-  <section>
-    <p class="eyebrow">Method</p>
-    <h2>What makes the data clean.</h2>
-    <div class="grid g2">
-      <div class="card cream">
-        <h3>Seeded, varied scenes</h3>
-        <p>One batch seed gives every episode its own object layout, and the same seed gives the same episodes again.
-          <i>Vary per episode</i> also draws, close to the defaults, the workspace camera (±3 cm, ±8°, field of view
-          ±8°), the light (0.8× to 1.2×) and the room. Fixed evaluation seeds (50) compare models on the same starts.</p>
-      </div>
-      <div class="card lav">
-        <h3>Failures become successes</h3>
-        <p>A failure monitor watches the simulator's ground truth and spots a stall, a drop, a missed grasp or an object
-          pushed away. A rule-based script then takes the arms with the same inverse kinematics a human uses:
-          grasp, transport, set down, retreat, with retries. When one arm reaches only the object and the other only the
-          target, it sets the object down where both reach and hands it over.</p>
-      </div>
-      <div class="card">
-        <h3>Honest labels</h3>
-        <p>Every run is judged by success rules for its task type (pick &amp; place, move to an area, lift, push, goal
-          scenes drawn on the camera picture). A person's label wins over the rules, and disagreements can be listed.
-          Each run records how it was set up: mode, seed, scene settings, who acted at each step.</p>
-      </div>
-      <div class="card grass">
-        <h3>Ready to train</h3>
-        <p>Picked runs are saved as one LeRobot v2.1 dataset with the YAM embodiment (right arm first, joints in
-          radians, grippers 0 to 1, three cameras) and pass Dream Labs' own checks before anything is sent. The Train page
-          uploads it, shows the price, and starts the fine-tune; the Test page runs the new model.</p>
-      </div>
+<section class="section chapter" id="collect">
+  <div class="container content">
+    <p class="chapter-no">Chapter 1</p>
+    <h2 class="title">Collect Custom Dataset</h2>
+    <ul class="points">
+      <li><b>Diverse scenes.</b> A seed sets the object layout; room, light, camera, blur and table can be changed too.</li>
+      <li><b>Failures become successes.</b> When Dream-1 gets stuck, a rule-based script finishes the task.</li>
+      <li><b>Ready to train.</b> Success rules label every run; the good ones are saved in the Dream Labs format.</li>
+    </ul>
+    <div class="screens">
+      <figure class="screen"><img src="assets/screens/03-collect.png" alt="The Collect page: model, run setup and the camera view" loading="lazy"><figcaption>The Collect page: model, run setup and the camera view</figcaption></figure>
+      <figure class="screen"><img src="assets/screens/04-collect-batch.png" alt="A batch: episodes, seeds, scene per episode, and the runs" loading="lazy"><figcaption>A batch: episodes, seeds, scene per episode, and the runs</figcaption></figure>
     </div>
-  </section>
+    <h3 class="title">Results</h3>
+    <table class="results">
+      <thead><tr><th>Setting</th><th>Episodes</th><th>Success</th></tr></thead>
+      <tbody>
+        <tr><td>Rule-based only, "put the banana on the plate", varied camera, light and room</td><td>68 valid</td><td class="num">66 (97%)</td></tr>
+        <tr><td>Data collection (Dream-1 + recovery), failures handed to the script sooner, same 3 seeds</td><td>3</td><td class="num">1 → 3</td></tr>
+        <tr><td>Rule-based script on 4 pick-and-place tasks × 5 seeds, after the reach and hand-over fixes</td><td>20</td><td class="num">4 → 7</td></tr>
+      </tbody>
+    </table>
 
-  <section>
-    <p class="eyebrow">Results</p>
-    <h2>So far.</h2>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Setting</th><th>Result</th></tr></thead>
-        <tbody>
-          <tr><td>Rule-based only, "put the banana on the plate", varied camera, light and room</td><td><span class="big">66 / 68</span><br><span class="small muted">valid episodes succeeded (97%)</span></td></tr>
-          <tr><td>Rule-based script on 4 pick-and-place tasks × 5 seeds, after the reach and hand-over fixes</td><td><span class="big">4 → 7 / 20</span><br><span class="small muted">successes</span></td></tr>
-          <tr><td>Data collection (Dream-1 + recovery), with failures handed to the script sooner, same 3 seeds</td><td><span class="big">1 → 3 / 3</span><br><span class="small muted">successes</span></td></tr>
-          <tr><td>Banana dataset: 50 unique seeds, 5,078 frames at 5 fps</td><td><span class="big">processed</span><br><span class="small muted">passed the Dream Labs checks; uploaded</span></td></tr>
-        </tbody>
-      </table>
+    <h4 class="title">Same seed, a different environment</h4>
+    <p>Same task and seed: the default scene on the left, a changed one on the right. Use the arrows or swipe.</p>
+    <div class="pairs" id="pairs">
+      <button class="pair-nav prev" type="button" aria-label="Previous">‹</button>
+      <div class="pair-track" tabindex="0" aria-label="Default and changed scenes, ten seeds">
+        <div class="pair-slide" data-i="1">
+          <p class="pair-title"><b>Banana → plate</b> · seed 41093</p>
+          <div class="pair-videos">
+            <figure><figcaption><span class="tag">Default scene</span>YAM tabletop, default light and camera</figcaption>
+              <video data-src="assets/videos/gallery/01-default-seed41093.mp4" muted loop playsinline preload="none"></video></figure>
+            <figure><figcaption><span class="tag changed">Changed scene</span>Kitchen · light 1.6×, front view</figcaption>
+              <video data-src="assets/videos/gallery/01-banana-plate-kitchen-seed41093.mp4" muted loop playsinline preload="none"></video></figure>
+          </div>
+        </div>
+        <div class="pair-slide" data-i="2">
+          <p class="pair-title"><b>Apple → bowl</b> · seed 228517</p>
+          <div class="pair-videos">
+            <figure><figcaption><span class="tag">Default scene</span>YAM tabletop, default light and camera</figcaption>
+              <video data-src="assets/videos/gallery/02-default-seed228517.mp4" muted loop playsinline preload="none"></video></figure>
+            <figure><figcaption><span class="tag changed">Changed scene</span>Sunny apartment · light 2×, left diagonal</figcaption>
+              <video data-src="assets/videos/gallery/02-apple-bowl-sunny-apartment-seed228517.mp4" muted loop playsinline preload="none"></video></figure>
+          </div>
+        </div>
+        <div class="pair-slide" data-i="3">
+          <p class="pair-title"><b>Banana → bowl</b> · seed 390442</p>
+          <div class="pair-videos">
+            <figure><figcaption><span class="tag">Default scene</span>YAM tabletop, default light and camera</figcaption>
+              <video data-src="assets/videos/gallery/03-default-seed390442.mp4" muted loop playsinline preload="none"></video></figure>
+            <figure><figcaption><span class="tag changed">Changed scene</span>Cottage · light 0.5×, right diagonal</figcaption>
+              <video data-src="assets/videos/gallery/03-banana-bowl-cottage-seed390442.mp4" muted loop playsinline preload="none"></video></figure>
+          </div>
+        </div>
+        <div class="pair-slide" data-i="4">
+          <p class="pair-title"><b>Banana → plate</b> · seed 517006</p>
+          <div class="pair-videos">
+            <figure><figcaption><span class="tag">Default scene</span>YAM tabletop, default light and camera</figcaption>
+              <video data-src="assets/videos/gallery/04-default-seed517006.mp4" muted loop playsinline preload="none"></video></figure>
+            <figure><figcaption><span class="tag changed">Changed scene</span>Walnut study · light 0.4×, overhead, gray table</figcaption>
+              <video data-src="assets/videos/gallery/04-banana-plate-walnut-study-seed517006.mp4" muted loop playsinline preload="none"></video></figure>
+          </div>
+        </div>
+        <div class="pair-slide" data-i="5">
+          <p class="pair-title"><b>Apple → bowl</b> · seed 604381</p>
+          <div class="pair-videos">
+            <figure><figcaption><span class="tag">Default scene</span>YAM tabletop, default light and camera</figcaption>
+              <video data-src="assets/videos/gallery/05-default-seed604381.mp4" muted loop playsinline preload="none"></video></figure>
+            <figure><figcaption><span class="tag changed">Changed scene</span>Evening den · light 0.3×, FOV +15°</figcaption>
+              <video data-src="assets/videos/gallery/05-apple-bowl-evening-den-seed604381.mp4" muted loop playsinline preload="none"></video></figure>
+          </div>
+        </div>
+        <div class="pair-slide" data-i="6">
+          <p class="pair-title"><b>Banana → bowl</b> · seed 712950</p>
+          <div class="pair-videos">
+            <figure><figcaption><span class="tag">Default scene</span>YAM tabletop, default light and camera</figcaption>
+              <video data-src="assets/videos/gallery/06-default-seed712950.mp4" muted loop playsinline preload="none"></video></figure>
+            <figure><figcaption><span class="tag changed">Changed scene</span>YAM tabletop · light 1×, tilt -20°, pan +20°, gray table</figcaption>
+              <video data-src="assets/videos/gallery/06-banana-bowl-yam-tabletop-seed712950.mp4" muted loop playsinline preload="none"></video></figure>
+          </div>
+        </div>
+        <div class="pair-slide" data-i="7">
+          <p class="pair-title"><b>Banana → plate</b> · seed 803190</p>
+          <div class="pair-videos">
+            <figure><figcaption><span class="tag">Default scene</span>YAM tabletop, default light and camera</figcaption>
+              <video data-src="assets/videos/gallery/07-default-seed803190.mp4" muted loop playsinline preload="none"></video></figure>
+            <figure><figcaption><span class="tag changed">Changed scene</span>Kitchen · light 1×, roll -12°, blur 4px</figcaption>
+              <video data-src="assets/videos/gallery/07-banana-plate-kitchen-seed803190.mp4" muted loop playsinline preload="none"></video></figure>
+          </div>
+        </div>
+        <div class="pair-slide" data-i="8">
+          <p class="pair-title"><b>Apple → bowl</b> · seed 915264</p>
+          <div class="pair-videos">
+            <figure><figcaption><span class="tag">Default scene</span>YAM tabletop, default light and camera</figcaption>
+              <video data-src="assets/videos/gallery/08-default-seed915264.mp4" muted loop playsinline preload="none"></video></figure>
+            <figure><figcaption><span class="tag changed">Changed scene</span>Cottage · light 1.8×, overhead, roll +15°</figcaption>
+              <video data-src="assets/videos/gallery/08-apple-bowl-cottage-seed915264.mp4" muted loop playsinline preload="none"></video></figure>
+          </div>
+        </div>
+        <div class="pair-slide" data-i="9">
+          <p class="pair-title"><b>Banana → bowl</b> · seed 133771</p>
+          <div class="pair-videos">
+            <figure><figcaption><span class="tag">Default scene</span>YAM tabletop, default light and camera</figcaption>
+              <video data-src="assets/videos/gallery/09-default-seed133771.mp4" muted loop playsinline preload="none"></video></figure>
+            <figure><figcaption><span class="tag changed">Changed scene</span>Sunny apartment · light 0.7×, front view, FOV -15°, gray table</figcaption>
+              <video data-src="assets/videos/gallery/09-banana-bowl-sunny-apartment-seed133771.mp4" muted loop playsinline preload="none"></video></figure>
+          </div>
+        </div>
+        <div class="pair-slide" data-i="10">
+          <p class="pair-title"><b>Banana → plate</b> · seed 268840</p>
+          <div class="pair-videos">
+            <figure><figcaption><span class="tag">Default scene</span>YAM tabletop, default light and camera</figcaption>
+              <video data-src="assets/videos/gallery/10-default-seed268840.mp4" muted loop playsinline preload="none"></video></figure>
+            <figure><figcaption><span class="tag changed">Changed scene</span>Walnut study · light 1.4×, left diagonal, raised 8 cm</figcaption>
+              <video data-src="assets/videos/gallery/10-banana-plate-walnut-study-seed268840.mp4" muted loop playsinline preload="none"></video></figure>
+          </div>
+        </div>
+      </div>
+      <button class="pair-nav next" type="button" aria-label="Next">›</button>
+      <div class="pair-dots" role="tablist"></div>
     </div>
-    <p class="small muted" style="margin-top: 12px">Fine-tuning runs and their test results will be added here.</p>
-  </section>
+    <h4 class="title">Two rooms, varied camera and light</h4>
+    <div class="rollouts cols-4">
+      <figure><figcaption>YAM tabletop · seed 151282</figcaption><video src="assets/videos/banana-tabletop-1.mp4" autoplay muted loop playsinline></video></figure>
+      <figure><figcaption>YAM tabletop · seed 479444</figcaption><video src="assets/videos/banana-tabletop-2.mp4" autoplay muted loop playsinline></video></figure>
+      <figure><figcaption>Evening den · seed 860222</figcaption><video src="assets/videos/banana-evening-den.mp4" autoplay muted loop playsinline></video></figure>
+      <figure><figcaption>Evening den · seed 12715</figcaption><video src="assets/videos/banana-evening-den-2.mp4" autoplay muted loop playsinline></video></figure>
+    </div>
+    <h4 class="title">Three cameras of one episode</h4>
+    <p>The three views Dream-1 is trained on.</p>
+    <div class="rollouts cols-3">
+      <figure><figcaption>Workspace</figcaption><video src="assets/videos/banana-evening-den.mp4" autoplay muted loop playsinline></video></figure>
+      <figure><figcaption>Left wrist</figcaption><video src="assets/videos/banana-evening-den-left-wrist.mp4" autoplay muted loop playsinline></video></figure>
+      <figure><figcaption>Right wrist</figcaption><video src="assets/videos/banana-evening-den-right-wrist.mp4" autoplay muted loop playsinline></video></figure>
+    </div>
+  </div>
+</section>
 
-  <section>
-    <p class="eyebrow">Try it</p>
-    <h2>Run it locally.</h2>
+<section class="section chapter" id="train">
+  <div class="container content">
+    <p class="chapter-no">Chapter 2</p>
+    <h2 class="title">Train Custom Model</h2>
+    <p>The Train page fine-tunes Dream-1 on a collected dataset through the Dream Labs API, with the key you signed in
+      with; nothing has to be done on the Dream Labs website.</p>
+    <div class="screens">
+      <figure class="screen"><img src="assets/screens/06-train.png" alt="Step 1: upload a saved dataset" loading="lazy"><figcaption>Step 1: upload a saved dataset</figcaption></figure>
+      <figure class="screen"><img src="assets/screens/07-train-model.png" alt="Step 2: pick the steps and see the price" loading="lazy"><figcaption>Step 2: pick the steps and see the price</figcaption></figure>
+    </div>
+    <div class="steps">
+      <div class="step"><p class="step-no">1 · Upload</p><p>Every dataset saved in the Dream Labs format is listed. <b>Upload</b>
+        checks it locally, registers the robot once (<code>yam-sim</code>) and uploads it under a name. Free.</p></div>
+      <div class="step"><p class="step-no">2 · Process</p><p>Dream Labs prepares the dataset for training; the page follows it from
+        <i>waiting</i> to <i>processing</i> to <i>processed</i>, a few minutes for 50 episodes. Free.</p></div>
+      <div class="step"><p class="step-no">3 · Train</p><p>Pick a processed dataset, a model name, 500 to 10,000 steps, the training
+        data (mixed with Dream Labs data, or yours only) and the learning-rate schedule. The price shows as you choose and is
+        confirmed before the job starts; a queued job cannot be cancelled.</p></div>
+      <div class="step"><p class="step-no">4 · Follow</p><p>Jobs are read back from Dream Labs every 30 seconds (phase, step, loss);
+        a finished job publishes the model <code>dream-1-ft:&lt;account&gt;-&lt;name&gt;</code>.</p></div>
+    </div>
+    <h3 class="title">Results</h3>
+    <p>Our banana dataset, <b>50 unique seeds and 5,078 frames</b> in two rooms, passed the Dream Labs validator and was
+      uploaded and <b>processed</b> from the Train page, ready for a fine-tuning job. Training runs and their curves will be
+      added here.</p>
+  </div>
+</section>
+
+<section class="section chapter" id="test">
+  <div class="container content">
+    <p class="chapter-no">Chapter 3</p>
+    <h2 class="title">Test Custom Model</h2>
+    <p>The Test page runs a model on its own, without the failure monitor or the recovery script, so its success rate is
+      the model's. A <b>Model</b> bar lists the models your key can run, the public Dream-1 betas and your fine-tunes, and
+      every run records which one it used. A fine-tune that is still starting up is waited for (up to 10 minutes, not
+      counted in the run's time).</p>
+    <p>Runs and batches use the same seeded scenes as collection, including the fixed <b>evaluation set of 50 seeds</b>, so
+      a fine-tuned model and Dream-1 can be compared start for start.</p>
+    <div class="screens one">
+      <figure class="screen"><img src="assets/screens/08-test.png" alt="The Test page: pick a fine-tune in the Model bar and run it alone" loading="lazy"><figcaption>The Test page: pick a fine-tune in the Model bar and run it alone</figcaption></figure>
+    </div>
+    <h3 class="title">Results</h3>
+    <p>The comparison of our fine-tuned model with Dream-1 on the evaluation seeds will be added here.</p>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container content">
+    <h2 class="title">Try It</h2>
 <pre><code>python3 -m venv ~/dream-env
 ~/dream-env/bin/pip install dreamlabs pyarrow av
 ~/dream-env/bin/python app.py --port 8000
 # open http://localhost:8000 and sign in with your Dream API key</code></pre>
-    <p class="small muted" style="margin-top: 12px">Every page and option is described in the <a href="https://github.com/2btlFe/Sweat-Dream/blob/v2.0/docs/USAGE.md">usage guide</a>.</p>
-  </section>
-</main>
+    <p style="margin-top: 12px">Every page and option is described in the <a href="https://github.com/2btlFe/Sweet-Dream/blob/v2.0/docs/USAGE.md">usage guide</a>.</p>
+  </div>
+</section>
 
-<footer class="wrap">
-  <p>Sweet Dream is licensed under the <a href="https://github.com/2btlFe/Sweat-Dream/blob/v2.0/LICENSE">Apache License 2.0</a>
-    (<a href="https://github.com/2btlFe/Sweat-Dream/blob/v2.0/NOTICE">NOTICE</a>). Built on the
-    <a href="https://github.com/dreamlabs-co/dreamlabs">Dream Labs library</a> (Apache-2.0).</p>
-  <p>Videos: YAM robot meshes by <a href="https://github.com/i2rt-robotics/i2rt">I2RT Robotics</a> (MIT); the apple and banana are from the
-    <a href="https://ycb-benchmarks.s3.amazonaws.com/index.html">YCB Object and Model Set</a> by Calli, Singh, Walsman, Srinivasa, Abbeel and Dollar
-    (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>), recentered and rescaled by Dream Labs, rendered in simulation.</p>
-  <p>Dream Labs, Dream-1 and the Dream Labs cloud mark (from which the Sweet Dream icon is drawn) are names and marks of
-    <a href="https://dreamlabs.ai">Dream Labs</a>. Sweet Dream is not made or endorsed by Dream Labs.</p>
-  <h4 class="ack-title">Acknowledgements</h4>
-  <p>We thank <a href="https://www.nota.ai">Nota AI GmbH</a> and <a href="https://dreamlabs.ai">Dream Labs</a> for their support of this project.</p>
+<section class="section">
+  <div class="container content">
+    <h2 class="title">BibTeX</h2>
+<pre><code>@misc{sweetdream2026,
+  title        = {Sweet Dream: Diverse Data for Custom Dream-1 Fine-Tuning},
+  author       = {{Sweet Dream contributors}},
+  year         = {2026},
+  howpublished = {\url{https://github.com/2btlFe/Sweet-Dream}}
+}</code></pre>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p>Sweet Dream is licensed under the <a href="https://github.com/2btlFe/Sweet-Dream/blob/v2.0/LICENSE">Apache License 2.0</a>
+      (<a href="https://github.com/2btlFe/Sweet-Dream/blob/v2.0/NOTICE">NOTICE</a>). Built on the
+      <a href="https://github.com/dreamlabs-co/dreamlabs">Dream Labs library</a> (Apache-2.0).</p>
+    <p>Videos: YAM robot meshes by <a href="https://github.com/i2rt-robotics/i2rt">I2RT Robotics</a> (MIT); the apple and banana are from the
+      <a href="https://ycb-benchmarks.s3.amazonaws.com/index.html">YCB Object and Model Set</a> by Calli, Singh, Walsman, Srinivasa, Abbeel and Dollar
+      (<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>), recentered and rescaled by Dream Labs, rendered in simulation.</p>
+    <p>Dream Labs, Dream-1 and the Dream Labs cloud mark (from which the Sweet Dream icon is drawn) are names and marks of
+      <a href="https://dreamlabs.ai">Dream Labs</a>. Sweet Dream is not made or endorsed by Dream Labs.</p>
+    <p>Page layout after the <a href="https://openvla.github.io">OpenVLA</a> project page and the
+      <a href="https://nerfies.github.io">Nerfies</a> template.</p>
+    <h5>Acknowledgements</h5>
+    <p>We thank <a href="https://www.nota.ai">Nota AI GmbH</a> and <a href="https://dreamlabs.ai">Dream Labs</a> for their support of this project.</p>
+  </div>
 </footer>
+<script>
+// Chapter 1's slider: one slide per seed, the default scene on the left and the changed one on the right. Only the slide
+// on screen loads and plays its two videos, started together.
+(() => {
+  const root = document.getElementById("pairs"); if (!root) return;
+  const track = root.querySelector(".pair-track"), slides = [...root.querySelectorAll(".pair-slide")];
+  const dots = root.querySelector(".pair-dots"), prev = root.querySelector(".prev"), next = root.querySelector(".next");
+  slides.forEach((_, i) => { const b = document.createElement("button"); b.type = "button"; b.setAttribute("aria-label", `Seed ${i + 1}`); b.onclick = () => go(i); dots.append(b); });
+  let current = -1;
+  function show(i) {
+    if (i === current) return; current = i;
+    slides.forEach((s, k) => s.querySelectorAll("video").forEach(v => { if (k === i) { if (!v.src) v.src = v.dataset.src; v.currentTime = 0; v.play().catch(() => {}); } else v.pause(); }));
+    [...dots.children].forEach((d, k) => d.classList.toggle("on", k === i));
+    prev.disabled = i === 0; next.disabled = i === slides.length - 1;
+  }
+  const go = i => track.scrollTo({ left: Math.max(0, Math.min(slides.length - 1, i)) * track.clientWidth });
+  prev.onclick = () => go(current - 1); next.onclick = () => go(current + 1);
+  track.addEventListener("keydown", e => { if (e.key === "ArrowRight") go(current + 1); if (e.key === "ArrowLeft") go(current - 1); });
+  track.addEventListener("scroll", () => show(Math.round(track.scrollLeft / track.clientWidth)), { passive: true });
+  new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting && current < 0) show(0); }), { threshold: .2 }).observe(root);
+})();
+</script>
+<script>
+// The chapter bar marks the chapter on screen.
+const links = [...document.querySelectorAll(".chapters a")];
+const mark = id => links.forEach(a => a.classList.toggle("on", a.getAttribute("href") === "#" + id));
+const seen = new Map();
+const io = new IntersectionObserver(entries => {
+  for (const e of entries) seen.set(e.target.id, e.isIntersecting);
+  const order = links.map(a => a.getAttribute("href").slice(1));
+  const first = order.find(id => seen.get(id));
+  if (first) mark(first);
+}, { rootMargin: "-70px 0px -55% 0px" });
+for (const a of links) { const el = document.getElementById(a.getAttribute("href").slice(1)); if (el) io.observe(el); }
+</script>
 </body>
 </html>

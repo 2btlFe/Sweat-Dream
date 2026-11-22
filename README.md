@@ -3,9 +3,10 @@
 </p>
 
 <h1 align="center">Sweet Dream</h1>
-<p align="center"><b>Clean Data, Better Dream</b>: collect clean robot data in simulation, fine-tune Dream-1 on it, and test the result.</p>
+<p align="center"><b>Diverse Data for Custom Dream-1 Fine-Tuning</b></p>
+<p align="center">Collect diverse robot data in simulation, fine-tune a custom Dream-1 on it, and test the result.</p>
 <p align="center">
-  <a href="https://2btlfe.github.io/Sweat-Dream/">Project page</a> ·
+  <a href="https://2btlfe.github.io/Sweet-Dream/">Project page</a> ·
   <a href="docs/USAGE.md">Usage guide</a> ·
   <a href="https://platform.dreamlabs.ai/api-documentation/">Dream Labs API</a>
 </p>
@@ -22,6 +23,18 @@ two-arm robot:
 | 1 | **Collect Custom Dataset!** (`/collect`) | Run Dream-1 once or in batches over seeded scenes. A failure monitor hands a failed episode to a rule-based recovery script, so failures become successes. Success rules label every run; you can relabel by hand, pick runs, and save them as a dataset in the Dream Labs format (LeRobot v2.1). |
 | 2 | **Train Custom Model!** (`/train`) | Upload a saved dataset to Dream Labs and fine-tune Dream-1 on it, with the price shown before you start. |
 | 3 | **Test Custom Model!** (`/test`) | Run your fine-tuned model in the same scenes and compare it with Dream-1. |
+
+## Screenshots
+
+| Start · sign in | Start · pick a section |
+| --- | --- |
+| ![Start page: sign in with the Dream API key](docs/assets/screens/01-start.png) | ![Sections: Collect, Train, Test](docs/assets/screens/02-sections.png) |
+| **1. Collect** · run setup, model and camera view | **1. Collect** · a batch with its settings and the runs |
+| ![Collect page](docs/assets/screens/03-collect.png) | ![Batch settings](docs/assets/screens/04-collect-batch.png) |
+| **1. Collect** · a run's video, verdict and settings | **2. Train** · upload saved datasets |
+| ![A run's detail](docs/assets/screens/05-collect-run.png) | ![Train page: datasets](docs/assets/screens/06-train.png) |
+| **2. Train** · pick the steps and see the price | **3. Test** · run a fine-tune on its own |
+| ![Train page: training form](docs/assets/screens/07-train-model.png) | ![Test page](docs/assets/screens/08-test.png) |
 
 ## Highlights
 
@@ -73,10 +86,6 @@ server's memory only. Every page and option is described in the [usage guide](do
 | `train.py` | Upload and fine-tuning through the Dream Labs API |
 | `static/` | The pages (start, sections, collect, train, test) |
 | `docs/` | The project page (GitHub Pages) and the usage guide |
-
-## Contributors
-
-ByeongCheol Lee, Eunbin, Dang, Seogyoung Hwang, Se Yeon Kim.
 
 ## License and credits
 
