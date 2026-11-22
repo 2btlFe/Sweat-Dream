@@ -4,24 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sweet Dream</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/theme.css">
 <style>
-  main { min-height: 100vh; display: grid; place-items: center; padding: 48px 16px; }
-  .start { width: min(440px, 100%); text-align: center; }
-  .login { margin-top: 40px; text-align: left; }
-  .login h2 { font-size: 18px; margin: 0 0 4px; letter-spacing: -.01em; }
-  .login .lead { margin: 0 0 18px; }
-  .row { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
-  .row button { flex: 1 1 140px; }
-  .signed { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--well); }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex: none; }
-  .help { margin: 16px 0 0; }
+  main { min-height: 100vh; display: grid; place-items: center; padding: 56px 16px; }
+  .start { width: min(600px, 100%); text-align: center; }
+  .start .brand { white-space: nowrap; font-size: clamp(44px, 11vw, 88px); }
+  .login { width: min(460px, 100%); margin: 44px auto 0; text-align: left; }
+  .login h2 { font-size: 22px; font-weight: 500; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .login .lead { margin: 0 0 20px; }
+  .row { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+  .row button { flex: 1 1 150px; }
+  .signed { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 12px; background: var(--white); border: 1px solid var(--line-soft); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #2fbf5f; flex: none; }
+  .help { margin: 18px 0 0; }
 </style>
 </head>
 <body>
 <main>
   <div class="start">
-    <h1 class="brand">Sweet <span>Dream</span></h1>
+    <h1 class="brand">Sweet <span class="mark">Dream</span></h1>
     <p class="tagline">Collect data, fine-tune and test Dream-1 in the simulator.</p>
 
     <section class="panel login" aria-labelledby="loginTitle">
@@ -31,8 +35,8 @@
       <div id="signedIn" hidden>
         <div class="signed"><span class="dot" aria-hidden="true"></span><span>Signed in with the key ending <b id="keyHint"></b></span></div>
         <div class="row">
-          <button type="button" id="continue">Continue</button>
-          <button type="button" class="ghost" id="other">Use another key</button>
+          <button type="button" class="dark" id="continue">Continue</button>
+          <button type="button" class="outline" id="other" style="height: 48px">Use another key</button>
         </div>
       </div>
 
