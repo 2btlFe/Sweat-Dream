@@ -19,13 +19,14 @@ python3 -m venv ~/dream-env
 
 1. Open **http://localhost:8000**.
 2. Paste your Dream API key and press **Sign in**. (No key yet? Create one at
-   [platform.dreamlabs.ai/api-keys](https://platform.dreamlabs.ai/api-keys).)
-3. Pick a section: **Collect Custom Dataset!**, **Train Custom Model!** or **Test Custom Model!**
+   [platform.dreamlabs.ai/api-keys](https://platform.dreamlabs.ai/api-keys).) Already signed in? Press **Continue**,
+   or **Use another key**.
+3. Pick a section and press **Open**: **Collect Custom Dataset!**, **Train Custom Model!** or **Test Custom Model!**
 
 <img src="assets/screens/01-start.png" width="49%" alt="Start page"> <img src="assets/screens/02-sections.png" width="49%" alt="Sections">
 
 The key stays in the server's memory only. **Sign out** (top right) removes it; restarting the server does too, so you
-sign in again after a restart.
+sign in again after a restart. **← Sweet Dream · Sections** (top left) goes back to the sections.
 
 ---
 
@@ -33,120 +34,169 @@ sign in again after a restart.
 
 Run the robot in the simulator, check which runs succeeded, and save the good ones as a dataset.
 
-![Collect page: model, run setup and camera view](assets/screens/03-collect.png)
+The page has the **Camera feeds** on the left and the setup on the right, in four steps. The arrows **← / →** move
+between the steps; the camera feeds show the start scene as you change the settings.
 
-### Set up a run
+![Collect page: camera feeds and the setup in four steps](assets/screens/03-collect.png)
+
+### Step 1 · Task & robot
 
 | Setting | What it is |
 | --- | --- |
-| **Model** | The model that drives the arms: Dream-1 (`dream-1-beta`) or one of your fine-tunes. |
-| **Robot · Room** | The robot is YAM. The room changes the table and background (YAM tabletop, Kitchen, Cottage, ...). |
-| **Seed** | Decides where the objects start. Same seed, same start. **↻** gives a new one. |
-| **Scene settings** | Camera viewpoint and angle, light, blur, table, the arms' start angles. Tick **random** to draw a setting from the seed instead. **Default** resets everything. |
-| **Task** | What the robot should do, in words, e.g. `put apple into the bowl`. **Set task…** also lets you drag the objects to where they should end up (a *goal scene*). |
+| **Model** | The model that drives the arms: Dream-1 (`dream-1-beta`, `dream-1-beta-flash`) or one of your fine-tunes. **↻** reloads the list. A fine-tune runs only with the key of the account that trained it. |
+| **Robot · Room** | The robot is YAM. The room changes the table and background: YAM tabletop, Kitchen, Sunny apartment, Cottage, Walnut study, Evening den. |
+| **Task** | What the robot should do, in words, e.g. `put apple into the bowl`. The card shows how it will be judged. **Set task…** changes the words, and also lets you drag the objects to where they should end up (a *goal scene*). |
 
-The camera view shows the start scene as you change these.
+**Default** puts the run setup back to its defaults.
 
-### Pick a run mode
+### Step 2 · Scene
+
+**Camera, robot & environment settings**: the workspace camera's viewpoint (Overhead, Front angle, Left diagonal,
+Right diagonal) and fine offsets, each arm's start angles, blur, the light and the work surface.
+
+- Tick **random** on a setting to draw it from the seed instead of the slider. **Random from the seed: All / None**
+  ticks or clears them all.
+- **Reset scene settings** puts every slider back.
+- **Custom layout** places the objects by hand instead of from the seed.
+
+### Step 3 · Run settings
+
+Choose **Single run** or **Batch**.
+
+**Single run**: set the **Seed** (same seed, same start) and the **Limit (s)**, then a run mode:
 
 | Mode | Who moves the arms | Needs credits |
 | --- | --- | --- |
-| **Data collection** (default) | Dream-1. When it gets stuck or drops the object, a rule-based script takes over and finishes the task. | Yes |
-| **Rule-based only** | The script does the whole task by itself. | No |
-| **Test** | Dream-1, and you can take over at any time with `T`. | Yes |
-| **Human only** | You, with the mouse and keys. `T` hands the arms to Dream-1. | Only after `T` |
-| **Dream-1 only** | Dream-1 alone, no help. | Yes |
+| **Data collection** | Dream-1. When it fails, the recovery script takes over. A failure it cannot recover ends the run (you can recover it later in Recordings). | Yes |
+| **Rule-based only** | The rule-based script does the whole task from the first step. | No |
+| **Test** | Dream-1, and you take turns with `T`. A failure hands the arms to you. | Yes |
+| **Human only** | You drive from the start. `T` hands the arms to Dream-1. | Only after `T` |
+| **Dream-1 only** | Dream-1 alone: no monitor, no script, no human control. | Yes |
 
-Press **Run**. Each run is saved in `runs/`, and its recording (cameras, arm states, who acted) in `episodes/`.
+**Data collection settings · faster successes** sets when the script takes over: after a number of seconds without
+progress, and (optionally) at once on a missed grasp or an object pushed away. It also sets whether the script
+**finishes the task** or **picks it up and gives it back to Dream-1**, the script's speed, and whether the run ends as
+soon as the task is done.
 
-### Run many episodes: Batch
+Keep **Record to episodes/** ticked: the recording (cameras, arm states, who controlled each step) is what lets you
+resume a run later.
 
-Switch to **Batch** and choose:
+**Batch**: many episodes in the background.
 
-![Batch settings and the run list](assets/screens/04-collect-batch.png)
+![Run settings for a batch](assets/screens/04-collect-batch.png)
 
-- **Each episode**: Data collection, Rule-based only, Dream-1 only, or **Original** (the baseline: always the default
-  scene and settings).
 - **Episodes** and **Seconds each**.
-- **At once**: how many run side by side (1 to 4). More is faster overall, but Dream-1 may answer "busy"
-  (`NO_CAPACITY`); those episodes are retried automatically.
-- **Seeds**: **From the seed** (one seed makes the whole batch; the same seed gives the same episodes again) or
-  **Eval set (50)** (fixed seeds for fair comparisons).
+- **Seeds: From the seed**. The seed is the whole batch: each episode gets its own layout from it, and the same seed
+  gives the same episodes again.
+- **Each episode**: Data collection, Rule-based only, Dream-1 only, or **Original** (the baseline: the simulator's
+  default scene and settings every episode).
+- **At once**: how many run side by side. More is faster overall, but Dream-1 may answer "busy" (`NO_CAPACITY`);
+  those episodes are retried automatically.
 - **Scene per episode**: **Same settings**, or **Vary per episode** (each episode gets its own camera, light and room).
 
-The page shows progress, successes and the camera of each running episode. **Stop batch** stops them all.
+A line under the settings sums the batch up: episodes, how many at once, the batch seed and about how long it takes.
+
+### Step 4 · Review
+
+**Review your run** lists the task, the success criteria, the run mode and the settings (**Detailed settings** shows
+every one). Press **Run** (single run) or **Start batch**; **Stop** or **Stop batch** ends them, and **Reset** starts a single
+run again from the beginning.
+
+Each run is saved in `runs/`, and its recording in `episodes/`.
 
 ### Check and label the runs
 
-- The **Runs** list shows every run with its result: **SUCCESS**, **FAILURE** or **INVALID** (an error or a stopped
-  run). The filter shows one batch at a time.
-- Click a run to see its video, why it passed or failed, and how it was set up.
+Open **Runs** under the setup.
 
-  <img src="assets/screens/05-collect-run.png" width="60%" alt="A run's detail">
+- The filter shows **All runs**, **Single runs**, the runs **Labeled by hand**, those where **Hand ≠ rules**, or one
+  batch. The line below it counts the successes, failures and invalid runs (errors or stopped runs) it shows.
+- The list is on the left; click a run to see it on the right: its **Recording** (Top, Left wrist, Right wrist, Last
+  frame), the **Automatic result** and why it passed or failed, **How it was run**, and the distance to the target over
+  time. **Same start** puts the run's seed and its random settings back on the page, to run that start again.
 
-- Disagree with the result? Set it yourself with **Success / Failure / Invalid** (keys `1 / 2 / 3`; `0` gives it back
-  to the rules). Your label always wins. `J / K` move to the next / previous run.
-- **Success rules** (Advanced) sets what counts as success, per task type. See [Success rules](#success-rules).
+  <img src="assets/screens/05-collect-run.png" width="80%" alt="The run list and a run's detail">
+
+- Disagree with the result? Open **Manual review** and press **Success / Failure / Invalid** (keys `1 / 2 / 3`;
+  **Use the rules** or `0` gives it back to the rules). Your label always wins. `J / K` move to the next / previous
+  run. **Save labels** saves the labels of every run the filter shows.
+- With a batch in the filter, **Run as original** runs its baseline (the same task, judge and time limit, in the
+  default scene, with Dream-1 and the recovery script), and the line below the filter compares the two success rates.
 
 ### Save a dataset
 
-1. Press **+** on the runs you want, or **+ Add successes** to pick every success in the list.
-2. Press **Save dataset…**, give it a name and choose a folder (default: `datasets/`).
-3. Keep **Dream Labs format** ticked: the runs are also written in the format Dream Labs trains on (`dream_format/`)
-   and checked on your computer.
+1. Press **+** on the runs you want, or **+ Add successes** to pick every success the filter shows.
+2. Press **Save dataset…**, give it a **Name** and choose a folder (**Open**, **Up**; the default is `datasets/`).
+3. Keep **Also save in the Dream Labs format (LeRobot v2.1)** ticked: the runs are also written in the format Dream
+   Labs trains on (`dream_format/`) and checked on your computer.
 
-**−** takes a run back out; **Delete picked** deletes the picked runs.
+**−** takes a run back out, **Clear** empties the pick, and **Delete picked** deletes the picked runs.
 
 ### Turn a failure into a success: Recordings
 
-In **Recordings**, choose a failed run, move the slider to just before it failed, and press **Resume here**. The
-scene comes back exactly as it was, and you finish the task with the mouse and keys. The result is a new run.
+1. Open **Recordings · resume a failure** (tick **Failures only** to see just the failures) and press **Choose** on a
+   run.
+2. Move **Start from step** to just before it failed (**Failure point** jumps there; **− 1 s / + 1 s** fine-tune it).
+3. Press **Resume here (you control)**. The scene comes back exactly as it was, and you finish the task with the mouse
+   and keys (or press `T` to give it to Dream-1).
+
+The result is a new run that starts with the original's steps.
 
 <details>
 <summary>Mouse and keys</summary>
 
-- **Mouse:** click an object (the nearer arm moves above it), then **Lower → Grip → Lift**. Drag in the top camera to
-  move the hand; the wheel moves it up and down.
-- **Keys** (click the picture first): `W/S` forward / back, `A/D` left / right, `R/F` up / down, `Q/E` turn,
-  `Z/X` tilt, `Space` gripper, `Tab` other arm, `V` point down, `H` arm home, `G` grasp style, `T` take over / give
-  back.
+- **Buttons:** **Take over (T)**, then **Lower → Grip (Space) → Lift**; **Switch arm (Tab)**, **Home (H)**, **Grasp:
+  from above (G)**.
+- **Mouse:** click an object in a camera to move a hand above it (a wrist camera moves its own arm). Drag in the top
+  camera to move the hand along the table; the wheel moves it up and down.
+- **Keys** (click the picture first): `W/S` away from / toward the top camera, `A/D` left / right, `R/F` up / down,
+  `Q/E` turn, `Z/X` tilt, `G` grasp from above or tilted, `Space` gripper, `Tab` other arm, `V` point down, `H` arm
+  home, `T` take the arms from Dream-1 / give them back.
 </details>
 
 ### Delete runs
 
-**Delete this run** (in a run's detail), **Delete shown** (everything the list shows) or **Delete picked**. The page
-asks first, and a run that is going is never deleted.
+**Delete this run** (in a run's detail), **Delete all filtered runs** (everything the filter shows) or **Delete
+picked**. The page asks first, and a run that is going is never deleted.
 
 ---
 
 ## 3. Train Custom Model
 
-Fine-tune Dream-1 on a dataset you saved, without leaving the app. It uses the key you signed in with.
+Fine-tune Dream-1 on a dataset you saved, without leaving the app. It uses the key you signed in with. The page has
+three steps; the arrows **← / →** move between them.
 
-<img src="assets/screens/06-train.png" width="49%" alt="Train page: datasets"> <img src="assets/screens/07-train-model.png" width="49%" alt="Train page: training form">
+<img src="assets/screens/06-train.png" width="49%" alt="Train page: Upload Dataset"> <img src="assets/screens/07-train-model.png" width="49%" alt="Train page: Configure Training">
 
 | Step | What you do | Cost |
 | --- | --- | --- |
-| **1. Upload** | Saved datasets are listed. You can also **Import dataset ZIP** from Sweet Dream, or a LeRobot ZIP with `embodiment.json`. Import validates locally and adds a row; give it a name and press **Upload** to send it to Dream Labs. | Free |
-| **2. Process** | Dream Labs prepares it (a few minutes). Wait until it says **processed**. | Free |
-| **3. Train** | Pick the dataset, name your new model, set the steps (500 to 10,000), and choose the data mix: 50% Dream-1 data (`base_share=0.5`) or your data only (`base_share=0.0`). The estimated price shows before you start. | $0.20 per step* |
-| **4. Follow** | Your jobs show their progress. When one is done, its model name (`dream-1-ft:...`) appears. | — |
+| **1. Upload Dataset** | Your saved datasets are listed. You can also **Import dataset ZIP** (a ZIP with the Dream Labs format and `embodiment.json`); it is checked locally and added as a row. Press **Upload** on a row to send it to Dream Labs, which then prepares it (a few minutes) until it says **processed**. | Free |
+| **2. Configure Training** | Pick a processed **Dataset on Dream Labs**, **Name your new model**, and set the **Training steps** (a multiple of 100 from 500 to 10,000), the **Training data mix** (**Balanced mix**: 50% your data, 50% Dream-1; or **My data only**) and the **Learning rate schedule** (**Constant** or **Cosine**). The **Estimated billing** shows before you press **Start training…**. | $0.20 per step* |
+| **3. Train Model** | **Your training jobs** show their progress (read from Dream Labs every 30 seconds, so they are back after a restart). When one is done, its model (`dream-1-ft:<account>-<name>`) can be tested. | — |
 
 \* At the time of writing; 1,000 steps take about 7 to 8 hours. A started job **cannot be cancelled**. Check your
 credits on the Dream Labs [Billing](https://platform.dreamlabs.ai/billing) page; an API key cannot read the balance.
 
-**Hide** removes a dataset from the list (nothing is deleted); **Show hidden** brings it back.
+**Hide** removes a dataset from the list (nothing is deleted); **Show hidden** brings it back. If Dream Labs already
+has a dataset with the same name, the row says so: rename it before uploading.
 
 ---
 
 ## 4. Test Custom Model
 
-Run a model by itself, with no rescue script, to see how good it really is.
+Run a model by itself, with no recovery script and no human control, to see how good it really is. The page has the
+same four steps as Collect.
 
 ![Test page](assets/screens/08-test.png)
 
-1. In the **Model** bar, pick your fine-tune. (The first run of a new model may wait a few minutes while it starts.)
-2. Run it once or as a batch. Use **Eval set (50)** to compare it with Dream-1 on the same starts.
+1. In the **Model** bar (Step 1), pick your fine-tune. (The first run of a new model may wait a few minutes while it
+   starts.)
+2. In Step 3, run it once or as a batch. Every run is **Model only**: the result is the model's own.
+3. For a fair comparison, set **Seeds** to **Test set** and pick one (from `testsets/`, or **Upload testset.json…**).
+   A test set fixes the starts, the task, the judge and the time limit.
+4. Run the same test set with Dream-1, then pick each batch in the **Runs** filter: the line below it gives each
+   model's success rate.
+
+Runs, labels and recordings work as on the Collect page.
 
 ---
 
@@ -160,10 +210,10 @@ How a run is judged depends on its task:
 | Move to an area | `push the apple to the left` | The object rests in that area. |
 | Lift | `lift the apple` | The object stayed lifted long enough. |
 | Push | `push the orange` | The object moved far enough along the table. |
-| Goal scene | made with **Set task…** | Every moved object ends where you dragged it. |
+| Goal scene | made with **Set task…** | Every moved object ends where you dragged it, within the range set there. |
 
-Each type's numbers (distance, still time, ...) can be changed in **Success rules**; past runs are judged again.
-Errors and stopped runs are **invalid**, never failures.
+The numbers for tasks without a goal scene (distance, still time, ...) are in **Advanced · success rules for tasks
+without a goal scene** (Step 1); past runs are judged again. Errors and stopped runs are **invalid**, never failures.
 
 ---
 
@@ -200,6 +250,7 @@ Runs made here show up in the app's Runs list too.
 | `src/recorder.py`, `src/lerobot_export.py` | Recordings, and the Dream Labs dataset format |
 | `src/train.py` | Upload and fine-tuning through the Dream Labs API |
 | `src/batch.py` | Batches from the command line |
+| `testsets/` | Test sets for the Test page |
 | `tests/` | Unit tests (`python -m unittest discover tests`) |
 | `tools/screenshots.py` | Captures the pages for these docs (`docs/assets/screens/`), with the key and account hidden |
 
