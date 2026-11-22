@@ -1,7 +1,7 @@
 # Sweet Dream · Usage
 
 How to use the app, page by page. For what the project is, see the [README](../README.md).
-Prefer to watch? The [demo video](https://2btlfe.github.io/Sweet-Dream/#demo) (90 s, narrated) shows the same steps.
+Prefer to watch? The [demo video](https://2btlfe.github.io/Sweet-Dream/#demo) (3 min, narrated) shows the same steps.
 
 **Contents:** [Start](#1-start) · [Collect](#2-collect-custom-dataset) · [Train](#3-train-custom-model) ·
 [Test](#4-test-custom-model) · [Success rules](#success-rules) · [Command line](#command-line) · [Files](#files) ·
