@@ -74,10 +74,6 @@ server's memory only. Every page and option is described in the [usage guide](do
 | `static/` | The pages (start, sections, collect, train, test) |
 | `docs/` | The project page (GitHub Pages) and the usage guide |
 
-## Contributors
-
-ByeongCheol Lee, Eunbin, Dang, Seogyoung Hwang, Se Yeon Kim.
-
 ## License and credits
 
 Sweet Dream is licensed under the [Apache License 2.0](LICENSE); see [NOTICE](NOTICE).
