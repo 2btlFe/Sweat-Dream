@@ -1,0 +1,31 @@
+Sweet Dream (Clean Data, Better Dream)
+Copyright 2026 the Sweet Dream contributors: ByeongCheol Lee, Eunbin, Dang, Seogyoung Hwang, Se Yeon Kim
+
+Licensed under the Apache License, Version 2.0 (LICENSE).
+
+This repository does not copy Dream Labs code. It uses, as an installed dependency, the work below; their licenses
+apply to that work, not to this repository's code.
+
+Dependencies
+- dreamlabs and dreamlabs-client (the dream library, dreamcli and the DreamAPI client), Copyright 2026 Dream Labs,
+  Apache License 2.0. https://github.com/dreamlabs-co/dreamlabs
+  Its YAM MuJoCo example (dream_examples/yam_mujoco) is the simulator Sweet Dream runs, and its NOTICE and
+  THIRD-PARTY-LICENSES.md list the work it contains.
+- MuJoCo, Copyright DeepMind Technologies Limited, Apache License 2.0.
+- PyAV (FFmpeg) and pyarrow, under their own licenses.
+
+Assets shown in this repository's videos and project page (docs/)
+- The YAM robot arms: meshes from I2RT Robotics' i2rt (https://github.com/i2rt-robotics/i2rt), MIT License,
+  Copyright (c) I2RT Robotics, as included in the dream library.
+- The apple and banana: scanned objects from the YCB Object and Model Set
+  (https://ycb-benchmarks.s3.amazonaws.com/index.html) by Berk C. Calli, Arjun Singh, Aaron Walsman, Siddhartha
+  Srinivasa, Pieter Abbeel and Aaron M. Dollar, Creative Commons Attribution 4.0 International
+  (https://creativecommons.org/licenses/by/4.0/). Recentered and rescaled for the simulator by Dream Labs (see
+  ATTRIBUTION.md in the dream library's dream_examples/yam_mujoco/assets/fruits); rendered here in simulation.
+  No endorsement by the dataset authors is implied.
+
+Names and marks
+Dream Labs, Dream-1 and the Dream Labs cloud mark are Dream Labs' names and marks; the Apache License grants no
+right to use them (section 6). The Sweet Dream icon (static/icon.svg, docs/assets/icon.svg) is drawn from the Dream
+Labs cloud mark for this project and is not covered by this repository's license. Sweet Dream is not made or
+endorsed by Dream Labs.

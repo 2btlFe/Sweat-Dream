@@ -78,4 +78,15 @@ server's memory only. Every page and option is described in the [usage guide](do
 
 ByeongCheol Lee, Eunbin, Dang, Seogyoung Hwang, Se Yeon Kim.
 
-Dream-1, the Dream Labs API and the cloud mark in the icon belong to Dream Labs.
+## License and credits
+
+Sweet Dream is licensed under the [Apache License 2.0](LICENSE); see [NOTICE](NOTICE).
+
+- Built on the [Dream Labs library](https://github.com/dreamlabs-co/dreamlabs) (Apache-2.0), used as an installed
+  dependency; its YAM MuJoCo example is the simulator.
+- YAM robot meshes: [I2RT Robotics](https://github.com/i2rt-robotics/i2rt), MIT License.
+- Apple and banana: the [YCB Object and Model Set](https://ycb-benchmarks.s3.amazonaws.com/index.html) by Calli,
+  Singh, Walsman, Srinivasa, Abbeel and Dollar, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/),
+  recentered and rescaled by Dream Labs, rendered here in simulation.
+- Dream Labs, Dream-1 and the Dream Labs cloud mark (from which the Sweet Dream icon is drawn) are Dream Labs' names
+  and marks, not covered by this license. Sweet Dream is not made or endorsed by Dream Labs.
