@@ -1651,8 +1651,9 @@ function setSplit(next) {
   }
   const onSet = split === "testset";
   $("testsetRow").hidden = !onSet;
-  // A test set fixes the episodes, the time limit, the task and the scene: its own, so every model meets the same starts.
-  $("batchCount").disabled = $("batchSeconds").disabled = onSet;
+  // A test set fixes the episodes, the task and the scene, so every model meets the same starts; the time limit
+  // starts at the set's and can be changed.
+  $("batchCount").disabled = onSet;
   $("varyRow").hidden = onSet || batchMode === "original";
   $("batchHow").hidden = onSet || batchMode === "original";
   $("batchTaskNote").hidden = onSet;  // a test set runs its own task
@@ -1677,8 +1678,15 @@ async function loadTestsets(pick) {
 function showTestset() {
   const t = currentTestset();
   if (!t) { $("testsetInfo").textContent = "Put a testset.json under testsets/ or upload one."; estimate(); return; }
-  $("batchCount").value = t.count; $("batchSeconds").value = t.seconds;
-  $("testsetInfo").textContent = `${t.count} starts · “${t.task}” · judged: ${specText(t.judge)} · ${t.seconds} s each · `
+  $("batchCount").value = t.count;
+  // The time limit: the one picked for this set before (kept in the browser), else the set's own.
+  if ($("testsetPick").dataset.shown !== t.id) {
+    let kept = null;
+    try { kept = Number(localStorage.getItem(`testsetSeconds:${t.id}`)) || null; } catch {}
+    $("batchSeconds").value = kept || t.seconds;
+    $("testsetPick").dataset.shown = t.id;
+  }
+  $("testsetInfo").textContent = `${t.count} starts · “${t.task}” · judged: ${specText(t.judge)} · ${t.seconds} s each in the set (change Seconds each to use another) · `
     + `${t.settings ? "its own scene settings" : "default scene settings"} · the Task above and the scene settings below are not used`;
   estimate();
 }
@@ -1850,7 +1858,11 @@ function estimate() {
 }
 $("batchCount").oninput = estimate;
 $("batchWorkers").oninput = estimate;
-$("batchSeconds").oninput = estimate;
+$("batchSeconds").oninput = () => {
+  const t = split === "testset" ? currentTestset() : null;  // remember a test set's chosen time limit
+  if (t) try { localStorage.setItem(`testsetSeconds:${t.id}`, String(Number($("batchSeconds").value) || t.seconds)); } catch {}
+  estimate();
+};
 
 $("startBatch").onclick = async () => {
   const ood = isOpenYAM() ? {} : readOOD();
@@ -1863,8 +1875,9 @@ $("startBatch").onclick = async () => {
   const how = batchMode === "original" ? " as the original (the default scene and settings every episode, Dream-1 with the recovery script)"
     : batchMode === "script" ? " rule-based (the script alone, no Dream-1 use)" : "";
   const use = batchMode === "script" ? "" : " of Dream-1 use";
-  const on = testset ? ` on the test set ${testset.id} (“${testset.task}”)` : "";
-  if (!(await ask(`Run ${count} episodes${how}${on} in the background (about ${estimate()} min${use})?`, "Start batch"))) return;
+  const early = batchMode === "plain" ? " Each episode ends as soon as it is judged a success." : "";
+  const on = testset ? ` on the test set ${testset.id} (“${testset.task}”), ${Number($("batchSeconds").value) || testset.seconds} s each` : "";
+  if (!(await ask(`Run ${count} episodes${how}${on} in the background (about ${estimate()} min${use})?${early}`, "Start batch"))) return;
   try {
     const tasks = testset ? [{ prompt: testset.task, judge: testset.judge }]
       : [{ prompt: $("task").value.trim(), ...(goalSpec ? { judge: goalSpec } : {}) }];
@@ -1909,6 +1922,7 @@ function showBatch(b) {
     : b.original ? `Original: the default scene and settings every episode (fixed), Dream-1 with the recovery script · ${b.seconds} s each`
     : `${b.testset ? `Test set ${b.testset.id}` : b.split === "eval" ? "Eval seeds" : `Batch seed ${b.batch_seed ?? b.seed}`}${b.ood_random?.length ? ` · random: ${b.ood_random.join(", ")}` : ""} · ${b.seconds} s each · labeled with the rules as at the start`;
   $("batchEnd").textContent = (b.running ? "" : b.stopped_reason || "Finished.")
+    + (b.folder ? ` Saved in ${b.folder}/.` : "")
     + (b.capacity_retries ? ` Dream-1 was at capacity ${b.capacity_retries} time${b.capacity_retries > 1 ? "s" : ""}: those episodes were tried again.` : "");
   $("batchEnd").classList.toggle("bad", !b.running && !!b.stopped_reason && b.stopped_reason !== "Stopped by you.");
   showBatchLive(b.running ? (b.active || []).filter(e => e.run) : []);

@@ -1851,6 +1851,7 @@ function showBatch(b) {
     : b.original ? `Original: the default scene and settings every episode (fixed), Dream-1 with the recovery script · ${b.seconds} s each`
     : `${b.split === "eval" ? "Eval seeds" : `Batch seed ${b.batch_seed ?? b.seed}`}${b.ood_random?.length ? ` · random: ${b.ood_random.join(", ")}` : ""} · ${b.seconds} s each · labeled with the rules as at the start`;
   $("batchEnd").textContent = (b.running ? "" : b.stopped_reason || "Finished.")
+    + (b.folder ? ` Saved in ${b.folder}/.` : "")
     + (b.capacity_retries ? ` Dream-1 was at capacity ${b.capacity_retries} time${b.capacity_retries > 1 ? "s" : ""}: those episodes were tried again.` : "");
   $("batchEnd").classList.toggle("bad", !b.running && !!b.stopped_reason && b.stopped_reason !== "Stopped by you.");
   showBatchLive(b.running ? (b.active || []).filter(e => e.run) : []);

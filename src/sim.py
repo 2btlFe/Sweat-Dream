@@ -588,6 +588,38 @@ def read_meta(folder):
         return None
 
 
+## Model-only runs with --end-on-success: how often the run so far is judged (control steps; 10 = half a second).
+SUCCESS_CHECK_STEPS = 10
+
+
+def end_on_success(env, meta, stop):
+    """Model-only runs (--plain --end-on-success, the Test page's batches): judge the run so far with the same judge
+    and rules as its label (judge.evaluate; the batch's rules from JUDGE_RULES, else runs/rules.json) every half
+    second, and end it the moment it is a success (placed, released and at rest for the rules' still time)."""
+    try:
+        rules = json.loads(os.environ["JUDGE_RULES"]) if os.environ.get("JUDGE_RULES") else \
+            json.loads((ROOT / "runs" / "rules.json").read_text()) if (ROOT / "runs" / "rules.json").exists() else {}
+    except (ValueError, OSError):
+        rules = {}
+    step = env.step
+    steps = [0]
+
+    def checked_step(left, right):
+        result = step(left, right)
+        steps[0] += 1
+        if steps[0] % SUCCESS_CHECK_STEPS == 0 and not stop.is_set() and STATS["model_actions"]:
+            verdict = judge.evaluate({**meta, **STATS}, TRAJECTORY.to_json(), rules)
+            if verdict["label"] == "success":
+                print(f"  Ending the run: the task is done ({TRAJECTORY.t[-1]:.1f} s).", flush=True)
+                meta["ended_early"] = "task done"
+                if RECORDER is not None:
+                    RECORDER.event("ended", reason="task done")
+                stop.set()
+        return result
+
+    env.step = checked_step
+
+
 def record_plain(env, args, meta):
     """Model-only runs (--plain, the Test page): record the episode as the other modes do (episodes/<id>: steps,
     the three camera videos, events), with no failure monitor, recovery script or human control. Every step is the
@@ -963,6 +995,8 @@ def main():
         start_ksy(env, args, meta, stop, source_dir)
     elif args.plain and not openyam and not partial and not args.no_record:
         record_plain(env, args, meta)
+    if args.plain and args.end_on_success:
+        end_on_success(env, meta, stop)
 
     print(f"Starting the simulator: {args.task} ({args.seconds:g} s)"
           + {"human": " · you have the arms (T hands them to Dream-1)", "resumed": " · you have the arms",

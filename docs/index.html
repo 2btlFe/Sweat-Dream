@@ -4,146 +4,158 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sweet Dream: Diverse Data for Custom Dream-1 Fine-Tuning</title>
-<meta name="description" content="Sweet Dream: collect clean robot data in simulation, fine-tune Dream-1 on it, and test the result.">
+<meta name="description" content="Sweet Dream: a pipeline for building diverse robot datasets in simulation, fine-tuning Dream-1 on them, and testing the result.">
 <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap">
-<!-- Layout after the OpenVLA project page (openvla.github.io), itself from the Nerfies template; styles written here. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<!-- Layout after the OpenVLA project page (openvla.github.io), itself from the Nerfies template; palette, type and logo
+     from the Sweet Dream app (static/theme.css). -->
 <style>
-  :root { --text: #4a4a4a; --strong: #363636; --link: #3273dc; --band: #f5f5f5; --line: #dbdbdb; --honey: #e8a200; }
+  :root { --paper: #f8f6f1; --white: #fffefa; --ink: #25241f; --ink-2: #45443b; --ink-3: #635f53; --rule: #d5d0c4;
+          --sun: #f6e7a9; --sun-hover: #eed889; --sun-wash: #fff8df; --ochre: #705713; --radius: 4px;
+          --step-1: #fcf8ee; --step-2: #edf497; --step-3: #ead45f; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: #fff; color: var(--text); font: 16px/1.6 "Google Sans", "Noto Sans", system-ui, sans-serif; }
-  a { color: var(--link); text-decoration: none; } a:hover { text-decoration: underline; }
+  body { margin: 0; background: var(--paper); color: var(--ink-2); font: 16px/1.6 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+         -webkit-font-smoothing: antialiased; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+  a:hover { text-decoration-color: var(--ink); }
+  :focus-visible { outline: 2px solid var(--ochre); outline-offset: 3px; }
   .container { max-width: 960px; margin: 0 auto; padding: 0 20px; }
-  .hero { padding: 56px 0 32px; text-align: center; }
-  .logo { width: 84px; height: 84px; display: block; margin: 0 auto 6px; }
-  .publication-title { color: #111; font-size: clamp(32px, 5.4vw, 48px); font-weight: 600; line-height: 1.15; margin: 0; letter-spacing: -.01em; }
-  .publication-authors { font-size: 20px; margin: 18px 0 0; }
-  .publication-authors .author { white-space: nowrap; }
-  .note { font-size: 14px; color: #7a7a7a; margin: 4px 0 0; }
-  .link-blocks { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
-  .button { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px; border-radius: 999px; background: #363636; color: #fff; font-size: 16px; }
-  .button:hover { background: #2f2f2f; text-decoration: none; }
+  .hero { padding: 56px 0 36px; text-align: center; }
+  .logo { display: block; width: 72px; height: 72px; margin: 0 auto 18px; }
+  .publication-title { color: var(--ink); font-size: clamp(32px, 5.4vw, 52px); font-weight: 700; line-height: 1.05; margin: 0; letter-spacing: -.05em; }
+  .tagline { margin: 14px 0 0; color: var(--ochre); font-size: clamp(18px, 2.4vw, 22px); font-weight: 650; letter-spacing: .01em; }
+  .link-blocks { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 26px; }
+  .button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 16px; border: 1px solid transparent;
+            border-radius: var(--radius); background: var(--sun); color: var(--ink); font-size: 15px; font-weight: 650; text-decoration: none; }
+  .button:hover { background: var(--sun-hover); }
   .button svg { width: 16px; height: 16px; fill: currentColor; }
-  .qr { display: inline-flex; align-items: center; gap: 10px; margin: 16px 0 0; padding: 6px 14px 6px 6px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
-  .qr img { width: 76px; height: 76px; display: block; image-rendering: pixelated; }
-  .qr figcaption { font-size: 13px; line-height: 1.4; color: #7a7a7a; text-align: left; }
-  .qr figcaption a { color: var(--strong); }
-  .teaser { background: var(--band); padding: 28px 0; }
-  .teaser-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border-radius: 6px; overflow: hidden; }
-  .teaser-grid video { border-radius: 0; }
-  video.demo { width: 100%; aspect-ratio: 1280 / 800; border-radius: 8px; background: #111; box-shadow: 0 8px 28px rgba(0,0,0,.12); }
-  .demo-note { text-align: center; font-size: 14px; color: #7a7a7a; margin: 10px 0 0; }
-  .tldr { text-align: center; font-size: 20px; font-weight: 400; line-height: 1.55; color: var(--text); max-width: 900px; margin: 0 auto; padding: 30px 20px 10px; }
-  .tldr b { color: var(--strong); }
+  .teaser { background: var(--ink); padding: 32px 0; }
+  video.demo { width: 100%; aspect-ratio: 1280 / 800; border-radius: var(--radius); background: #111; }
+  .demo-note { text-align: center; font-size: 14px; color: #e4ded0; margin: 12px 0 0; }
+  .tldr { text-align: center; font-size: 20px; font-weight: 400; line-height: 1.55; color: var(--ink-2); max-width: 900px; margin: 0 auto;
+          padding: 36px 20px 10px; letter-spacing: -.01em; }
+  .tldr b { color: var(--ink); font-weight: 650; }
   section.section { padding: 34px 0 10px; }
-  h2.title { color: var(--strong); font-size: 32px; font-weight: 600; margin: 0 0 16px; line-height: 1.2; }
-  h3.title { color: var(--strong); font-size: 22px; font-weight: 600; margin: 28px 0 10px; }
-  h4.title { color: var(--strong); font-size: 16px; font-weight: 700; margin: 18px 0 8px; }
+  h2.title { color: var(--ink); font-size: clamp(28px, 4vw, 36px); font-weight: 700; margin: 0 0 16px; line-height: 1.1; letter-spacing: -.045em; }
+  h3.title { color: var(--ink); font-size: 22px; font-weight: 650; margin: 28px 0 10px; letter-spacing: -.03em; }
+  h4.title { color: var(--ink); font-size: 16px; font-weight: 650; margin: 18px 0 8px; letter-spacing: -.01em; }
   .content p { margin: 0 0 14px; text-align: justify; }
-  .content b { color: var(--strong); }
-  video { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #222; border-radius: 4px; }
-  .figure { background: var(--band); border-radius: 10px; padding: 18px; margin: 6px 0 16px; }
+  .content b { color: var(--ink); font-weight: 650; }
+  video { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #222; border-radius: 2px; }
+  .figure { background: var(--white); border: 1px solid var(--rule); border-radius: var(--radius); padding: 18px; margin: 6px 0 16px; }
   .figure svg { width: 100%; height: auto; display: block; }
-  .rollouts { background: var(--band); border-radius: 10px; padding: 10px 10px 12px; margin: 8px 0 16px; display: grid; gap: 10px; }
+  .rollouts { background: var(--white); border: 1px solid var(--rule); border-radius: var(--radius); padding: 10px 10px 12px; margin: 8px 0 16px; display: grid; gap: 10px; }
   .rollouts.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .rollouts.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .rollouts.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
-  .gallery figure { display: flex; flex-direction: column; justify-content: flex-end; }
-  .gallery figcaption { font-size: 13px; line-height: 1.3; }
-  .gallery figcaption span { display: block; font-size: 12px; color: #7a7a7a; }
   .rollouts figure { margin: 0; text-align: center; }
-  .rollouts figcaption { font-size: 15px; margin-bottom: 6px; color: var(--strong); }
-  @media (max-width: 760px) { .teaser-grid, .rollouts.cols-3, .rollouts.cols-4, .rollouts.cols-5 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
-  table.results { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 15px; }
-  table.results th, table.results td { border-bottom: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
-  table.results th { color: var(--strong); font-weight: 600; background: #fafafa; }
-  table.results td.num { white-space: nowrap; color: var(--strong); font-weight: 600; }
-  pre { background: var(--band); padding: 18px 20px; border-radius: 6px; overflow-x: auto; font-size: 14px; line-height: 1.5; color: var(--strong); margin: 0; }
+  .rollouts figcaption { font-size: 14px; margin-bottom: 6px; color: var(--ink); }
+  @media (max-width: 760px) { .rollouts.cols-3, .rollouts.cols-4 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  table.results { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 15px; background: var(--white); border: 1px solid var(--rule); }
+  table.results th, table.results td { border-bottom: 1px solid var(--rule); padding: 10px 12px; text-align: left; vertical-align: top; }
+  table.results th { color: var(--ink); font-weight: 650; background: var(--sun-wash); }
+  table.results td.num { white-space: nowrap; color: var(--ink); font-weight: 650; }
+  pre { background: var(--ink); padding: 18px 20px; border-radius: var(--radius); overflow-x: auto; font-size: 14px; line-height: 1.5; color: #f5f3ee; margin: 0; }
   code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-  .chapters { position: sticky; top: 0; z-index: 10; background: rgba(255, 255, 255, .94); backdrop-filter: blur(6px);
-              border-bottom: 1px solid var(--line); margin-top: 18px; }
+  .chapters { position: sticky; top: 0; z-index: 10; background: rgb(248 246 241 / 94%); backdrop-filter: blur(6px);
+              border-top: 2px solid var(--ink); border-bottom: 1px solid var(--rule); margin-top: 22px; }
   .chapters .container { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; padding-top: 10px; padding-bottom: 10px; }
-  .chapters a { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; color: var(--strong); font-size: 15px; }
-  .chapters a:hover { background: var(--band); text-decoration: none; }
-  .chapters a.on { background: #363636; color: #fff; }
-  .chapters .n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--band); color: var(--strong); font-size: 13px; font-weight: 600; }
-  .chapters a.on .n { background: #fff; color: #363636; }
+  .chapters a { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: var(--radius); color: var(--ink);
+                font-size: 15px; font-weight: 500; text-decoration: none; }
+  .chapters a:hover { background: var(--sun-wash); }
+  .chapters a.on { background: var(--sun); font-weight: 650; }
+  .chapters .n { display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--rule); border-radius: 2px;
+                 color: var(--ink); font-size: 12px; font-weight: 650; }
+  .chapters a[href="#collect"] .n { background: var(--step-1); }
+  .chapters a[href="#train"] .n { background: var(--step-2); }
+  .chapters a[href="#test"] .n { background: var(--step-3); }
   section[id] { scroll-margin-top: 64px; }
-  .chapter { border-top: 1px solid var(--line); margin-top: 26px; }
-  .chapter-no { text-transform: uppercase; letter-spacing: .08em; font-size: 13px; font-weight: 600; color: #7a7a7a; margin: 0 0 4px; }
+  .chapter { border-top: 1px solid var(--rule); margin-top: 26px; }
+  .chapter-no { display: inline-block; font-size: 13px; font-weight: 650; color: #514323; margin: 0 0 10px; padding: 2px 10px;
+                border: 1px solid var(--rule); border-radius: 2px; }
+  #collect .chapter-no { background: var(--step-1); }
+  #train .chapter-no { background: var(--step-2); }
+  #test .chapter-no { background: var(--step-3); }
   .screens { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 10px 0 18px; }
+  .screens.four { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .screens.four figcaption { font-size: 12px; }
+  .gif-soon { aspect-ratio: 16 / 9; display: grid; place-content: center; text-align: center; border: 1.5px dashed #d5d0c4; border-radius: 4px; color: #635f53; font-weight: 600; }
+  .gif-soon small { font-weight: 400; }
+  @media (max-width: 760px) { .screens.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .screens.one { grid-template-columns: minmax(0, 1fr); max-width: 760px; margin-left: auto; margin-right: auto; }
   @media (max-width: 760px) { .screens { grid-template-columns: minmax(0, 1fr); } }
   .screen { margin: 0; }
-  .screen img { width: 100%; display: block; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
-  .screen figcaption { font-size: 14px; color: #7a7a7a; margin-top: 6px; text-align: center; }
-  .pairs { position: relative; background: var(--band); border-radius: 10px; padding: 14px 52px 12px; margin: 8px 0 18px; }
+  .screen img { width: 100%; display: block; border: 1px solid var(--rule); border-radius: var(--radius); }
+  .screen figcaption { font-size: 14px; color: var(--ink-3); margin-top: 6px; text-align: center; }
+  .pairs { position: relative; background: var(--white); border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px 56px 12px; margin: 8px 0 18px; }
   .pair-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none; }
   .pair-track::-webkit-scrollbar { display: none; }
   .pair-slide { flex: 0 0 100%; scroll-snap-align: start; }
-  .pair-title { text-align: center; margin: 0 0 8px; color: var(--strong); }
+  .pair-title { text-align: center; margin: 0 0 8px; color: var(--ink); }
   .pair-videos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .pair-videos figure { margin: 0; }
-  .pair-videos figcaption { font-size: 14px; margin-bottom: 6px; color: var(--text); min-height: 2.6em; }
-  .pair-videos .tag { display: inline-block; margin-right: 8px; padding: 1px 9px; border-radius: 999px; background: #e6e6e6; color: var(--strong); font-size: 12px; font-weight: 600; }
-  .pair-videos .tag.changed { background: #363636; color: #fff; }
-  .pair-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; border-radius: 50%; border: 0; background: #363636; color: #fff; font-size: 24px; line-height: 1; cursor: pointer; }
-  .pair-nav:hover { background: #222; } .pair-nav:disabled { opacity: .3; cursor: default; }
+  .pair-videos figcaption { font-size: 14px; margin-bottom: 6px; color: var(--ink-2); min-height: 2.6em; }
+  .pair-videos .tag { display: inline-block; margin-right: 8px; padding: 1px 9px; border: 1px solid var(--rule); border-radius: 2px;
+                      background: var(--paper); color: var(--ink); font-size: 12px; font-weight: 650; }
+  .pair-videos .tag.changed { background: var(--sun); border-color: var(--sun); }
+  .pair-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border: 0; border-radius: var(--radius);
+              background: var(--sun); color: var(--ink); font-size: 24px; line-height: 1; cursor: pointer; }
+  .pair-nav:hover { background: var(--sun-hover); } .pair-nav:disabled { opacity: .35; cursor: default; }
   .pair-nav.prev { left: 8px; } .pair-nav.next { right: 8px; }
   .pair-dots { display: flex; gap: 6px; justify-content: center; margin-top: 12px; }
-  .pair-dots button { width: 9px; height: 9px; padding: 0; border-radius: 50%; border: 0; background: #c8c8c8; cursor: pointer; }
-  .pair-dots button.on { background: #363636; }
+  .pair-dots button { width: 9px; height: 9px; padding: 0; border-radius: 50%; border: 0; background: var(--rule); cursor: pointer; }
+  .pair-dots button.on { background: var(--ink); }
   @media (max-width: 760px) { .pairs { padding: 12px 10px; } .pair-nav { display: none; } .pair-videos { grid-template-columns: minmax(0, 1fr); } }
   .points { margin: 4px 0 16px; padding-left: 20px; } .points li { margin: 6px 0; }
-  .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 6px 0 10px; }
+  .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 6px 0 10px; background: var(--rule);
+           border: 1px solid var(--rule); border-top: 2px solid var(--ink); }
   @media (max-width: 860px) { .steps { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
-  .step { background: var(--band); border-radius: 10px; padding: 14px 16px; }
+  .step { background: var(--white); padding: 14px 16px; }
   .step p { margin: 0; font-size: 15px; text-align: left; }
-  .step .step-no { font-weight: 600; color: var(--strong); margin-bottom: 6px; }
-  footer { margin-top: 40px; padding: 30px 0 48px; background: #fafafa; font-size: 14px; color: #7a7a7a; }
-  footer p { margin: 0 0 8px; } footer h5 { margin: 16px 0 6px; font-size: 15px; color: var(--strong); }
+  .step .step-no { font-weight: 650; color: var(--ink); margin-bottom: 6px; }
+  .team { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 6px 0 10px;
+          padding: 0; background: var(--rule); border: 1px solid var(--rule); border-top: 2px solid var(--ink); }
+  @media (max-width: 760px) { .team { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  .team li { background: var(--white); padding: 14px 16px; font-weight: 650; }
+  footer { margin-top: 40px; padding: 30px 0 48px; background: var(--white); border-top: 1px solid var(--rule); font-size: 14px; color: var(--ink-3); }
+  footer p { margin: 0 0 8px; } footer h5 { margin: 16px 0 6px; font-size: 15px; color: var(--ink); }
+  footer a { color: var(--ink-2); }
 </style>
 </head>
 <body>
 
 <section class="hero">
   <div class="container">
-    <img class="logo" src="assets/icon.svg" alt="Sweet Dream icon: a sleeping cloud">
+    <img class="logo" src="assets/logo.svg" alt="" width="72" height="72">
     <h1 class="publication-title">Sweet Dream:<br>Diverse Data for Custom Dream&#8209;1 Fine&#8209;Tuning</h1>
-    <p class="note" style="margin-top: 14px">Built on Dream-1 and the Dream Labs API</p>
+    <p class="tagline">Better Data, Better Dream</p>
     <div class="link-blocks">
-      <a class="button" href="https://github.com/2btlFe/Sweet-Dream">
+      <a class="button" href="https://github.com/2btlFe/Sweet-Dream/tree/v3.0">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
         Code</a>
-      <a class="button" href="https://github.com/2btlFe/Sweet-Dream/blob/v2.0/docs/USAGE.md">
+      <a class="button" href="https://github.com/2btlFe/Sweet-Dream/blob/v3.0/docs/USAGE.md">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 1.75C2 .78 2.78 0 3.75 0h6.59c.46 0 .9.18 1.23.51l2.92 2.92c.33.33.51.77.51 1.23v9.59A1.75 1.75 0 0113.25 16h-9.5A1.75 1.75 0 012 14.25V1.75zm1.75-.25a.25.25 0 00-.25.25v12.5c0 .14.11.25.25.25h9.5a.25.25 0 00.25-.25V6h-2.75A1.75 1.75 0 019 4.25V1.5H3.75zm6.75.06V4.25c0 .14.11.25.25.25h2.69L10.5 1.56z"/></svg>
         Usage guide</a>
       <a class="button" href="https://platform.dreamlabs.ai/api-documentation/">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.72 3.22a.75.75 0 011.06 1.06L2.06 8l3.72 3.72a.75.75 0 11-1.06 1.06L.47 8.53a.75.75 0 010-1.06l4.25-4.25zm6.56 0a.75.75 0 10-1.06 1.06L13.94 8l-3.72 3.72a.75.75 0 101.06 1.06l4.25-4.25a.75.75 0 000-1.06l-4.25-4.25z"/></svg>
         Dream Labs API</a>
     </div>
-    <figure class="qr">
-      <a href="assets/qr-project-page.png" download="sweet-dream-qr.png"><img src="assets/qr-project-page.svg" alt="QR code for https://2btlfe.github.io/Sweet-Dream/"></a>
-      <figcaption>Scan to open this page<br><a href="assets/qr-project-page.png" download="sweet-dream-qr.png">PNG</a> ·
-        <a href="assets/qr-project-page.svg" download="sweet-dream-qr.svg">SVG</a></figcaption>
-    </figure>
   </div>
 </section>
 
 <section class="teaser" id="demo">
   <div class="container">
     <video class="demo" src="assets/videos/demo.mp4" poster="assets/videos/demo-poster.jpg" controls playsinline preload="metadata"></video>
-    <p class="demo-note">A 90-second tour of Sweet Dream, with narration: sign in, collect a run, save a dataset, train, test.</p>
+    <p class="demo-note">A two-minute tour of Sweet Dream, with narration: sign in, define success, collect a run, save a dataset, train, test.</p>
   </div>
 </section>
 
 <section>
-  <h2 class="tldr">We introduce <b>Sweet Dream</b>, a local web app that collects <b>clean</b> robot episodes in simulation for
-    fine-tuning Dream-1: seeded and varied scenes, failures turned into successes by a rule-based recovery script,
-    every run labeled by success rules, and datasets saved in the exact format Dream Labs trains on, then uploaded,
-    fine-tuned and tested from the same app.</h2>
+  <h2 class="tldr">We introduce <b>Sweet Dream</b>, a tool that provides a full pipeline for building <b>diverse</b> robot
+    datasets in simulation to fine-tune Dream-1: seeded scenes varied in layout, room, light and camera, failed runs
+    finished by a recovery script or a person, every run labeled by the success you define, and datasets saved in the format
+    Dream Labs trains on, then uploaded, fine-tuned and tested from the same app.</h2>
 </section>
 
 <nav class="chapters" aria-label="Chapters">
@@ -159,40 +171,58 @@
 <section class="section" id="overview">
   <div class="container content">
     <h2 class="title">Overview</h2>
+    <div class="screens four">
+      <figure class="screen"><img src="assets/gifs/diverse-scenes.gif" alt="One view cutting through six collected runs: Kitchen, Sunny apartment, Cottage, Walnut study, Evening den and YAM tabletop, each with its own light and camera" loading="lazy"><figcaption><b>Diverse demonstrations:</b> six rooms, lights and cameras</figcaption></figure>
+      <figure class="screen"><img src="assets/gifs/define-success.gif" alt="The Task dialog: the apple is dragged into the bowl in the goal scene, then distance, still time and release are set" loading="lazy"><figcaption><b>Define success:</b> set what success means for any task, here the apple in the bowl</figcaption></figure>
+      <figure class="screen"><img src="assets/gifs/human-takeover.gif" alt="Dream-1 reaches toward the apple and stalls; a human takes over with T, picks up the apple and puts it into the bowl" loading="lazy"><figcaption><b>Human recovery:</b> Dream-1 stalls, a person presses T and finishes</figcaption></figure>
+      <figure class="screen"><div class="gif-soon" role="img" aria-label="Apple task: Dream-1 base and our fine-tune side by side, coming soon">Base vs ours<br><small>coming soon</small></div><figcaption><b>Base vs ours:</b> Dream-1 and our fine-tune on the same apple scene</figcaption></figure>
+    </div>
     <div class="figure">
       <svg viewBox="0 0 1000 300" role="img" aria-labelledby="pipeTitle">
         <title id="pipeTitle">Pipeline: seeded scenes, Dream-1 runs with failure monitor and recovery, success rules, dataset, fine-tune, test</title>
-        <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#363636"/></marker></defs>
-        <g font-family="Noto Sans, sans-serif" font-size="17" fill="#363636" text-anchor="middle">
-          <rect x="10" y="40" width="160" height="96" rx="12" fill="#fff" stroke="#dbdbdb"/>
-          <text x="90" y="80" font-weight="600">Seeded scenes</text><text x="90" y="104" font-size="14" fill="#7a7a7a">layout, camera,</text><text x="90" y="122" font-size="14" fill="#7a7a7a">light, room</text>
-          <rect x="215" y="40" width="190" height="96" rx="12" fill="#fff4ea" stroke="#f3cfa6"/>
-          <text x="310" y="80" font-weight="600">Dream-1 runs</text><text x="310" y="104" font-size="14" fill="#7a7a7a">single or batch,</text><text x="310" y="122" font-size="14" fill="#7a7a7a">up to 4 at once</text>
-          <rect x="215" y="190" width="190" height="96" rx="12" fill="#f5f2fe" stroke="#d7cdf1"/>
-          <text x="310" y="228" font-weight="600">Failure monitor</text><text x="310" y="252" font-size="14" fill="#7a7a7a">→ rule-based</text><text x="310" y="270" font-size="14" fill="#7a7a7a">recovery script</text>
-          <rect x="450" y="40" width="160" height="96" rx="12" fill="#fff" stroke="#dbdbdb"/>
-          <text x="530" y="80" font-weight="600">Success rules</text><text x="530" y="104" font-size="14" fill="#7a7a7a">+ hand labels,</text><text x="530" y="122" font-size="14" fill="#7a7a7a">pick the runs</text>
-          <rect x="655" y="40" width="150" height="96" rx="12" fill="#fff" stroke="#dbdbdb"/>
-          <text x="730" y="80" font-weight="600">Dataset</text><text x="730" y="104" font-size="14" fill="#7a7a7a">LeRobot v2.1,</text><text x="730" y="122" font-size="14" fill="#7a7a7a">checked</text>
-          <rect x="850" y="40" width="140" height="96" rx="12" fill="#363636"/>
-          <text x="920" y="80" font-weight="600" fill="#fff">Fine-tune</text><text x="920" y="104" font-size="14" fill="#dbdbdb">upload, train</text><text x="920" y="122" font-size="14" fill="#dbdbdb">on Dream Labs</text>
-          <rect x="850" y="190" width="140" height="96" rx="12" fill="#eefbf1" stroke="#c3f2cc"/>
-          <text x="920" y="230" font-weight="600">Test</text><text x="920" y="254" font-size="14" fill="#7a7a7a">same scenes,</text><text x="920" y="272" font-size="14" fill="#7a7a7a">vs Dream-1</text>
+        <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#25241f"/></marker></defs>
+        <g font-family="Inter, sans-serif" font-size="17" fill="#25241f" text-anchor="middle">
+          <rect x="10" y="40" width="160" height="96" rx="4" fill="#fffefa" stroke="#d5d0c4"/>
+          <text x="90" y="80" font-weight="600">Seeded scenes</text><text x="90" y="104" font-size="14" fill="#635f53">layout, camera,</text><text x="90" y="122" font-size="14" fill="#635f53">light, room</text>
+          <rect x="215" y="40" width="190" height="96" rx="4" fill="#fcf8ee" stroke="#d5d0c4"/>
+          <text x="310" y="80" font-weight="600">Dream-1 runs</text><text x="310" y="104" font-size="14" fill="#635f53">single or batch,</text><text x="310" y="122" font-size="14" fill="#635f53">up to 4 at once</text>
+          <rect x="215" y="190" width="190" height="96" rx="4" fill="#fff8df" stroke="#eed889"/>
+          <text x="310" y="228" font-weight="600">Failure monitor</text><text x="310" y="252" font-size="14" fill="#635f53">→ rule-based</text><text x="310" y="270" font-size="14" fill="#635f53">recovery script</text>
+          <rect x="450" y="40" width="160" height="96" rx="4" fill="#fffefa" stroke="#d5d0c4"/>
+          <text x="530" y="80" font-weight="600">Success rules</text><text x="530" y="104" font-size="14" fill="#635f53">+ hand labels,</text><text x="530" y="122" font-size="14" fill="#635f53">pick the runs</text>
+          <rect x="655" y="40" width="150" height="96" rx="4" fill="#fffefa" stroke="#d5d0c4"/>
+          <text x="730" y="80" font-weight="600">Dataset</text><text x="730" y="104" font-size="14" fill="#635f53">LeRobot v2.1,</text><text x="730" y="122" font-size="14" fill="#635f53">checked</text>
+          <rect x="850" y="40" width="140" height="96" rx="4" fill="#edf497" stroke="#d5d0c4"/>
+          <text x="920" y="80" font-weight="600">Fine-tune</text><text x="920" y="104" font-size="14" fill="#635f53">upload, train</text><text x="920" y="122" font-size="14" fill="#635f53">on Dream Labs</text>
+          <rect x="850" y="190" width="140" height="96" rx="4" fill="#ead45f" stroke="#d5bd45"/>
+          <text x="920" y="230" font-weight="600">Test</text><text x="920" y="254" font-size="14" fill="#635f53">same scenes,</text><text x="920" y="272" font-size="14" fill="#635f53">vs Dream-1</text>
         </g>
-        <g stroke="#363636" stroke-width="2.4" fill="none" marker-end="url(#arrow)">
+        <g stroke="#25241f" stroke-width="2.4" fill="none" marker-end="url(#arrow)">
           <path d="M172 88H211"/><path d="M407 88H446"/><path d="M612 88H651"/><path d="M807 88H846"/><path d="M920 138V186"/>
           <path d="M290 138V186" stroke-dasharray="6 5"/><path d="M330 188V140" stroke-dasharray="6 5"/>
           <path d="M848 214H396V140" stroke-dasharray="6 5"/>
         </g>
-        <g font-family="Noto Sans, sans-serif" font-size="13" fill="#7a7a7a">
+        <g font-family="Inter, sans-serif" font-size="13" fill="#635f53">
           <text x="236" y="166">fails</text><text x="338" y="166">recovers</text><text x="560" y="206">the new model goes back into the runs</text>
         </g>
       </svg>
     </div>
-    <p>Sweet Dream is a local web app around a MuJoCo simulation of the YAM two-arm robot, in three chapters that follow
-      the loop above: <a href="#collect">collect</a> a dataset of successful, varied episodes;
-      <a href="#train">train</a> a custom Dream-1 on it through the Dream Labs API; and <a href="#test">test</a> the new
-      model in the same scenes against Dream-1. You sign in once with your Dream API key; every chapter uses it.</p>
+    <p><b>A fine-tuned Dream-1 is only as good as the data behind it</b>, and good robot data is slow to collect: same
+      scenes, failed runs thrown away, success checked by hand. Sweet Dream turns the YAM simulator into a data factory,
+      one app that <a href="#collect">collects</a> diverse, successful episodes, <a href="#train">fine-tunes</a> Dream-1
+      on them through the Dream Labs API, and <a href="#test">tests</a> the result against the base model in the same
+      scenes. On 50 held-out apple starts, our fine-tune succeeds <b>74%</b> of the time, against <b>2%</b> for
+      Dream-1 base.</p>
+    <ul class="points">
+      <li><b>Diversity on demand.</b> One seed fixes the layout; room, light, camera and table change per episode, and
+        every scene can be reproduced.</li>
+      <li><b>Success, your way.</b> Define what success means for any task: drag objects into a goal scene and set the
+        tolerances. Every run is labeled by it, with no code.</li>
+      <li><b>No wasted runs.</b> When Dream-1 fails, a recovery script or a person (press T) finishes the task, and every
+        step is recorded with who was in control.</li>
+      <li><b>Closed loop, one app.</b> Collect, export a LeRobot dataset, fine-tune, and test on held-out seeds published
+        on Hugging Face, all with one API key.</li>
+    </ul>
   </div>
 </section>
 
@@ -202,22 +232,16 @@
     <h2 class="title">Collect Custom Dataset</h2>
     <ul class="points">
       <li><b>Diverse scenes.</b> A seed sets the object layout; room, light, camera, blur and table can be changed too.</li>
-      <li><b>Failures become successes.</b> When Dream-1 gets stuck, a rule-based script finishes the task.</li>
-      <li><b>Ready to train.</b> Success rules label every run; the good ones are saved in the Dream Labs format.</li>
+      <li><b>Failures become successes.</b> When Dream-1 gets stuck, a rule-based script or a person (press T) finishes the task.</li>
+      <li><b>Your own success.</b> Drag objects to where they should end up and set the distance, still time and
+        release; every run is judged by that goal scene.</li>
+      <li><b>Guided setup.</b> Four steps with arrows: task and robot, scene, run settings, review. One run or a batch of up to 4 at once.</li>
+      <li><b>Ready to train.</b> Every run is labeled; the good ones are saved in the Dream Labs format.</li>
     </ul>
     <div class="screens">
-      <figure class="screen"><img src="assets/screens/03-collect.png" alt="The Collect page: model, run setup and the camera view" loading="lazy"><figcaption>The Collect page: model, run setup and the camera view</figcaption></figure>
-      <figure class="screen"><img src="assets/screens/04-collect-batch.png" alt="A batch: episodes, seeds, scene per episode, and the runs" loading="lazy"><figcaption>A batch: episodes, seeds, scene per episode, and the runs</figcaption></figure>
+      <figure class="screen"><img src="assets/screens/03-collect.png" alt="The Collect page: step 1 of the guided setup, task and robot, beside the camera feeds" loading="lazy"><figcaption>Step 1 of 4: model, robot, room and task, beside the camera feeds</figcaption></figure>
+      <figure class="screen"><img src="assets/screens/04-collect-batch.png" alt="Step 3 of the guided setup: a batch with seed, episodes, run mode and scene per episode, above the runs list" loading="lazy"><figcaption>Step 3 of 4: a batch with seed, episodes, run mode and scene per episode</figcaption></figure>
     </div>
-    <h3 class="title">Results</h3>
-    <table class="results">
-      <thead><tr><th>Setting</th><th>Episodes</th><th>Success</th></tr></thead>
-      <tbody>
-        <tr><td>Rule-based only, "put the banana on the plate", varied camera, light and room</td><td>68 valid</td><td class="num">66 (97%)</td></tr>
-        <tr><td>Data collection (Dream-1 + recovery), failures handed to the script sooner, same 3 seeds</td><td>3</td><td class="num">1 → 3</td></tr>
-        <tr><td>Rule-based script on 4 pick-and-place tasks × 5 seeds, after the reach and hand-over fixes</td><td>20</td><td class="num">4 → 7</td></tr>
-      </tbody>
-    </table>
 
     <h4 class="title">Same seed, a different environment</h4>
     <p>Same task and seed: the default scene on the left, a changed one on the right. Use the arrows or swipe.</p>
@@ -341,19 +365,14 @@
     <h2 class="title">Train Custom Model</h2>
     <p>Fine-tune Dream-1 on a collected dataset from the app, with the key you signed in with.</p>
     <div class="screens">
-      <figure class="screen"><img src="assets/screens/06-train.png" alt="Step 1: upload a saved dataset" loading="lazy"><figcaption>Step 1: upload a saved dataset</figcaption></figure>
-      <figure class="screen"><img src="assets/screens/07-train-model.png" alt="Step 2: pick the steps and see the price" loading="lazy"><figcaption>Step 2: pick the steps and see the price</figcaption></figure>
+      <figure class="screen"><img src="assets/screens/06-train.png" alt="Train step 1, Dataset: saved datasets with Upload, and Import dataset ZIP" loading="lazy"><figcaption>Step 1 · Dataset: upload a saved dataset or import a ZIP</figcaption></figure>
+      <figure class="screen"><img src="assets/screens/07-train-model.png" alt="Train step 2, Configure: dataset, model name, steps, data mix, learning rate schedule and the estimated price" loading="lazy"><figcaption>Step 2 · Configure: steps, data mix and schedule, with the price</figcaption></figure>
     </div>
     <div class="steps">
-      <div class="step"><p class="step-no">1 · Upload</p><p>Pick a saved dataset and upload it. Free.</p></div>
-      <div class="step"><p class="step-no">2 · Process</p><p>Dream Labs prepares it in a few minutes. Free.</p></div>
-      <div class="step"><p class="step-no">3 · Train</p><p>Choose the steps and see the price. Once started, it can't be cancelled.</p></div>
-      <div class="step"><p class="step-no">4 · Follow</p><p>Watch the progress; the finished model appears here.</p></div>
+      <div class="step"><p class="step-no">1 · Dataset</p><p>Upload a saved dataset or import a ZIP; Dream Labs processes it in a few minutes. Free.</p></div>
+      <div class="step"><p class="step-no">2 · Configure</p><p>Name the model, pick 500 to 10,000 steps, the data mix (50% Dream-1 data or yours only) and the schedule. The price shows first; a started job can't be cancelled.</p></div>
+      <div class="step"><p class="step-no">3 · Models</p><p>Follow the jobs; the finished <code>dream-1-ft</code> model appears here and in the Model bar.</p></div>
     </div>
-    <h3 class="title">Results</h3>
-    <p>Our banana dataset, <b>50 unique seeds and 5,078 frames</b> in two rooms, passed the Dream Labs validator and was
-      uploaded and <b>processed</b> from the Train page, ready for a fine-tuning job. Training runs and their curves will be
-      added here.</p>
   </div>
 </section>
 
@@ -365,13 +384,23 @@
       the model's. A <b>Model</b> bar lists the models your key can run, the public Dream-1 betas and your fine-tunes, and
       every run records which one it used. A fine-tune that is still starting up is waited for (up to 10 minutes, not
       counted in the run's time).</p>
-    <p>Runs and batches use the same seeded scenes as collection, including the fixed <b>evaluation set of 50 seeds</b>, so
-      a fine-tuned model and Dream-1 can be compared start for start.</p>
+    <p>Setup follows the same four guided steps as Collect. Runs and batches can use a <b>test set</b>, a
+      <code>testset.json</code> of fixed starts (ours are on Hugging Face), so a fine-tuned model and Dream-1 are compared
+      start for start.</p>
     <div class="screens one">
-      <figure class="screen"><img src="assets/screens/08-test.png" alt="The Test page: pick a fine-tune in the Model bar and run it alone" loading="lazy"><figcaption>The Test page: pick a fine-tune in the Model bar and run it alone</figcaption></figure>
+      <figure class="screen"><img src="assets/screens/08-test.png" alt="The Test page: step 1 of the guided setup with the Model bar, beside the camera feeds" loading="lazy"><figcaption>The Test page: pick a fine-tune in the Model bar, then set up the run in four steps</figcaption></figure>
     </div>
     <h3 class="title">Results</h3>
-    <p>The comparison of our fine-tuned model with Dream-1 on the evaluation seeds will be added here.</p>
+    <p>Success rate on test set 10 of the apple task, <b>"Put the apple into the bowl"</b>: 50 fixed starts
+      (<a href="https://huggingface.co/datasets/Dangni/sweet-dream-apple" target="_blank" rel="noopener">Dangni/sweet-dream-apple</a>
+      on Hugging Face, batch seed 10), every model on its own with no recovery script.</p>
+    <table class="results">
+      <thead><tr><th>Model</th><th>Successes</th><th>Success rate</th></tr></thead>
+      <tbody>
+        <tr><td>Dream-1 (base)</td><td class="num">1 / 50</td><td class="num">2%</td></tr>
+        <tr><td><b>Sweet Dream fine-tune (ours)</b></td><td class="num"><b>37 / 50</b></td><td class="num"><b>74%</b></td></tr>
+      </tbody>
+    </table>
   </div>
 </section>
 
@@ -382,7 +411,21 @@
 ~/dream-env/bin/pip install dreamlabs pyarrow av
 ~/dream-env/bin/python src/app.py --port 8000
 # open http://localhost:8000 and sign in with your Dream API key</code></pre>
-    <p style="margin-top: 12px">Every page and option is described in the <a href="https://github.com/2btlFe/Sweet-Dream/blob/v2.0/docs/USAGE.md">usage guide</a>.</p>
+    <p style="margin-top: 12px">Every page and option is described in the <a href="https://github.com/2btlFe/Sweet-Dream/blob/v3.0/docs/USAGE.md">usage guide</a>.</p>
+  </div>
+</section>
+
+<section class="section" id="team">
+  <div class="container content">
+    <h2 class="title">Team</h2>
+    <ul class="team">
+      <li><a href="https://www.linkedin.com/in/se-yeon-k-440760126/">Se Yeon Kim</a></li>
+      <li><a href="https://www.linkedin.com/in/daeun-lee-b41b0133a/">DaEun Lee</a></li>
+      <li><a href="https://www.linkedin.com/in/eunbinlee/">Eunbin Lee</a></li>
+      <li><a href="https://www.linkedin.com/in/seogyounghwang/">Seogyoung Hwang</a></li>
+      <li><a href="https://www.linkedin.com/in/yoonseo-lee-65307b330/">Yoonseo Lee</a></li>
+      <li><a href="https://www.linkedin.com/in/byeong-cheol-lee-637311202/">ByeongCheol Lee</a></li>
+    </ul>
   </div>
 </section>
 
@@ -400,8 +443,8 @@
 
 <footer>
   <div class="container">
-    <p>Sweet Dream is licensed under the <a href="https://github.com/2btlFe/Sweet-Dream/blob/v2.0/LICENSE">Apache License 2.0</a>
-      (<a href="https://github.com/2btlFe/Sweet-Dream/blob/v2.0/NOTICE">NOTICE</a>). Built on the
+    <p>Sweet Dream is licensed under the <a href="https://github.com/2btlFe/Sweet-Dream/blob/v3.0/LICENSE">Apache License 2.0</a>
+      (<a href="https://github.com/2btlFe/Sweet-Dream/blob/v3.0/NOTICE">NOTICE</a>). Built on the
       <a href="https://github.com/dreamlabs-co/dreamlabs">Dream Labs library</a> (Apache-2.0).</p>
     <p>Videos: YAM robot meshes by <a href="https://github.com/i2rt-robotics/i2rt">I2RT Robotics</a> (MIT); the apple and banana are from the
       <a href="https://ycb-benchmarks.s3.amazonaws.com/index.html">YCB Object and Model Set</a> by Calli, Singh, Walsman, Srinivasa, Abbeel and Dollar
@@ -411,7 +454,7 @@
     <p>Page layout after the <a href="https://openvla.github.io">OpenVLA</a> project page and the
       <a href="https://nerfies.github.io">Nerfies</a> template.</p>
     <h5>Acknowledgements</h5>
-    <p>We thank <a href="https://www.nota.ai">Nota AI GmbH</a> and <a href="https://dreamlabs.ai">Dream Labs</a> for their support of this project.</p>
+    <p>We thank <a href="https://dreamlabs.ai">Dream Labs</a> for its support of this project.</p>
   </div>
 </footer>
 <script>
