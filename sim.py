@@ -233,6 +233,47 @@ def capture(env, windows, keep=True):
     return dict(last_images)
 
 
+MODEL = {"id": dream_control.BETA_MODEL}  # the checkpoint this run asks (--model); set in main()
+STOP_EVENT = threading.Event()  # set when the run is stopped (Stop, the stop file, or the end of the run)
+WARMING_LIMIT_S = 600  # how long a run waits for a model that is starting (DA-2000 pool_warming) before giving up
+
+
+class PausableClock:
+    """dream_control's clock (its run deadline and its round-trip times): the time module, minus the seconds spent
+    waiting for a model to start, so a fine-tune that is not running yet does not use up the run's time."""
+
+    paused_s = 0.0
+
+    def __getattr__(self, name):
+        return getattr(time, name)
+
+    def monotonic(self):
+        return time.monotonic() - self.paused_s
+
+
+DREAM_CLOCK = PausableClock()
+dream_control.time = DREAM_CLOCK
+
+
+def wait_for_model(error, waited):
+    """Wait while the model starts (the first call to a model that is not running, such as a fine-tune, is refused
+    with DA-2000 pool_warming), off the run's clock.
+    @param error The dream.DreamServerError. @param waited The seconds waited so far in this run.
+    @return The seconds waited this time. @throws error When it is another refusal, or the model took too long."""
+    if getattr(error, "reason", None) != "pool_warming" or waited >= WARMING_LIMIT_S:
+        raise error
+    pause = min(max(float(getattr(error, "retry_after_s", None) or 5), 1.0), 30.0)
+    print(f"  The model {MODEL['id']} is starting; asking again in {pause:.0f} s "
+          f"(waited {waited:.0f} s, not counted in the run's time).", flush=True)
+    started = time.monotonic()
+    STOP_EVENT.wait(pause)
+    if STOP_EVENT.is_set():
+        raise error
+    spent = time.monotonic() - started
+    DREAM_CLOCK.paused_s += spent
+    return spent
+
+
 # A connection the server dropped while idle is reopened by asking again (up to twice).
 original_get_action = dream.DreamClient.get_action
 
@@ -246,17 +287,23 @@ def get_action(self, *args, **kwargs):
         return {"q_l_chunk": np.tile(left, (HOLD_ROWS, 1)), "q_r_chunk": np.tile(right, (HOLD_ROWS, 1))}
     DREAM_STARTED[0] = True
     if RECORDER is not None and RECORDER.model_id is None:
-        RECORDER.model_id = getattr(dream_control, "BETA_MODEL", "dream-1")
-    for attempt in range(3):
+        RECORDER.model_id = MODEL["id"]
+    dropped, waited = 0, 0.0
+    while True:
         try:
             reply = original_get_action(self, *args, **kwargs)
             STATS["model_responses"] += 1
+            if waited:  # app.py reads this line: the page stops showing "the model is starting"
+                print(f"  The model {MODEL['id']} is ready (it took {waited:.0f} s to start).", flush=True)
             return reply
         except dream.DreamProtocolError:
-            if attempt == 2:
+            dropped += 1
+            if dropped == 3:
                 raise
             print("  Connection dropped; asking again.", flush=True)
             time.sleep(0.2)
+        except dream.DreamServerError as error:
+            waited += wait_for_model(error, waited)
 
 
 yam_env.YamEnv.step = step
@@ -335,6 +382,48 @@ def workspace_frame(env, camera):
     unit = lambda v: [round(float(x), 4) for x in v / (np.linalg.norm(v) or 1)]
     return {"center": [round(float(x), 4) for x in center], "left": unit(left), "front": unit(front)}
 dream.DreamClient.get_action = get_action
+
+
+## A fine-tune can overshoot the gripper a little (1.07 is fully open); dream_control stops the run on any gripper
+## value more than 0.05 outside 0..1, as a sign of a wrong response contract. Values up to GRIPPER_SLACK outside are
+## clipped to 0..1 here first; anything further out still stops the run (a real contract error).
+GRIPPER_SLACK = 0.25
+GRIPPER_CLIPPED = {"rows": 0, "max": 0.0}
+original_validate_chunk = dream_control.validate_chunk
+
+
+def clip_gripper(actions):
+    """@return The actions with each chunk's gripper column clipped to 0..1 where it is at most GRIPPER_SLACK outside
+    (a copy; the reply itself is not changed), and the largest correction made."""
+    clipped, largest = dict(actions), 0.0
+    for key in ("q_l_chunk", "q_r_chunk"):
+        try:
+            rows = np.array(actions[key], dtype=float, copy=True)
+        except (KeyError, TypeError, ValueError):
+            continue  # validate_chunk says what is wrong
+        if rows.ndim != 2 or rows.shape[1] != 7 or not np.isfinite(rows[:, 6]).all():
+            continue
+        gripper = rows[:, 6]
+        fixable = (gripper >= -GRIPPER_SLACK) & (gripper <= 1 + GRIPPER_SLACK)
+        bounded = np.where(fixable, np.clip(gripper, 0.0, 1.0), gripper)
+        changed = np.abs(bounded - gripper)
+        if changed.any():
+            GRIPPER_CLIPPED["rows"] += int(np.count_nonzero(changed))
+            largest = max(largest, float(changed.max()))
+            rows[:, 6] = bounded
+            clipped[key] = rows
+    return clipped, largest
+
+
+def validate_chunk(env, actions, *args, **kwargs):
+    clipped, largest = clip_gripper(actions)
+    if largest > 0.05 and largest > GRIPPER_CLIPPED["max"]:  # said once, and again only for a larger overshoot
+        GRIPPER_CLIPPED["max"] = largest
+        print(f"  Gripper value {largest:.3f} outside 0..1, clipped (the model overshoots open / closed).", flush=True)
+    return original_validate_chunk(env, clipped, *args, **kwargs)
+
+
+dream_control.validate_chunk = validate_chunk
 
 
 def read_keys(env, stop):
@@ -691,8 +780,13 @@ def main():
                         help="data collection: the script picks the object up and gives the arms back (carry), or finishes the task")
     parser.add_argument("--script-speed", type=float, default=1.0, help="data collection: the script's speed, x Dream-1's pace (1 to 3)")
     parser.add_argument("--end-on-success", action="store_true", help="end the run once the monitor sees the task done")
+    parser.add_argument("--model", type=dream_control.resolve_model,
+                        default=os.environ.get("DREAM_MODEL") or dream_control.BETA_MODEL,
+                        help="the checkpoint Dream-1 runs: beta, or a model id such as a fine-tune (dream-1-ft:...);"
+                             " default DREAM_MODEL, else dreamlabs/dream-1-beta")
     scene.add_arguments(parser)  # --seed, --default-scene, --split, --setting, --ood-random
     args = parser.parse_args()
+    MODEL["id"] = args.model
     source_dir = resume_options(args) if args.resume else None
     openyam = args.robot == "openyam"
     if openyam and (SCENE or args.ood or args.ood_random):
@@ -787,6 +881,7 @@ def main():
             "ood_random": args.ood_random, "ood": None,
             "started_at": datetime.now().isoformat(timespec="seconds"), "stopped_by_user": False,
             "error": None, "error_type": None, "scene": SCENE or None,
+            "model": None if args.script_only else args.model,
             "batch_id": os.environ.get("BATCH_ID"), "original": os.environ.get("ORIGINAL") == "1",
             "batch_seed": int(os.environ["BATCH_SEED"]) if os.environ.get("BATCH_SEED") else None,
             "original_of": os.environ.get("ORIGINAL_OF") or None,
@@ -803,6 +898,7 @@ def main():
         meta["ended_at"] = datetime.now().isoformat(timespec="seconds")
         meta["sim_seconds"] = TRAJECTORY.t[-1] if TRAJECTORY.t else 0
         meta.update(STATS)
+        meta["gripper_clipped"] = dict(GRIPPER_CLIPPED) if GRIPPER_CLIPPED["rows"] else None
         (run_dir / "trajectory.json").write_text(json.dumps(TRAJECTORY.to_json(), separators=(",", ":")))
         if last_images:
             save_jpeg(camera_view(last_images), run_dir / "last.jpg")
@@ -828,7 +924,7 @@ def main():
         meta["off_table_z"] = OPENYAM_OFF_TABLE_Z
         meta["workspace"] = workspace_frame(env, "overhead")
 
-    stop = threading.Event()
+    stop = STOP_EVENT
     if STOP_FILE:
         def watch():
             while not stop.is_set():
@@ -858,10 +954,12 @@ def main():
             if left is not None and left > 1 and not stop.is_set():
                 # Hand-off: Dream-1 continues from the scene exactly as the human left it, for the time that is left.
                 print(f"  Handing the arms to Dream-1 ({left:.0f} s left).", flush=True)
-                dream_control.main(["--task", args.task, "--seconds", f"{left:.1f}", "--headless", "--quiet"],
+                dream_control.main(["--task", args.task, "--seconds", f"{left:.1f}", "--headless", "--quiet",
+                                    "--model", args.model],
                                    shared_env=env, stop_event=stop)
         else:
-            dream_control.main(["--task", args.task, "--seconds", str(args.seconds), "--headless", "--quiet"],
+            dream_control.main(["--task", args.task, "--seconds", str(args.seconds), "--headless", "--quiet",
+                                "--model", args.model],
                                shared_env=env, stop_event=stop)
     except Exception as error:
         meta["error"] = str(error)

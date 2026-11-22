@@ -28,6 +28,13 @@
   header .back { display: inline-block; font-size: 13px; color: var(--muted); text-decoration: none; }
   header .account { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
   header .back:hover { color: var(--accent-ink); }
+  .modelbar { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin: 0 0 20px; padding: 12px 16px;
+              background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 14px; }
+  .modelbar label { margin: 0; font-weight: 600; }
+  .modelbar select { width: auto; flex: 0 1 420px; }
+  .modelbar .model-note { flex: 1 1 260px; font-size: 13px; color: var(--muted); }
+  .modelbar.ft { background: var(--ok-bg); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
+  .modelbar.ft .model-note b { color: var(--ok); }
   h1 { font-size: clamp(32px, 4.5vw, 48px); line-height: 1.05; letter-spacing: -.023em; font-weight: 400; margin: 0; }
   h2 { font-size: 18px; letter-spacing: -.01em; font-weight: 500; margin: 0 0 16px; }
   .sub { color: var(--muted); margin: 8px 0 0; }
@@ -316,6 +323,17 @@
   svg.chart { width: 100%; height: auto; display: block; margin-top: 6px; }
   .examples button { max-width: 100%; text-align: left; overflow-wrap: anywhere; }
   .monitor-header .status { max-width: 100%; }
+  .warming { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 12px; padding: 10px 12px; border-radius: 10px;
+             background: var(--warn-bg); color: var(--warn); font-size: 13px; }
+  .view-wrap { position: relative; }
+  .warming-overlay { position: absolute; inset: 0; z-index: 2; display: grid; place-content: center; justify-items: center; gap: 12px;
+                     border-radius: 10px; background: color-mix(in srgb, var(--bg) 96%, transparent); text-align: center; color: var(--text); }
+  .warming-overlay .ring { width: 64px; height: 64px; border-radius: 50%; border: 6px solid color-mix(in srgb, var(--accent) 30%, var(--bg));
+                           border-top-color: var(--accent-ink); animation: warming-spin .9s linear infinite; }
+  .warming-overlay strong { font-size: 15px; font-weight: 600; }
+  .warming-overlay span { font-size: 13px; color: var(--muted); }
+  @keyframes warming-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .warming-overlay .ring { animation-duration: 2.4s; } }
   .batch-box .title strong { min-width: 0; overflow-wrap: anywhere; }
   svg.chart text { fill: var(--muted); font-size: 11px; }
   .chart-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; color: var(--muted); margin-top: 4px; }
@@ -343,6 +361,12 @@
     <h1>Collect Custom Dataset!</h1>
     <p class="sub">Set up a start scene, run Dream-1 once or in a batch, and label the runs with your own success rules.</p>
   </header>
+  <section class="modelbar" id="modelBar" aria-label="Model">
+    <label for="model">Model</label>
+    <select id="model" aria-describedby="modelNote"><option>dreamlabs/dream-1-beta</option></select>
+    <button type="button" class="ghost small" id="modelReload" title="List the models this key may run again (after a fine-tuning job finishes)">↻</button>
+    <span class="model-note" id="modelNote">Loading the models this key may run…</span>
+  </section>
   <dialog class="ask" id="askDialog" aria-labelledby="askText">
     <p id="askText"></p>
     <div class="acts"><button class="ghost" id="askNo">Cancel</button><button id="askYes">OK</button></div>
@@ -508,6 +532,10 @@
       <h2 id="viewTitle">Camera feeds</h2>
       <div class="status" id="statusBadge" role="status"><span class="dot" id="dot"></span><strong id="statusText">Ready</strong></div>
     </div>
+    <div class="warming" id="warmingNote" role="status" hidden><span id="warmingText"></span></div>
+    <div class="view-wrap">
+    <div class="warming-overlay" id="warmingOverlay" hidden><div class="ring" aria-hidden="true"></div>
+      <strong>Starting the model…</strong><span id="warmingWait"></span></div>
     <img id="live" class="view" alt="Live camera view" hidden>
     <div id="placeholder" class="view placeholder">Preparing the initial camera view…</div>
     <div id="batchBox" class="batch-box" hidden>
@@ -518,6 +546,7 @@
       <div class="batch-live" id="batchLive" aria-label="Camera view of each episode going now"></div>
       <div class="batch-end small" id="batchEnd"></div>
       <div><button class="ghost small" id="batchShow">Show these runs</button></div>
+    </div>
     </div>
     <div class="legend"><span>Workspace camera</span><span>Wrist cameras</span></div>
     <div id="controlBox" hidden>
@@ -1018,6 +1047,7 @@ const startText = run => run.layout === "custom" ? "custom layout" : run.layout 
 /** One line under the task in the list: mode · start · robot / room. */
 function settingsBrief(run) {
   return [MODE_TEXT[run.mode] || run.mode, startText(run),
+          run.model && run.model !== "dreamlabs/dream-1-beta" ? run.model.replace(/^dreamlabs\//, "") : "",
           run.robot && run.robot !== "yam" ? (simCatalog?.robots[run.robot] || run.robot) : "",
           run.room && run.room !== "yam_tabletop" ? (simCatalog?.rooms[run.room] || run.room) : "",
           run.ood_random?.length ? `random ×${run.ood_random.length}` : ""].filter(Boolean).join(" · ");
@@ -1025,6 +1055,7 @@ function settingsBrief(run) {
 /** Every setting the run was made with (meta.json), for its detail. */
 function settingsRows(run, v) {
   const rows = [["Mode", MODE_TEXT[run.mode] || run.mode || "—"],
+                ["Model", run.model || (run.mode === "script" ? "none (rule-based)" : "dreamlabs/dream-1-beta")],
                 ["Robot · room", `${simCatalog?.robots[run.robot] || run.robot || "YAM"} · ${simCatalog?.rooms[run.room] || run.room || "YAM tabletop"}`],
                 ["Start", run.layout === "custom" ? `custom layout: ${Object.keys(run.scene?.items || {}).map(itemName).join(", ")}`
                   : `${startText(run)}${run.setting ? `, setting ${run.setting}` : ""}${run.scene_version ? `, scene v${run.scene_version}` : ""}`]];
@@ -1441,6 +1472,48 @@ $("signOut").onclick = async () => {
   location.href = "/";
 };
 
+/* ---------- model ---------- */
+
+/** The model bar: Dream-1 runs as the public beta or as one of this account's fine-tunes. The server keeps the choice
+ *  and hands it to each run and new batch; a batch keeps the model it started with. */
+let models = [], chosenModel = "dreamlabs/dream-1-beta";
+const modelLabel = m => m.owner === "mine" ? `${m.id}${m.servable ? "" : " (not ready)"}`
+  : `${m.id.replace(/^dreamlabs\//, "")} (public)`;
+
+function showModel(id) {
+  chosenModel = id || chosenModel;
+  const sel = $("model");
+  if (![...sel.options].some(o => o.value === chosenModel)) sel.add(new Option(chosenModel, chosenModel));
+  sel.value = chosenModel;
+  const m = models.find(x => x.id === chosenModel), mine = m?.owner === "mine" || chosenModel.startsWith("dream-1-ft:");
+  $("modelBar").classList.toggle("ft", mine);
+  const fineTunes = models.filter(x => x.owner === "mine").length;
+  $("modelNote").innerHTML = mine
+    ? `<b>Fine-tune</b>${m?.base_model ? ` of ${esc(m.base_model)}` : ""}: runs and new batches use it. Its first call waits while the model starts (that wait is not counted in the run's time). Prompt it the way it was trained.`
+    : `Runs and new batches use the public model. ${fineTunes ? `${fineTunes} fine-tune${fineTunes > 1 ? "s" : ""} of this account in the list.` : "This key has no fine-tunes: a fine-tune runs only with the key of the account that trained it."}`;
+}
+
+async function loadModels() {
+  $("modelNote").textContent = "Loading the models this key may run…";
+  try {
+    const r = await api("/api/models");
+    models = r.models;
+    const groups = [["Public", models.filter(m => m.owner !== "mine")], ["Your fine-tunes", models.filter(m => m.owner === "mine")]];
+    $("model").innerHTML = groups.filter(([, list]) => list.length).map(([name, list]) =>
+      `<optgroup label="${name}">${list.map(m => `<option value="${esc(m.id)}"${m.servable ? "" : " disabled"}>${esc(modelLabel(m))}</option>`).join("")}</optgroup>`).join("");
+    showModel(r.model);
+  } catch (err) {
+    showModel(chosenModel);
+    $("modelNote").textContent = `Could not list the models: ${err.message}`;
+  }
+}
+$("model").onchange = async () => {
+  const next = $("model").value, before = chosenModel;
+  try { showModel((await api("/api/model", { model: next })).model); }
+  catch (err) { showModel(before); showError(err, "Model"); }
+};
+$("modelReload").onclick = loadModels;
+
 /* ---------- batch ---------- */
 
 let mode = "single", split = "train", lastBatchDone = null, followBatch = false, batchState = null;
@@ -1715,6 +1788,8 @@ function refreshBatchLive() {
 // Known errors in plain words: [pattern, title, hint, setup problem?]. Anything else shows its own message.
 const ERRORS = [
   [/not a Dream API key/i, "That is not a Dream API key", "Sign out (top right) and sign in again with the key from platform.dreamlabs.ai (it starts with dl_).", false],
+  [/not_entitled|is not a model this key may run|unknown_checkpoint/i, "This key may not run that model", "A fine-tune runs only with the key of the account that trained it. Pick another model in the Model bar, or sign in with that account's key.", false],
+  [/is not ready to run yet|pool_warming/i, "The model is not ready yet", "Its fine-tuning has not finished, or it is still starting. Press ↻ in the Model bar later, or pick another model.", false],
   [/UNAUTHORIZED|api key|401|403/i, "The Dream API rejected the key", "Sign out (top right) and sign in again with a valid key.", false],
   [/busy/i, "The simulator is busy", "A run, batch or preview is going. Wait for it to finish, then try again.", false],
   [/Initial arm pose overlaps/i, "The arms' start pose collides with the scene", "The joint angles put an arm into the table, an object or the other arm. Change them, or draw again / go back to the defaults.", true],
@@ -1921,6 +1996,7 @@ async function refresh() {
   catch { $("statusText").textContent = "Cannot reach app.py. Is it running?"; return; }
 
   showKey(s.key);
+  if (s.model && s.model !== chosenModel) showModel(s.model);
   lastRunId = s.run_id;
   const b = s.batch, batchRunning = !!b?.running;
   batchState = b;
@@ -1932,6 +2008,7 @@ async function refresh() {
   $("run").disabled = running || (!s.key.source && !["human", "script"].includes(runMode())) || !robotRunsHere() || !!setupProblem;
   $("startBatch").disabled = running || (!s.key.source && batchMode !== "script") || !robotRunsHere();
   $("robot").disabled = $("room").disabled = running;
+  $("model").disabled = $("modelReload").disabled = running;
   $("stop").hidden = !s.running || batchRunning;
   $("stopBatch").hidden = !batchRunning;
   $("dot").classList.toggle("on", running);
@@ -1963,6 +2040,7 @@ async function refresh() {
     }
     $("statusMore").textContent = `${s.task} · ${s.elapsed_s} s`;
   }
+  showWarming(batchRunning ? b.model_warming : s.running ? s.model_warming : null, batchRunning);
   $("logBox").hidden = !s.log.length;
   $("log").textContent = s.log.join("\n");
   $("log").scrollTop = $("log").scrollHeight;
@@ -2286,6 +2364,19 @@ for (const radio of document.querySelectorAll("input[name=runMode]")) radio.addE
 const MODE_NAMES = { dream: "Dream-1", paused: "Dream-1 needs help", human: "Human", script: "Script recovering", returning: "Giving back to Dream-1…" };
 const REASONS = { dropped: "Dream-1 dropped the object", stalled: "Dream-1 stopped making progress", off_table: "The object fell off the table (cannot be recovered)" };
 
+/** While a run waits for its model to start on Dream Labs (a fine-tune that is not running yet answers DA-2000
+ *  pool_warming): the arms do not move until it answers, so say so above the camera view. */
+function showWarming(w, batch) {
+  $("warmingNote").hidden = $("warmingOverlay").hidden = !w;
+  if (!w) return;
+  $("warmingWait").textContent = `waited about ${w.waited_s} s · the arms move once it answers`;
+  const who = batch ? (w.episodes > 1 ? `${w.episodes} episodes are` : "An episode is") : "The run is";
+  $("warmingText").innerHTML = `<b>Starting the model on Dream Labs</b> · ${esc(w.model)} · waited about ${w.waited_s} s. `
+    + `${who} waiting for it: the arms move once it answers. A model that has not run for a while takes a few minutes to start `
+    + `(up to 10 min); this wait is not counted in the run's time.`;
+  $("statusText").textContent = "Starting the model…";
+}
+
 /** The control panel under the camera, from sim.py's control state. */
 function showControl(s, batchRunning) {
   const t = s.teleop;
@@ -2468,6 +2559,7 @@ $("ood").addEventListener("reset", schedulePreview);
     $("newSeed").addEventListener("click", estimate);
     estimate();
   }
+  loadModels();
   await loadRuns().catch(() => {});
   loadEpisodes();
   placeCollectBox();
