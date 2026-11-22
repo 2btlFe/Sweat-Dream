@@ -1,0 +1,193 @@
+[
+  {
+    "file": "01-banana-plate-evening-den-seed512759.mp4",
+    "run": "20261122-110601-e9e2",
+    "task": "put the banana on the plate",
+    "room": "evening_den",
+    "seed": 512759,
+    "light": 0.9,
+    "camera": {
+      "camera_fov_offset_deg": 1,
+      "camera_roll_deg": 1,
+      "camera_x_cm": 0.5,
+      "camera_yaw_deg": -5,
+      "camera_z_cm": 1.5
+    },
+    "sim_seconds": 21.9,
+    "mode": "rule-based only",
+    "result": "success"
+  },
+  {
+    "file": "02-banana-plate-tabletop-seed675143.mp4",
+    "run": "20261122-110631-3b62",
+    "task": "put the banana on the plate",
+    "room": "yam_tabletop",
+    "seed": 675143,
+    "light": 0.95,
+    "camera": {
+      "camera_fov_offset_deg": 4,
+      "camera_pitch_deg": 2,
+      "camera_roll_deg": -1,
+      "camera_y_cm": -1.5,
+      "camera_yaw_deg": 4,
+      "camera_z_cm": -0.5
+    },
+    "sim_seconds": 21.4,
+    "mode": "rule-based only",
+    "result": "success"
+  },
+  {
+    "file": "03-banana-plate-evening-den-seed146151.mp4",
+    "run": "20261122-110657-21d2",
+    "task": "put the banana on the plate",
+    "room": "evening_den",
+    "seed": 146151,
+    "light": 0.85,
+    "camera": {
+      "camera_fov_offset_deg": -6,
+      "camera_roll_deg": -2,
+      "camera_x_cm": 1.0,
+      "camera_yaw_deg": 6,
+      "camera_z_cm": 1.0
+    },
+    "sim_seconds": 21.0,
+    "mode": "rule-based only",
+    "result": "success"
+  },
+  {
+    "file": "04-apple-bowl-tabletop-seed559185.mp4",
+    "run": "20261122-110602-4de6",
+    "task": "put apple into the bowl",
+    "room": "yam_tabletop",
+    "seed": 559185,
+    "light": 1.0,
+    "camera": {
+      "camera_fov_offset_deg": -4,
+      "camera_pitch_deg": 5,
+      "camera_roll_deg": -2,
+      "camera_y_cm": -0.5,
+      "camera_yaw_deg": -8,
+      "camera_z_cm": 1.0
+    },
+    "sim_seconds": 22.4,
+    "mode": "rule-based only",
+    "result": "success"
+  },
+  {
+    "file": "05-apple-bowl-tabletop-seed615756.mp4",
+    "run": "20261122-110629-d6d4",
+    "task": "put apple into the bowl",
+    "room": "yam_tabletop",
+    "seed": 615756,
+    "light": 1.05,
+    "camera": {
+      "camera_fov_offset_deg": 2,
+      "camera_pitch_deg": 4,
+      "camera_roll_deg": 3,
+      "camera_x_cm": 0.5,
+      "camera_y_cm": -0.5,
+      "camera_yaw_deg": -1,
+      "camera_z_cm": 1.5
+    },
+    "sim_seconds": 21.9,
+    "mode": "rule-based only",
+    "result": "success"
+  },
+  {
+    "file": "06-apple-bowl-evening-den-seed151570.mp4",
+    "run": "20261122-110658-94ad",
+    "task": "put apple into the bowl",
+    "room": "evening_den",
+    "seed": 151570,
+    "light": 0.95,
+    "camera": {
+      "camera_fov_offset_deg": 3,
+      "camera_pitch_deg": 5,
+      "camera_roll_deg": 3,
+      "camera_x_cm": 1.0,
+      "camera_y_cm": -1.5,
+      "camera_yaw_deg": -6,
+      "camera_z_cm": 0.5
+    },
+    "sim_seconds": 21.8,
+    "mode": "rule-based only",
+    "result": "success"
+  },
+  {
+    "file": "07-apple-bowl-evening-den-seed314175.mp4",
+    "run": "20261122-110747-199b",
+    "task": "put apple into the bowl",
+    "room": "evening_den",
+    "seed": 314175,
+    "light": 1.05,
+    "camera": {
+      "camera_fov_offset_deg": 2,
+      "camera_pitch_deg": 5,
+      "camera_roll_deg": 1,
+      "camera_x_cm": -2.0,
+      "camera_y_cm": 1.5,
+      "camera_yaw_deg": 5,
+      "camera_z_cm": -1.0
+    },
+    "sim_seconds": 22.0,
+    "mode": "rule-based only",
+    "result": "success"
+  },
+  {
+    "file": "08-banana-bowl-tabletop-seed730303.mp4",
+    "run": "20261122-110603-ce83",
+    "task": "put banana into the bowl",
+    "room": "yam_tabletop",
+    "seed": 730303,
+    "light": 0.95,
+    "camera": {
+      "camera_fov_offset_deg": 5,
+      "camera_pitch_deg": 1,
+      "camera_roll_deg": -3,
+      "camera_yaw_deg": 1,
+      "camera_z_cm": -0.5
+    },
+    "sim_seconds": 23.1,
+    "mode": "rule-based only",
+    "result": "success"
+  },
+  {
+    "file": "09-banana-bowl-tabletop-seed839611.mp4",
+    "run": "20261122-110657-e646",
+    "task": "put banana into the bowl",
+    "room": "yam_tabletop",
+    "seed": 839611,
+    "light": 0.85,
+    "camera": {
+      "camera_fov_offset_deg": -1,
+      "camera_pitch_deg": -4,
+      "camera_roll_deg": -4,
+      "camera_x_cm": 0.5,
+      "camera_y_cm": 0.5,
+      "camera_yaw_deg": -2,
+      "camera_z_cm": -2.0
+    },
+    "sim_seconds": 20.5,
+    "mode": "rule-based only",
+    "result": "success"
+  },
+  {
+    "file": "10-banana-bowl-evening-den-seed214168.mp4",
+    "run": "20261122-110630-5e05",
+    "task": "put banana into the bowl",
+    "room": "evening_den",
+    "seed": 214168,
+    "light": 1.0,
+    "camera": {
+      "camera_fov_offset_deg": -4,
+      "camera_pitch_deg": -7,
+      "camera_roll_deg": 1,
+      "camera_x_cm": -1.0,
+      "camera_yaw_deg": 2,
+      "camera_z_cm": -1.0
+    },
+    "sim_seconds": 20.8,
+    "mode": "rule-based only",
+    "result": "success"
+  }
+]
