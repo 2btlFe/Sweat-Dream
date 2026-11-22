@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sweet Dream: Clean Data, Better Dream</title>
+<title>Sweet Dream: Diverse Data for Custom Dream-1 Fine-Tuning</title>
 <meta name="description" content="Sweet Dream: collect clean robot data in simulation, fine-tune Dream-1 on it, and test the result.">
 <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -44,6 +44,7 @@
   .rollouts.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .rollouts.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .rollouts.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+  .gallery figure { display: flex; flex-direction: column; justify-content: flex-end; }
   .gallery figcaption { font-size: 13px; line-height: 1.3; }
   .gallery figcaption span { display: block; font-size: 12px; color: #7a7a7a; }
   .rollouts figure { margin: 0; text-align: center; }
@@ -64,7 +65,7 @@
 <section class="hero">
   <div class="container">
     <img class="logo" src="assets/icon.svg" alt="Sweet Dream icon: a sleeping cloud">
-    <h1 class="publication-title">Sweet Dream:<br>Clean Data for Better Dream&#8209;1 Fine&#8209;Tuning</h1>
+    <h1 class="publication-title">Sweet Dream:<br>Diverse Data for Custom Dream&#8209;1 Fine&#8209;Tuning</h1>
     <p class="note" style="margin-top: 14px">Built on Dream-1 and the Dream Labs API</p>
     <div class="link-blocks">
       <a class="button" href="https://github.com/2btlFe/Sweet-Dream">
@@ -83,9 +84,9 @@
 <section class="teaser">
   <div class="container">
     <div class="teaser-grid">
-      <video src="assets/videos/banana-tabletop-1.mp4" autoplay muted loop playsinline></video>
-      <video src="assets/videos/banana-evening-den.mp4" autoplay muted loop playsinline></video>
-      <video src="assets/videos/banana-tabletop-2.mp4" autoplay muted loop playsinline></video>
+      <video src="assets/videos/gallery/02-apple-bowl-sunny-apartment-seed228517.mp4" autoplay muted loop playsinline></video>
+      <video src="assets/videos/gallery/05-apple-bowl-evening-den-seed604381.mp4" autoplay muted loop playsinline></video>
+      <video src="assets/videos/gallery/08-apple-bowl-cottage-seed915264.mp4" autoplay muted loop playsinline></video>
     </div>
   </div>
 </section>
@@ -171,20 +172,21 @@
 
     <h3 class="title">Sample Rollout Videos</h3>
     <p>Rule-based episodes of "put the banana on the plate", workspace camera at 5 fps (the frames Dream-1 sees).</p>
-    <h4 class="title">Ten seeds, three tasks, two rooms</h4>
-    <p>One rule-based batch with <i>Vary per episode</i>: every episode draws its object layout, workspace camera
-      (position, angle, field of view), light and room from its own seed. 17 of its 18 episodes succeeded; ten are shown.</p>
+    <h4 class="title">Ten seeds, ten environments</h4>
+    <p>Each episode has its own seed and an environment set by hand: six rooms, light from 0.3× to 2×, five camera
+      viewpoints with tilt, pan, roll and field of view changes, a blurred camera, and a gray work surface. The
+      rule-based script finishes the task in all of them.</p>
     <div class="rollouts cols-5 gallery">
-      <figure><figcaption>Banana → plate<span>Evening den · seed 512759</span></figcaption><video src="assets/videos/gallery/01-banana-plate-evening-den-seed512759.mp4" autoplay muted loop playsinline></video></figure>
-      <figure><figcaption>Banana → plate<span>Tabletop · seed 675143</span></figcaption><video src="assets/videos/gallery/02-banana-plate-tabletop-seed675143.mp4" autoplay muted loop playsinline></video></figure>
-      <figure><figcaption>Banana → plate<span>Evening den · seed 146151</span></figcaption><video src="assets/videos/gallery/03-banana-plate-evening-den-seed146151.mp4" autoplay muted loop playsinline></video></figure>
-      <figure><figcaption>Apple → bowl<span>Tabletop · seed 559185</span></figcaption><video src="assets/videos/gallery/04-apple-bowl-tabletop-seed559185.mp4" autoplay muted loop playsinline></video></figure>
-      <figure><figcaption>Apple → bowl<span>Tabletop · seed 615756</span></figcaption><video src="assets/videos/gallery/05-apple-bowl-tabletop-seed615756.mp4" autoplay muted loop playsinline></video></figure>
-      <figure><figcaption>Apple → bowl<span>Evening den · seed 151570</span></figcaption><video src="assets/videos/gallery/06-apple-bowl-evening-den-seed151570.mp4" autoplay muted loop playsinline></video></figure>
-      <figure><figcaption>Apple → bowl<span>Evening den · seed 314175</span></figcaption><video src="assets/videos/gallery/07-apple-bowl-evening-den-seed314175.mp4" autoplay muted loop playsinline></video></figure>
-      <figure><figcaption>Banana → bowl<span>Tabletop · seed 730303</span></figcaption><video src="assets/videos/gallery/08-banana-bowl-tabletop-seed730303.mp4" autoplay muted loop playsinline></video></figure>
-      <figure><figcaption>Banana → bowl<span>Tabletop · seed 839611</span></figcaption><video src="assets/videos/gallery/09-banana-bowl-tabletop-seed839611.mp4" autoplay muted loop playsinline></video></figure>
-      <figure><figcaption>Banana → bowl<span>Evening den · seed 214168</span></figcaption><video src="assets/videos/gallery/10-banana-bowl-evening-den-seed214168.mp4" autoplay muted loop playsinline></video></figure>
+      <figure><figcaption>Banana → plate<span>Kitchen · seed 41093</span><span>light 1.6×, front view</span></figcaption><video src="assets/videos/gallery/01-banana-plate-kitchen-seed41093.mp4" autoplay muted loop playsinline></video></figure>
+      <figure><figcaption>Apple → bowl<span>Sunny apartment · seed 228517</span><span>light 2×, left diagonal</span></figcaption><video src="assets/videos/gallery/02-apple-bowl-sunny-apartment-seed228517.mp4" autoplay muted loop playsinline></video></figure>
+      <figure><figcaption>Banana → bowl<span>Cottage · seed 390442</span><span>light 0.5×, right diagonal</span></figcaption><video src="assets/videos/gallery/03-banana-bowl-cottage-seed390442.mp4" autoplay muted loop playsinline></video></figure>
+      <figure><figcaption>Banana → plate<span>Walnut study · seed 517006</span><span>light 0.4×, overhead, gray table</span></figcaption><video src="assets/videos/gallery/04-banana-plate-walnut-study-seed517006.mp4" autoplay muted loop playsinline></video></figure>
+      <figure><figcaption>Apple → bowl<span>Evening den · seed 604381</span><span>light 0.3×, FOV +15°</span></figcaption><video src="assets/videos/gallery/05-apple-bowl-evening-den-seed604381.mp4" autoplay muted loop playsinline></video></figure>
+      <figure><figcaption>Banana → bowl<span>YAM tabletop · seed 712950</span><span>light 1×, tilt -20°, pan +20°, gray table</span></figcaption><video src="assets/videos/gallery/06-banana-bowl-yam-tabletop-seed712950.mp4" autoplay muted loop playsinline></video></figure>
+      <figure><figcaption>Banana → plate<span>Kitchen · seed 803190</span><span>light 1×, roll -12°, blur 4px</span></figcaption><video src="assets/videos/gallery/07-banana-plate-kitchen-seed803190.mp4" autoplay muted loop playsinline></video></figure>
+      <figure><figcaption>Apple → bowl<span>Cottage · seed 915264</span><span>light 1.8×, overhead, roll +15°</span></figcaption><video src="assets/videos/gallery/08-apple-bowl-cottage-seed915264.mp4" autoplay muted loop playsinline></video></figure>
+      <figure><figcaption>Banana → bowl<span>Sunny apartment · seed 133771</span><span>light 0.7×, front view, FOV -15°, gray table</span></figcaption><video src="assets/videos/gallery/09-banana-bowl-sunny-apartment-seed133771.mp4" autoplay muted loop playsinline></video></figure>
+      <figure><figcaption>Banana → plate<span>Walnut study · seed 268840</span><span>light 1.4×, left diagonal, raised 8 cm</span></figcaption><video src="assets/videos/gallery/10-banana-plate-walnut-study-seed268840.mp4" autoplay muted loop playsinline></video></figure>
     </div>
     <h4 class="title">Two rooms, varied camera and light</h4>
     <div class="rollouts cols-4">
@@ -218,7 +220,7 @@
   <div class="container content">
     <h2 class="title">BibTeX</h2>
 <pre><code>@misc{sweetdream2026,
-  title        = {Sweet Dream: Clean Data for Better Dream-1 Fine-Tuning},
+  title        = {Sweet Dream: Diverse Data for Custom Dream-1 Fine-Tuning},
   author       = {{Sweet Dream contributors}},
   year         = {2026},
   howpublished = {\url{https://github.com/2btlFe/Sweet-Dream}}
