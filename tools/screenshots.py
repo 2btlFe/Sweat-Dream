@@ -81,7 +81,7 @@ def main():
         page.wait_for_selector("#runs tr[data-id]", timeout=20000)
         shot("03-collect", 3500)
 
-        # 4. Collect: a run's detail, with its video.
+        # 5. Collect: a run's detail, with its video (taken here, before the batch view, but numbered after it).
         run = DETAIL_RUN if page.locator(f'#runs tr[data-id="{DETAIL_RUN}"]').count() else None
         row = page.locator(f'#runs tr[data-id="{run}"]') if run else page.locator("#runs tr[data-id]").first
         row.scroll_into_view_if_needed()
@@ -90,14 +90,14 @@ def main():
         page.evaluate("() => { const d = document.getElementById('detail'); window.scrollTo(0, d.getBoundingClientRect().top + scrollY - 20); }")
         page.wait_for_timeout(500)
         box = page.locator("#detail").bounding_box()  # the run's detail only (the left column is empty there)
-        shot("04-collect-run", 2500, clip={"x": box["x"] - 12, "y": max(0, box["y"] - 12), "width": box["width"] + 24,
+        shot("05-collect-run", 2500, clip={"x": box["x"] - 12, "y": max(0, box["y"] - 12), "width": box["width"] + 24,
                                            "height": min(780, SIZE["height"] - max(0, box["y"] - 12))})
 
-        # 5. Collect: a batch, with its settings.
+        # 4. Collect: a batch, with its settings.
         page.evaluate("() => window.scrollTo(0, 0)")
         page.click("#modeBatch")
         page.evaluate("() => { const f = document.getElementById('batchForm'); window.scrollTo(0, f.getBoundingClientRect().top + scrollY - 160); }")
-        shot("05-collect-batch", 1200)
+        shot("04-collect-batch", 1200)
 
         # 6-7. Train: the saved datasets, then the training form and jobs.
         page.goto(base + "/train")

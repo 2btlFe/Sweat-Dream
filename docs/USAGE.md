@@ -62,7 +62,7 @@ Press **Run**. Each run is saved in `runs/`, and its recording (cameras, arm sta
 
 Switch to **Batch** and choose:
 
-![Batch settings and the run list](assets/screens/05-collect-batch.png)
+![Batch settings and the run list](assets/screens/04-collect-batch.png)
 
 - **Each episode**: Data collection, Rule-based only, Dream-1 only, or **Original** (the baseline: always the default
   scene and settings).
@@ -81,7 +81,7 @@ The page shows progress, successes and the camera of each running episode. **Sto
   run). The filter shows one batch at a time.
 - Click a run to see its video, why it passed or failed, and how it was set up.
 
-  <img src="assets/screens/04-collect-run.png" width="60%" alt="A run's detail">
+  <img src="assets/screens/05-collect-run.png" width="60%" alt="A run's detail">
 
 - Disagree with the result? Set it yourself with **Success / Failure / Invalid** (keys `1 / 2 / 3`; `0` gives it back
   to the rules). Your label always wins. `J / K` move to the next / previous run.

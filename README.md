@@ -26,15 +26,15 @@ two-arm robot:
 
 ## Screenshots
 
-| Sign in | Pick a section |
+| Start · sign in | Start · pick a section |
 | --- | --- |
 | ![Start page: sign in with the Dream API key](docs/assets/screens/01-start.png) | ![Sections: Collect, Train, Test](docs/assets/screens/02-sections.png) |
-| **1. Collect Custom Dataset**: run setup, model and camera view | **1. Collect**: a run's video, verdict and settings |
-| ![Collect page](docs/assets/screens/03-collect.png) | ![A run's detail](docs/assets/screens/04-collect-run.png) |
-| **2. Train Custom Model**: upload saved datasets | **2. Train**: pick steps and see the price |
-| ![Train page: datasets](docs/assets/screens/06-train.png) | ![Train page: training form](docs/assets/screens/07-train-model.png) |
-| **3. Test Custom Model**: run a fine-tune on its own | **1. Collect**: a batch with its settings and the runs |
-| ![Test page](docs/assets/screens/08-test.png) | ![Batch settings](docs/assets/screens/05-collect-batch.png) |
+| **1. Collect** · run setup, model and camera view | **1. Collect** · a batch with its settings and the runs |
+| ![Collect page](docs/assets/screens/03-collect.png) | ![Batch settings](docs/assets/screens/04-collect-batch.png) |
+| **1. Collect** · a run's video, verdict and settings | **2. Train** · upload saved datasets |
+| ![A run's detail](docs/assets/screens/05-collect-run.png) | ![Train page: datasets](docs/assets/screens/06-train.png) |
+| **2. Train** · pick the steps and see the price | **3. Test** · run a fine-tune on its own |
+| ![Train page: training form](docs/assets/screens/07-train-model.png) | ![Test page](docs/assets/screens/08-test.png) |
 
 ## Highlights
 
