@@ -24,7 +24,9 @@
   body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 Figtree, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
   main { max-width: 1440px; margin: 0 auto; padding: 36px clamp(16px, 4vw, 56px) 48px; }
   header { margin-bottom: 24px; }
-  header .back { display: inline-block; margin-bottom: 10px; font-size: 13px; color: var(--muted); text-decoration: none; }
+  header .topline { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  header .back { display: inline-block; font-size: 13px; color: var(--muted); text-decoration: none; }
+  header .account { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
   header .back:hover { color: var(--accent-ink); }
   h1 { font-size: clamp(32px, 4.5vw, 48px); line-height: 1.05; letter-spacing: -.023em; font-weight: 400; margin: 0; }
   h2 { font-size: 18px; letter-spacing: -.01em; font-weight: 500; margin: 0 0 16px; }
@@ -119,8 +121,6 @@
   details.log summary { font-size: 11px; color: var(--muted); cursor: pointer; margin-top: 10px; }
 
   /* API key, mode and task notes */
-  .keyrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: end; }
-  .keystate { font-size: 12px; margin: 6px 0 14px; color: var(--ok); }
   .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 14px; }
   /* error banner: every error the page shows, in one place */
   .errbar { border: 1px solid var(--danger); background: color-mix(in srgb, var(--danger) 10%, var(--panel)); border-radius: 10px;
@@ -145,7 +145,6 @@
   .robot-note.bad { color: var(--warn); }
   .robot-note a { color: var(--accent-ink); }
   .yam-only.off { opacity: .45; pointer-events: none; }
-  .keystate.none { color: var(--warn); }
   .toggle { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   .toggle button { border-radius: 0; border: 0; background: var(--well); color: var(--muted); font-weight: 500; padding: 7px 6px; line-height: 1.25; min-width: 0; overflow-wrap: anywhere; }
   .toggle button:hover:not(:disabled):not(.on) { background: #f4f1ec; border: 0; }
@@ -331,15 +330,16 @@
     .ood-grid { grid-template-columns: minmax(0, 1fr); }
     .grid3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
     .grid3 > :last-child { grid-column: 1 / -1; }
-    .keyrow { grid-template-columns: minmax(0, 1fr) auto; }
-    .keyrow #clearKey { grid-column: 2; }
   }
 </style>
 </head>
 <body>
 <main>
   <header>
-    <a class="back" href="/sections">← Sweet Dream · Sections</a>
+    <div class="topline">
+      <a class="back" href="/sections">← Sweet Dream · Sections</a>
+      <div class="account"><span>Signed in · key <b id="keyHint">…</b></span><button type="button" class="ghost small" id="signOut">Sign out</button></div>
+    </div>
     <h1>Collect Custom Dataset!</h1>
     <p class="sub">Set up a start scene, run Dream-1 once or in a batch, and label the runs with your own success rules.</p>
   </header>
@@ -360,12 +360,6 @@
   <section class="panel setup" aria-labelledby="setupTitle">
     <div class="setup-head"><h2 id="setupTitle">Run setup</h2>
       <button class="ghost small" id="defaults" title="Back to the default start: YAM tabletop, every scene setting at its default, nothing random, no custom layout (the seed is kept)">Default</button></div>
-    <form class="keyrow" id="keyForm" autocomplete="off">
-      <div><label for="apiKey">API key</label><input id="apiKey" type="password" placeholder="Paste your Dream API key" spellcheck="false"></div>
-      <button type="submit" id="useKey">Use key</button>
-      <button type="button" id="clearKey" class="ghost" hidden>Clear</button>
-    </form>
-    <div class="keystate" id="keyState"></div>
     <div class="grid2">
       <div><label for="robot">Robot</label><select id="robot" aria-describedby="robotNote"></select></div>
       <div><label for="room">Room</label><select id="room"></select></div>
@@ -1436,18 +1430,16 @@ $("task").addEventListener("input", checkTask);
 
 /* ---------- API key ---------- */
 
+/** The key comes from the sign-in page (/): it is shown here, never typed here. Signed out (or the server restarted,
+ *  which forgets the key): back to the sign-in page. */
 function showKey(key) {
-  $("keyState").textContent = key.source ? `✓ Using your key (…${key.hint}). Kept in memory only, not saved.` : "No key. Paste one to run.";
-  $("keyState").classList.toggle("none", !key.source);
-  $("clearKey").hidden = key.source !== "page";
+  if (!key.source) { location.replace("/"); return; }
+  $("keyHint").textContent = "…" + key.hint;
 }
-$("keyForm").onsubmit = async e => {
-  e.preventDefault();
-  if (!$("apiKey").value.trim()) return;
-  try { showKey(await api("/api/key", { key: $("apiKey").value })); $("apiKey").value = ""; clearError(); refresh(); }
-  catch (err) { showError(err); }
+$("signOut").onclick = async () => {
+  await api("/api/key", { key: "" }).catch(() => {});
+  location.href = "/";
 };
-$("clearKey").onclick = async () => { $("apiKey").value = ""; showKey(await api("/api/key", { key: "" })); refresh(); };
 
 /* ---------- batch ---------- */
 
@@ -1722,8 +1714,8 @@ function refreshBatchLive() {
 
 // Known errors in plain words: [pattern, title, hint, setup problem?]. Anything else shows its own message.
 const ERRORS = [
-  [/not a Dream API key/i, "That is not a Dream API key", "Paste the key from platform.dreamlabs.ai (it starts with dl_), then press Use key. The key in use did not change.", false],
-  [/UNAUTHORIZED|api key|401|403/i, "The Dream API rejected the key", "Paste a valid key and press Use key.", false],
+  [/not a Dream API key/i, "That is not a Dream API key", "Sign out (top right) and sign in again with the key from platform.dreamlabs.ai (it starts with dl_).", false],
+  [/UNAUTHORIZED|api key|401|403/i, "The Dream API rejected the key", "Sign out (top right) and sign in again with a valid key.", false],
   [/busy/i, "The simulator is busy", "A run, batch or preview is going. Wait for it to finish, then try again.", false],
   [/Initial arm pose overlaps/i, "The arms' start pose collides with the scene", "The joint angles put an arm into the table, an object or the other arm. Change them, or draw again / go back to the defaults.", true],
   [/Random arm pose rejected/i, "The random arm pose does not work", "Its wrist camera would not see the table. Draw again with a new seed, or untick random on the arm angles.", true],

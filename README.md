@@ -26,7 +26,8 @@ Open http://localhost:8000. The site has several pages:
   **Test the model!** (coming soon). **Sign out** clears the key.
 - **Collect Custom Dataset!** (`/collect`): runs, batches, labels and datasets, as follows.
 
-1. The API key from the sign-in is used; the box at the top can change it (**Use key**) or remove it (**Clear**).
+1. The API key from the sign-in is used (no key box here): the top right shows its last characters, and **Sign out**
+   clears it and goes back to the start page. Without a key (signed out, or the server restarted) the page goes there too.
 2. **Robot** and **Room**: the list offers the team's target robot, YAM (`simulator_settings.TARGET_ROBOTS`; add
    `"openyam"` there to offer it again). YAM (with the seed scenes and scene settings below) or OpenYAM (on the Dream Labs Sandbox
    table; needs [Node.js](https://nodejs.org) to fetch it, and a seed only shifts its objects by up to 2 cm). The other

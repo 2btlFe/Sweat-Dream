@@ -238,7 +238,7 @@ class Runner:
             if self.running():
                 raise RuntimeError("A run is already going.")
             if not has_api_key() and mode not in NO_KEY_MODES and not resume:
-                raise RuntimeError("Enter your API key first.")
+                raise RuntimeError("Sign in with your API key first (the start page).")
             self.last_start = dict(task=task, seconds=seconds, changes=changes, seeding=seeding, scene=scene,
                                    live=live, extra_env=extra_env, robot=robot, mode=mode, record=record, resume=resume,
                                    collection=collection)
@@ -672,7 +672,7 @@ class Batch:
         if self.running() or RUNNER.running():
             raise RuntimeError("A run is already going.")
         if not has_api_key() and mode not in NO_KEY_MODES:
-            raise RuntimeError("Enter your API key first.")
+            raise RuntimeError("Sign in with your API key first (the start page).")
         workers = max(1, min(MAX_WORKERS, int(workers), len(seeds)))
         self.stop_requested, self.next, self.active = False, 0, {}
         self.info = {"id": "b" + datetime.now().strftime("%Y%m%d-%H%M%S"), "tasks": tasks, "total": len(seeds),
