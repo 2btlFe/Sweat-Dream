@@ -442,13 +442,13 @@
     </details>
 
     <div id="batchForm" hidden>
-      <div class="grid3" style="margin-top: 12px">
+      <div class="grid2" style="margin-top: 12px">
         <div><label for="batchCount">Episodes</label><input id="batchCount" type="number" min="1" max="500" value="20"></div>
         <div><label for="batchSeconds">Seconds each</label><input id="batchSeconds" type="number" min="10" max="300" value="60"></div>
-        <div><label>Seeds</label>
-          <div class="toggle" role="group" aria-label="Seeds">
+        <!-- Data collection always draws its episodes from the seed above (train seeds): no choice to show. -->
+        <div hidden><label>Seeds</label>
+          <div class="toggle" role="group" aria-label="Seeds" style="grid-template-columns: 1fr">
             <button id="splitTrain" class="on" aria-pressed="true" title="One seed is the whole batch: it gives every episode its own layout, and the same seed gives the same episodes again">From the seed</button>
-            <button id="splitEval" aria-pressed="false" title="The 50 fixed evaluation seeds">Eval set (50)</button>
           </div>
         </div>
       </div>
@@ -1534,7 +1534,7 @@ $("modeBatch").onclick = () => setMode("batch");
 
 function setSplit(next) {
   split = next;
-  for (const [id, l] of [["splitTrain", "train"], ["splitEval", "eval"]]) {
+  for (const [id, l] of [["splitTrain", "train"]]) {  // data collection uses train seeds only (no eval scenes)
     $(id).classList.toggle("on", split === l); $(id).setAttribute("aria-pressed", split === l);
   }
   $("batchCount").max = split === "eval" ? 50 : 500;
@@ -1558,14 +1558,13 @@ for (const [id, m] of BATCH_MODES) $(id).onclick = () => {
   batchMode = m;
   for (const [other, om] of BATCH_MODES) { $(other).classList.toggle("on", om === m); $(other).setAttribute("aria-pressed", om === m); }
   // Original uses no seed and no scene settings: the seed choice does not apply.
-  $("splitTrain").disabled = $("splitEval").disabled = m === "original";
+  $("splitTrain").disabled = m === "original";
   $("batchHow").hidden = m === "original"; $("batchHowOriginal").hidden = m !== "original";
   $("varyRow").hidden = m === "original";
   estimate();
   refresh();  // a rule-based batch needs no key: the Start button follows the mode
 };
 $("splitTrain").onclick = () => setSplit("train");
-$("splitEval").onclick = () => setSplit("eval");
 
 const itemName = n => n === "any" ? "any object" : (ITEMS[n]?.label || n);
 /** What a judge spec checks, in words (older specs: {pairs} or {object, target} are pick & place). */

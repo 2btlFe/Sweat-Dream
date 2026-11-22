@@ -447,9 +447,17 @@
         <div><label>Seeds</label>
           <div class="toggle" role="group" aria-label="Seeds">
             <button id="splitTrain" class="on" aria-pressed="true" title="One seed is the whole batch: it gives every episode its own layout, and the same seed gives the same episodes again">From the seed</button>
-            <button id="splitEval" aria-pressed="false" title="The 50 fixed evaluation seeds">Eval set (50)</button>
+            <button id="splitTest" aria-pressed="false" title="A test set (testsets/…/testset.json): exactly its starts, task, judge and time limit, so models are compared on the same scenes">Test set</button>
           </div>
         </div>
+      </div>
+      <div id="testsetRow" hidden style="margin-top: 12px"><label for="testsetPick">Test set</label>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+          <select id="testsetPick" style="flex: 1 1 220px; min-width: 0"></select>
+          <button id="testsetUpload" type="button" title="Add a testset.json (e.g. from Hugging Face) to testsets/uploaded/">Upload testset.json…</button>
+          <input id="testsetFile" type="file" accept=".json,application/json" hidden>
+        </div>
+        <p class="muted small" id="testsetInfo" style="margin: 4px 0 0"></p>
       </div>
       <div class="grid2" style="margin: 12px 0 0; grid-template-columns: minmax(0, 2fr) minmax(90px, 1fr)">
         <div><label>Each episode</label>
@@ -468,7 +476,7 @@
       <div id="batchCollectSlot"></div>
       <p class="muted small" style="margin: 8px 0 12px" id="batchHow">The seed is the whole batch: it gives each episode its own layout (the same episodes again with the same seed; other seeds share none). The scene settings below apply to every episode; the ones marked <em>random</em> are drawn from each episode's seed. Runs in the background.</p>
       <p class="muted small" style="margin: 8px 0 12px" id="batchHowOriginal" hidden>Original: the seed and the environment are fixed: every episode starts from the simulator's default scene (the same object layout) with default scene settings; the seed and the scene settings below are not used. Dream-1 runs with the failure monitor and the recovery script, as in Data collection (its settings above).</p>
-      <p class="small" style="margin: 0 0 4px">Every episode runs <b>the task above</b> (<span id="batchTaskName"></span>).</p>
+      <p class="small" id="batchTaskNote" style="margin: 0 0 4px">Every episode runs <b>the task above</b> (<span id="batchTaskName"></span>).</p>
       <div id="batchTaskList" hidden>
       <label>Tasks <span class="muted">(taken in turn)</span></label>
       <div class="items" id="batchTasks"></div>
@@ -958,7 +966,7 @@ async function renderDetail() {
   const v = verdict(run);
   showDetailMedia(run);
   const extra = [run.batch_id ? batchName(run.batch_id) : "Single run",
-                 run.layout === "custom" ? "custom layout" : run.seed != null ? `seed ${run.seed}${run.split === "eval" ? " (eval)" : ""}${run.batch_seed != null ? ` (batch seed ${run.batch_seed})` : ""}` : run.layout === "default" ? "default scene" : "",
+                 run.layout === "custom" ? "custom layout" : run.seed != null ? `seed ${run.seed}${run.split === "eval" ? " (eval)" : ""}${run.testset ? ` (test set ${run.testset})` : run.batch_seed != null ? ` (batch seed ${run.batch_seed})` : ""}` : run.layout === "default" ? "default scene" : "",
                  run.robot && run.robot !== "yam" ? (simCatalog?.robots[run.robot] || run.robot) : "",
                  run.room && run.room !== "yam_tabletop" ? (simCatalog?.rooms[run.room] || run.room) : "",
                  run.ood_random?.length ? `random: ${run.ood_random.join(", ")}` : "",
@@ -1038,7 +1046,7 @@ function drawChart(v) {
 
 const MODE_TEXT = { collect: "data collection", script: "rule-based only", test: "test", human: "human only", resumed: "resumed", plain: "Dream-1 only", assist: "Dream-1 + script + human" };
 const startText = run => run.layout === "custom" ? "custom layout" : run.layout === "sandbox" ? "Sandbox table"
-  : run.seed != null ? `seed ${run.seed}${run.split === "eval" ? " (eval)" : ""}` : "default scene";
+  : run.seed != null ? `seed ${run.seed}${run.split === "eval" ? " (eval)" : ""}${run.testset ? ` · test set ${run.testset}` : ""}` : "default scene";
 /** One line under the task in the list: mode · start · robot / room. */
 function settingsBrief(run) {
   return [MODE_TEXT[run.mode] || run.mode, startText(run),
@@ -1529,13 +1537,55 @@ $("modeBatch").onclick = () => setMode("batch");
 
 function setSplit(next) {
   split = next;
-  for (const [id, l] of [["splitTrain", "train"], ["splitEval", "eval"]]) {
+  for (const [id, l] of [["splitTrain", "train"], ["splitTest", "testset"]]) {
     $(id).classList.toggle("on", split === l); $(id).setAttribute("aria-pressed", split === l);
   }
-  $("batchCount").max = split === "eval" ? 50 : 500;
-  if (split === "eval" && Number($("batchCount").value) > 50) $("batchCount").value = 50;
+  const onSet = split === "testset";
+  $("testsetRow").hidden = !onSet;
+  // A test set fixes the episodes, the time limit, the task and the scene: its own, so every model meets the same starts.
+  $("batchCount").disabled = $("batchSeconds").disabled = onSet;
+  $("varyRow").hidden = onSet || batchMode === "original";
+  $("batchHow").hidden = onSet || batchMode === "original";
+  $("batchTaskNote").hidden = onSet;  // a test set runs its own task
+  if (onSet) { loadTestsets(); showTestset(); }
   estimate();
 }
+
+/* ---------- test sets (testsets/…/testset.json) ---------- */
+
+let testsets = [];
+const currentTestset = () => testsets.find(t => t.id === $("testsetPick").value && !t.error);
+async function loadTestsets(pick) {
+  const before = pick || $("testsetPick").value;
+  try { testsets = (await api("/api/testsets")).testsets || []; } catch { testsets = []; }
+  const usable = testsets.filter(t => !t.error);
+  $("testsetPick").innerHTML = usable.length
+    ? usable.map(t => `<option value="${esc(t.id)}">${esc(t.id.replace(/\//g, " · "))} (${t.count})</option>`).join("")
+    : `<option value="">No test sets in testsets/ yet</option>`;
+  if (usable.some(t => t.id === before)) $("testsetPick").value = before;
+  showTestset();
+}
+function showTestset() {
+  const t = currentTestset();
+  if (!t) { $("testsetInfo").textContent = "Put a testset.json under testsets/ or upload one."; estimate(); return; }
+  $("batchCount").value = t.count; $("batchSeconds").value = t.seconds;
+  $("testsetInfo").textContent = `${t.count} starts · “${t.task}” · judged: ${specText(t.judge)} · ${t.seconds} s each · `
+    + `${t.settings ? "its own scene settings" : "default scene settings"} · the Task above and the scene settings below are not used`;
+  estimate();
+}
+$("testsetPick").onchange = showTestset;
+$("testsetUpload").onclick = () => $("testsetFile").click();
+$("testsetFile").onchange = async () => {
+  const file = $("testsetFile").files[0];
+  $("testsetFile").value = "";
+  if (!file) return;
+  try {
+    const testset = JSON.parse(await file.text());
+    const reply = await api("/api/testsets", { testset, filename: file.name });
+    await loadTestsets(reply.id);
+    notify(`Added the test set ${reply.id}.`);
+  } catch (err) { showError(err); }
+};
 let batchMode = "plain";  // the Test page runs the model alone
 let varyScene = false;
 /** Vary per episode (camera, light, room from each episode's seed) or the same settings for every episode. Original
@@ -1553,14 +1603,14 @@ for (const [id, m] of BATCH_MODES) $(id).onclick = () => {
   batchMode = m;
   for (const [other, om] of BATCH_MODES) { $(other).classList.toggle("on", om === m); $(other).setAttribute("aria-pressed", om === m); }
   // Original uses no seed and no scene settings: the seed choice does not apply.
-  $("splitTrain").disabled = $("splitEval").disabled = m === "original";
-  $("batchHow").hidden = m === "original"; $("batchHowOriginal").hidden = m !== "original";
-  $("varyRow").hidden = m === "original";
+  $("splitTrain").disabled = $("splitTest").disabled = m === "original";
+  $("batchHow").hidden = m === "original" || split === "testset"; $("batchHowOriginal").hidden = m !== "original";
+  $("varyRow").hidden = m === "original" || split === "testset";
   estimate();
   refresh();  // a rule-based batch needs no key: the Start button follows the mode
 };
 $("splitTrain").onclick = () => setSplit("train");
-$("splitEval").onclick = () => setSplit("eval");
+$("splitTest").onclick = () => setSplit("testset");
 
 const itemName = n => n === "any" ? "any object" : (ITEMS[n]?.label || n);
 /** What a judge spec checks, in words (older specs: {pairs} or {object, target} are pick & place). */
@@ -1684,7 +1734,7 @@ function estimate() {
   const each = batchMode === "script" ? secs + 10 : secs + 20;
   const minutes = Math.round(Math.ceil(count / workers) * each / 60);
   const seeds = batchMode === "original" ? "original: fixed default scene and settings, with the recovery script"
-    : split === "eval" ? `eval seeds 1-${Math.min(count, 50)}` : `batch seed ${$("seed")?.value || "?"} (${count} different layouts, the same again with this seed)`;
+    : split === "testset" ? `test set ${currentTestset()?.id || "(none picked)"}` : `batch seed ${$("seed")?.value || "?"} (${count} different layouts, the same again with this seed)`;
   const vary = varyScene && batchMode !== "original" ? " · camera, light and room vary" : "";
   $("batchEstimate").textContent = count && secs ? `${count} episodes · ${workers} at once · ${seeds}${vary} · about ${minutes} min · ${batchTasks.size} task${batchTasks.size > 1 ? "s" : ""}` : "";
   return minutes;
@@ -1698,19 +1748,23 @@ $("startBatch").onclick = async () => {
   if (ood === null) return;
   const count = Number($("batchCount").value);
   // Every episode runs the task set above (its words, and its goal scene when it has one).
-  if (goalSpec && !goalRelational()) { notify("The task's goal scene has a fixed table spot, which only fits one seed: for batches, tie every object to an item (in the bowl, beside the plate, ...)."); return; }
+  const testset = split === "testset" ? currentTestset() : null;
+  if (split === "testset" && !testset) { notify("Pick a test set (or upload a testset.json)."); return; }
+  if (!testset && goalSpec && !goalRelational()) { notify("The task's goal scene has a fixed table spot, which only fits one seed: for batches, tie every object to an item (in the bowl, beside the plate, ...)."); return; }
   const how = batchMode === "original" ? " as the original (the default scene and settings every episode, Dream-1 with the recovery script)"
     : batchMode === "script" ? " rule-based (the script alone, no Dream-1 use)" : "";
   const use = batchMode === "script" ? "" : " of Dream-1 use";
-  if (!(await ask(`Run ${count} episodes${how} in the background (about ${estimate()} min${use})?`, "Start batch"))) return;
+  const on = testset ? ` on the test set ${testset.id} (“${testset.task}”)` : "";
+  if (!(await ask(`Run ${count} episodes${how}${on} in the background (about ${estimate()} min${use})?`, "Start batch"))) return;
   try {
-    const tasks = [{ prompt: $("task").value.trim(), ...(goalSpec ? { judge: goalSpec } : {}) }];
+    const tasks = testset ? [{ prompt: testset.task, judge: testset.judge }]
+      : [{ prompt: $("task").value.trim(), ...(goalSpec ? { judge: goalSpec } : {}) }];
     const { seed, ood_random } = seeding();
-    await api("/api/batch", { tasks, count, seconds: $("batchSeconds").value, split, seed, ood, mode: batchMode,
+    await api("/api/batch", { tasks, count, seconds: $("batchSeconds").value, split, seed, ood, mode: batchMode, testset: testset?.id,
                               vary_scene: varyScene && batchMode !== "original",
                               workers: Number($("batchWorkers").value) || 1, collection: collectionSettings(),
                               ood_random: isOpenYAM() ? [] : ood_random });
-    if (split !== "eval" && batchMode !== "original") advanceSeed(1);  // the seed was the whole batch: the next batch gets the next one
+    if (split === "train" && batchMode !== "original") advanceSeed(1);  // the seed was the whole batch: the next batch gets the next one
     followBatch = true;
     refresh();
   } catch (err) { showError(err); }
@@ -1744,7 +1798,7 @@ function showBatch(b) {
   const now = b.active?.length ? b.active : (b.current ? [b.current] : []);
   $("batchNow").textContent = now.length ? `Now${b.workers > 1 ? ` (${now.length} at once)` : ""}: ` + now.map(e => `#${e.index} ${e.task} (${e.seed != null ? `seed ${e.seed}` : "default scene"})`).join(" · ")
     : b.original ? `Original: the default scene and settings every episode (fixed), Dream-1 with the recovery script · ${b.seconds} s each`
-    : `${b.split === "eval" ? "Eval seeds" : `Batch seed ${b.batch_seed ?? b.seed}`}${b.ood_random?.length ? ` · random: ${b.ood_random.join(", ")}` : ""} · ${b.seconds} s each · labeled with the rules as at the start`;
+    : `${b.testset ? `Test set ${b.testset.id}` : b.split === "eval" ? "Eval seeds" : `Batch seed ${b.batch_seed ?? b.seed}`}${b.ood_random?.length ? ` · random: ${b.ood_random.join(", ")}` : ""} · ${b.seconds} s each · labeled with the rules as at the start`;
   $("batchEnd").textContent = (b.running ? "" : b.stopped_reason || "Finished.")
     + (b.capacity_retries ? ` Dream-1 was at capacity ${b.capacity_retries} time${b.capacity_retries > 1 ? "s" : ""}: those episodes were tried again.` : "");
   $("batchEnd").classList.toggle("bad", !b.running && !!b.stopped_reason && b.stopped_reason !== "Stopped by you.");
