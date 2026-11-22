@@ -775,7 +775,7 @@ def resume_options(args):
 
 def main():
     parser = argparse.ArgumentParser(description="Run one Dream-1 task in the simulator")
-    parser.add_argument("task", nargs="?", default="put apple into the bowl")
+    parser.add_argument("task", nargs="?", default="Put the apple into the bowl")
     parser.add_argument("--seconds", type=float, default=60)
     parser.add_argument("--ood", type=json.loads, default={}, help="Scene settings (ood.py) as a JSON object")
     parser.add_argument("--preview", type=Path, help="Render the initial camera view to a JPEG and exit")
