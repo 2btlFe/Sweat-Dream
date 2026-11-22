@@ -73,6 +73,8 @@ own fine-tuned model, on the YAM two-arm robot in a MuJoCo scene.
 | ![Start: sign in](docs/assets/screens/01-start.png) | ![Collect: a batch](docs/assets/screens/04-collect-batch.png) |
 | **Collect**: A run, with its video, verdict and settings | **Train**: Pick the dataset, steps, data mix and learning rate, and see the price |
 | ![Collect: a run](docs/assets/screens/05-collect-run.png) | ![Train: training form](docs/assets/screens/07-train-model.png) |
+| **Sections**: Choose a workflow | **3. Test**: Review a recorded evaluation |
+| ![Sections](docs/assets/screens/02-sections.png) | ![Test run list and recording](docs/assets/screens/09-test-runs.png) |
 
 ## Highlights
 
