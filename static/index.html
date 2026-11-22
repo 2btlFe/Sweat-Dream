@@ -367,18 +367,22 @@
     .grid3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
     .grid3 > :last-child { grid-column: 1 / -1; }
   }
-  .camera-settings {
-    display: grid; grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
-    gap: 18px; align-items: start; margin-bottom: 18px;
-  }
-  .camera-settings .ood-grid {
-    max-height: clamp(180px, 24vw, 380px); overflow-y: auto;
-    scrollbar-gutter: stable; padding: 4px; margin-bottom: 0;
-  }
+  .collection-console { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 18px; align-items: start; margin-bottom: 24px; }
+  #wizard { min-width: 0; }
+  #wizard > section { max-height: 54dvh; overflow: auto; scrollbar-gutter: stable; padding: 2px; }
   @media (max-width: 760px) {
-    .camera-settings { grid-template-columns: minmax(0, 1fr); gap: 10px; }
-    .camera-settings .ood-grid { max-height: 32dvh; }
+    .collection-console { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    #wizard > section { max-height: 38dvh; }
+    .collection-console .monitor .view { max-height: 24dvh; }
   }
+  #stageNav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  #stageNav button { background: var(--panel); color: var(--text); border: 1px solid var(--line); }
+  #stageNav [aria-current="step"] { background: var(--accent-soft); border-color: var(--accent-ink); }
+  #wizard .panel + .panel { margin-top: 12px; }
+  #wizard dl { display: grid; grid-template-columns: minmax(7rem, 1fr) 3fr; gap: 6px 14px; }
+  #wizard dd { margin: 0; overflow-wrap: anywhere; }
+  .workspace:has(> .col:empty) { grid-template-columns: 1fr; }
+  .workspace > .col:empty { display: none; }
 </style>
 </head>
 <body>
@@ -409,7 +413,7 @@
     <details id="errMore"><summary>Details</summary><pre id="errRaw"></pre></details>
   </div>
 
-  <div class="camera-settings">
+  <div class="collection-console">
   <section class="panel monitor" aria-labelledby="viewTitle">
     <div class="monitor-header">
       <h2 id="viewTitle">Camera feeds</h2>
@@ -468,6 +472,19 @@
     <p class="muted" id="statusMore"></p>
     <details class="log" id="logBox" hidden><summary>Log</summary><pre id="log"></pre></details>
   </section>
+  <section id="wizard" aria-label="Collection setup">
+    <nav id="stageNav" aria-label="Setup steps"></nav>
+    <section id="taskStage"></section>
+    <section id="sceneStage" hidden></section>
+    <section id="optionsStage" hidden></section>
+    <section id="reviewStage" hidden>
+      <div class="panel"><h2>Review your run</h2><dl id="reviewList"></dl>
+      <details><summary>Detailed settings</summary><dl id="reviewDetails"></dl></details>
+      <div id="launchActions" class="actions"></div></div>
+    </section>
+    <div class="actions"><button class="ghost" id="previousStage">Back</button><button id="nextStage">Next</button></div>
+  </section>
+
   <section class="panel ood-panel yam-only" aria-label="Camera, robot &amp; environment settings">
     <details class="ood" open>
       <summary>Camera, robot &amp; environment settings</summary>
@@ -2576,6 +2593,87 @@ $("resumeBtn").onclick = async () => {
 
 $("ood").addEventListener("input", schedulePreview);
 $("ood").addEventListener("reset", schedulePreview);
+
+// Move the existing controls so previews, validation and launch handlers share one state.
+const stages = ["taskStage", "sceneStage", "optionsStage", "reviewStage"].map($);
+const stageNames = ["Task & robot", "Scene", "Run settings", "Review"];
+const setupPanel = document.querySelector(".panel.setup");
+const runOptions = document.createElement("div");
+runOptions.className = "panel";
+const modeToggle = setupPanel.querySelector(".toggle.mode");
+while (modeToggle.nextSibling) runOptions.append(modeToggle.nextSibling);
+runOptions.prepend(modeToggle);
+stages[0].append($("modelBar"), setupPanel, $("rulesPanel").closest(".panel"));
+stages[1].append(document.querySelector(".ood-panel"), $("layoutPanel").closest(".panel"));
+stages[2].append(runOptions);
+$("launchActions").append($("run"), $("startBatch"), $("reset"), $("stop"), $("stopBatch"));
+document.querySelectorAll(".workspace > .col").forEach(col => { if (!col.childElementCount) col.remove(); });
+document.querySelector(".workspace").style.gridTemplateColumns = "minmax(0, 1fr)";
+
+function reviewRow(list, name, value) {
+  const term = document.createElement("dt"), description = document.createElement("dd");
+  term.textContent = name;
+  description.textContent = value ?? "—";
+  list.append(term, description);
+}
+function renderReview() {
+  const list = $("reviewList"), details = $("reviewDetails");
+  list.replaceChildren(); details.replaceChildren();
+  const batch = mode === "batch", original = batch && batchMode === "original";
+  const choice = id => $(id).selectedOptions[0]?.textContent;
+  const row = (name, value) => reviewRow(list, name, value);
+  row("Task", $("task").value);
+  row("Success criteria", $("taskJudged").textContent);
+  row("Model", choice("model"));
+  row("Robot", choice("robot"));
+  row("Room", original ? "Default scene" : choice("room"));
+  row("Run mode", batch ? $("batchForm").querySelector('[aria-label="Batch mode"] [aria-pressed="true"]').textContent :
+    document.querySelector("input[name=runMode]:checked + span").firstChild.textContent);
+  row("Episodes", batch ? $("batchCount").value : "1");
+  row("Time limit", (batch ? $("batchSeconds").value : $("seconds").value) + " s");
+  row("Seed", original ? "Fixed default" : batch && split === "eval" ? "Evaluation set" : $("seed")?.value || "Default");
+  if (batch) {
+    row("Parallel episodes", $("batchWorkers").value);
+    row("Scene per episode", original ? "Fixed default" : varyScene ? "Vary per episode" : "Same settings");
+  } else row("Record", $("record").checked ? "On" : "Off");
+  function fields(prefix, value) {
+    if (value && typeof value === "object") {
+      for (const [key, item] of Object.entries(value)) fields(prefix ? prefix + " · " + key.replaceAll("_", " ") : key.replaceAll("_", " "), item);
+    } else reviewRow(details, prefix, value);
+  }
+  if (!original && !isOpenYAM()) {
+    fields("", readOOD(false));
+    row("Randomized settings", seeding().ood_random?.join(", ") || "None");
+    if (!batch && customOn()) fields("Custom layout", sceneForRun());
+  }
+  if (!$("collectBox").hidden) fields("Collection", collectionSettings());
+  fields("Success rules", goalSpec || rules);
+  $("run").hidden = batch; $("startBatch").hidden = !batch;
+}
+let stageIndex = 0;
+function showStage(index, focus = true) {
+  stageIndex = index;
+  if (index === 3) renderReview();
+  stages.forEach((stage, i) => {
+    stage.hidden = i !== index;
+    const button = $("stageNav").children[i];
+    if (i === index) button.setAttribute("aria-current", "step");
+    else button.removeAttribute("aria-current");
+  });
+  $("previousStage").hidden = index === 0;
+  $("nextStage").hidden = index === 3;
+  $("nextStage").textContent = index === 2 ? "Review settings" : "Next";
+  if (focus) $("stageNav").children[index].focus();
+}
+stageNames.forEach((name, i) => {
+  const button = document.createElement("button");
+  button.textContent = (i + 1) + ". " + name;
+  button.onclick = () => showStage(i);
+  $("stageNav").append(button);
+});
+$("previousStage").onclick = () => showStage(stageIndex - 1);
+$("nextStage").onclick = () => showStage(stageIndex + 1);
+showStage(0, false);
 
 (async () => {
   try { rules = await api("/api/rules"); } catch {}
