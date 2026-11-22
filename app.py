@@ -1100,6 +1100,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(PAGE.with_name("icon.svg").read_bytes(), "image/svg+xml")
         if path in ("/ood.js", "/seed.js"):
             return self.send(PAGE.with_name(path[1:]).read_bytes(), "text/javascript; charset=utf-8")
+        if path in ("/assets/collect-demo.png", "/assets/test-third-person.png"):
+            return self.send((HERE / "static" / path.lstrip("/")).read_bytes(), "image/png")
         if path == "/api/ood":
             return self.send_json(ood.GROUPS)
         if path == "/api/status":
