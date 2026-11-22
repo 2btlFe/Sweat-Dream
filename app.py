@@ -943,6 +943,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(PAGE.with_name(PAGES[path]).read_bytes(), "text/html; charset=utf-8")
         if path == "/theme.css":
             return self.send(PAGE.with_name("theme.css").read_bytes(), "text/css; charset=utf-8")
+        if path in ("/icon.svg", "/favicon.svg"):  # Sweet Dream's icon: a sleepy cloud eating honey
+            return self.send(PAGE.with_name("icon.svg").read_bytes(), "image/svg+xml")
         if path in ("/ood.js", "/seed.js"):
             return self.send(PAGE.with_name(path[1:]).read_bytes(), "text/javascript; charset=utf-8")
         if path == "/api/ood":

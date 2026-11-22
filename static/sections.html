@@ -8,10 +8,13 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/theme.css">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
 <style>
   .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
          max-width: 1200px; margin: 0 auto; padding: 18px clamp(16px, 3vw, 40px); border-bottom: 1px solid var(--line-soft); }
-  .top .name { font-size: 20px; font-weight: 500; letter-spacing: -0.01em; text-decoration: none; color: var(--ink); }
+  .top .name { font-size: 20px; font-weight: 500; letter-spacing: -0.01em; text-decoration: none; color: var(--ink);
+               display: inline-flex; align-items: center; gap: 8px; }
+  .top .name .logo { width: 34px; height: 34px; }
   .account { display: flex; align-items: center; gap: 12px; font-size: 15px; }
   main { max-width: 1200px; margin: 0 auto; padding: 40px clamp(16px, 3vw, 40px) 72px; }
   .intro { margin: 24px 0 40px; max-width: 760px; }
@@ -36,7 +39,7 @@
 </head>
 <body>
 <header class="top">
-  <a class="name" href="/sections">Sweet <span class="mark">Dream</span></a>
+  <a class="name" href="/sections"><img class="logo" src="/icon.svg" alt="">Sweet <span class="mark">Dream</span></a>
   <div class="account">
     <span class="muted">Key <b id="keyHint">…</b></span>
     <button type="button" class="outline" id="signOut">Sign out</button>
