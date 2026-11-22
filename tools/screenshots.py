@@ -30,7 +30,7 @@ SIZE = {"width": 1280, "height": 800}
 # A run with a recording to show in the run detail (a success in a hand-set scene); the newest success otherwise.
 DETAIL_RUN = os.environ.get("SHOT_RUN", "20261122-111638-9099")
 
-FIX = r"""s => s.replace(/byeongcheol\.lee/gi, "your-account").replace(/…[A-Za-z0-9_-]{4}\b/g, "…abcd")
+FIX = r"""s => s.replace(/(?:eunbin|byeongcheol)\.lee/gi, "your-account").replace(/…[A-Za-z0-9_-]{4}\b/g, "…abcd")
                 .replace(/dream-1-ft:[0-9a-f]{8}-/g, "dream-1-ft:xxxxxxxx-")"""
 # Text the page writes later (the key hint arrives after the page loads) is masked as it appears, not only before a shot.
 KEEP_MASKED = """(() => {
@@ -47,7 +47,7 @@ KEEP_MASKED = """(() => {
 })()""" % FIX
 
 MASK = """() => {
-  const fix = s => s.replace(/byeongcheol\\.lee/gi, "your-account").replace(/…[A-Za-z0-9_-]{4}\\b/g, "…abcd")
+  const fix = s => s.replace(/(?:eunbin|byeongcheol)\\.lee/gi, "your-account").replace(/…[A-Za-z0-9_-]{4}\\b/g, "…abcd")
                     .replace(/dream-1-ft:[0-9a-f]{8}-/g, "dream-1-ft:xxxxxxxx-");
   const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   for (let n; (n = w.nextNode());) n.nodeValue = fix(n.nodeValue);
@@ -70,7 +70,7 @@ def main():
     base = f"http://127.0.0.1:{PORT}"
 
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        browser = p.chromium.launch(channel=os.environ.get("SHOT_BROWSER_CHANNEL"))
         page = browser.new_page(viewport=SIZE, device_scale_factor=1)
         page.add_init_script(KEEP_MASKED)
 
@@ -91,25 +91,25 @@ def main():
 
         # 2. Sections.
         page.goto(base + "/sections")
+        page.wait_for_function("Array.from(document.querySelectorAll('.card-media img')).every(img => img.naturalWidth > 0)")
         shot("02-sections")
 
         # 3. Collect: run setup and the camera view.
         page.goto(base + "/collect")
-        page.wait_for_selector("#runs tr[data-id]", timeout=20000)
+        page.wait_for_selector("#runs .run-open", timeout=20000)
         shot("03-collect", 3500)
 
         # 5. Collect: a run's detail, with its video (taken here, before the batch view, but numbered after it).
-        run = DETAIL_RUN if page.locator(f'#runs tr[data-id="{DETAIL_RUN}"]').count() else None
-        row = page.locator(f'#runs tr[data-id="{run}"]') if run else page.locator("#runs tr[data-id]").first
+        run = DETAIL_RUN if page.locator(f'#runs button[data-run="{DETAIL_RUN}"]').count() else None
+        row = page.locator(f'#runs button[data-run="{run}"]') if run else page.locator("#runs .run-open").first
         row.scroll_into_view_if_needed()
         row.click()
         page.wait_for_timeout(1500)
         page.evaluate("() => { const d = document.getElementById('detail'); window.scrollTo(0, d.getBoundingClientRect().top + scrollY - 20); }")
         page.wait_for_timeout(500)
-        box = page.locator("#detail").bounding_box()  # the run's detail only (the left column is empty there)
-        shot("05-collect-run", 2500, clip={"x": box["x"] - 12, "y": max(0, box["y"] - 12), "width": box["width"] + 24,
-                                           "height": min(780, SIZE["height"] - max(0, box["y"] - 12))})
-
+        page.locator(".runs-browser").scroll_into_view_if_needed()
+        page.evaluate("window.scrollTo(0, document.querySelector('.runs-browser').getBoundingClientRect().top + scrollY - 12)")
+        shot("05-collect-run", 500)
         # 4. Collect: a batch, with its settings.
         # The batch settings are in the setup's third step, Run settings: two steps on with the arrow.
         page.evaluate("() => window.scrollTo(0, 0)")
@@ -134,6 +134,10 @@ def main():
         page.goto(base + "/test")
         shot("08-test", 3500)
 
+        page.wait_for_selector("#runs .run-open")
+        page.locator("#runs .run-open").first.click()
+        page.evaluate("window.scrollTo(0, document.querySelector('.runs-browser').getBoundingClientRect().top + scrollY - 12)")
+        shot("09-test-runs", 800)
         browser.close()
     server.shutdown()
 
