@@ -82,6 +82,16 @@
   .screens.four figcaption { font-size: 12px; }
   .gif-soon { aspect-ratio: 16 / 9; display: grid; place-content: center; text-align: center; border: 1.5px dashed #d5d0c4; border-radius: 4px; color: #635f53; font-weight: 600; }
   .gif-soon small { font-weight: 400; }
+  .vs { position: relative; }
+  .vs video { border: 1px solid var(--rule); border-radius: var(--radius); object-fit: cover; }
+  .vs-tag { position: absolute; top: 6px; padding: 1px 7px; border-radius: 2px; font-size: 11px; font-weight: 650; line-height: 1.5; }
+  .vs-tag.fail { left: 6px; background: #fff0ee; color: #8d363a; }
+  .vs-tag.ok { right: 6px; background: #eefbf1; color: #17643a; }
+  .vs-rate { position: absolute; bottom: 8px; width: 50%; display: flex; justify-content: center; align-items: baseline; gap: 5px;
+             pointer-events: none; font-size: 11px; font-weight: 600; color: #fff; text-shadow: 0 1px 3px rgb(0 0 0 / 70%); }
+  .vs-rate b { padding: 0 8px; border-radius: 3px; font-size: 22px; line-height: 1.25; letter-spacing: -.02em; text-shadow: none; }
+  .vs-rate.fail { left: 0; } .vs-rate.fail b { background: #fff0ee; color: #8d363a; }
+  .vs-rate.ok { right: 0; } .vs-rate.ok b { background: #eefbf1; color: #17643a; }
   @media (max-width: 760px) { .screens.four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .screens.one { grid-template-columns: minmax(0, 1fr); max-width: 760px; margin-left: auto; margin-right: auto; }
   @media (max-width: 760px) { .screens { grid-template-columns: minmax(0, 1fr); } }
@@ -219,7 +229,7 @@
       <figure class="screen"><img src="assets/gifs/diverse-scenes.gif" alt="One view cutting through six collected runs: Kitchen, Sunny apartment, Cottage, Walnut study, Evening den and YAM tabletop, each with its own light and camera" loading="lazy"><figcaption><b>Diverse demonstrations:</b> six rooms, lights and cameras</figcaption></figure>
       <figure class="screen"><img src="assets/gifs/define-success.gif" alt="The Task dialog: the apple is dragged into the bowl in the goal scene, then distance, still time and release are set" loading="lazy"><figcaption><b>Define success:</b> set what success means for any task, here the apple in the bowl</figcaption></figure>
       <figure class="screen"><img src="assets/gifs/human-takeover.gif" alt="Dream-1 reaches toward the apple and stalls; a human takes over with T, picks up the apple and puts it into the bowl" loading="lazy"><figcaption><b>Human recovery:</b> Dream-1 stalls, a person presses T and finishes</figcaption></figure>
-      <figure class="screen"><div class="gif-soon" role="img" aria-label="Apple task: Dream-1 base and our fine-tune side by side, coming soon">Base vs ours<br><small>coming soon</small></div><figcaption><b>Base vs ours:</b> Dream-1 and our fine-tune on the same apple scene</figcaption></figure>
+      <figure class="screen"><div class="vs"><video src="assets/videos/base-vs-ours.mp4" autoplay muted loop playsinline aria-label="The same apple scene split down the middle: on the left Dream-1 base misses the apple, on the right our fine-tune puts it into the bowl"></video><span class="vs-tag fail">Base · fail</span><span class="vs-tag ok">Ours · success</span><span class="vs-rate fail" aria-label="Dream-1 base: 2% success, 1 of 50"><b>2%</b> 1/50</span><span class="vs-rate ok" aria-label="Ours: 74% success, 37 of 50"><b>74%</b> 37/50</span></div><figcaption><b>Base vs ours:</b> one apple scene, 4×; success rate on 50 held-out starts</figcaption></figure>
     </div>
     <div class="figure">
       <div class="method" role="group" aria-label="Method: vary the scene, recover a run, keep verified runs, fine-tune Dream-1, test on matched seeds">
