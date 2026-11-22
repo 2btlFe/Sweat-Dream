@@ -8,111 +8,120 @@
 <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&display=swap">
-<!-- Layout after the OpenVLA project page (openvla.github.io), itself from the Nerfies template; styles written here. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<!-- Layout after the OpenVLA project page (openvla.github.io), itself from the Nerfies template; palette, type and logo
+     from the Sweet Dream app (static/theme.css). -->
 <style>
-  :root { --text: #4a4a4a; --strong: #363636; --link: #3273dc; --band: #f5f5f5; --line: #dbdbdb; --honey: #e8a200; }
+  :root { --paper: #f8f6f1; --white: #fffefa; --ink: #25241f; --ink-2: #45443b; --ink-3: #635f53; --rule: #d5d0c4;
+          --sun: #f6e7a9; --sun-hover: #eed889; --sun-wash: #fff8df; --ochre: #705713; --radius: 4px;
+          --step-1: #fcf8ee; --step-2: #edf497; --step-3: #ead45f; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: #fff; color: var(--text); font: 16px/1.6 "Google Sans", "Noto Sans", system-ui, sans-serif; }
-  a { color: var(--link); text-decoration: none; } a:hover { text-decoration: underline; }
+  body { margin: 0; background: var(--paper); color: var(--ink-2); font: 16px/1.6 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+         -webkit-font-smoothing: antialiased; }
+  a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+  a:hover { text-decoration-color: var(--ink); }
+  :focus-visible { outline: 2px solid var(--ochre); outline-offset: 3px; }
   .container { max-width: 960px; margin: 0 auto; padding: 0 20px; }
-  .hero { padding: 56px 0 32px; text-align: center; }
-  .logo { width: 84px; height: 84px; display: block; margin: 0 auto 6px; }
-  .publication-title { color: #111; font-size: clamp(32px, 5.4vw, 48px); font-weight: 600; line-height: 1.15; margin: 0; letter-spacing: -.01em; }
-  .publication-authors { font-size: 20px; margin: 18px 0 0; }
-  .publication-authors .author { white-space: nowrap; }
-  .note { font-size: 14px; color: #7a7a7a; margin: 4px 0 0; }
-  .link-blocks { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
-  .button { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px; border-radius: 999px; background: #363636; color: #fff; font-size: 16px; }
-  .button:hover { background: #2f2f2f; text-decoration: none; }
+  .hero { padding: 56px 0 36px; text-align: center; }
+  .geometry { position: relative; width: 72px; aspect-ratio: 2; margin: 0 auto 22px; }
+  .geometry::before, .geometry::after { position: absolute; content: ""; width: 50%; height: 100%; }
+  .geometry::before { left: 0; border-radius: 50%; background: var(--sun); }
+  .geometry::after { right: 0; border: 1px solid var(--ink); border-radius: 0 50% 50% 0; }
+  .publication-title { color: var(--ink); font-size: clamp(32px, 5.4vw, 52px); font-weight: 700; line-height: 1.05; margin: 0; letter-spacing: -.05em; }
+  .link-blocks { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 26px; }
+  .button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 16px; border: 1px solid transparent;
+            border-radius: var(--radius); background: var(--sun); color: var(--ink); font-size: 15px; font-weight: 650; text-decoration: none; }
+  .button:hover { background: var(--sun-hover); }
   .button svg { width: 16px; height: 16px; fill: currentColor; }
-  .qr { display: inline-flex; align-items: center; gap: 10px; margin: 16px 0 0; padding: 6px 14px 6px 6px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
-  .qr img { width: 76px; height: 76px; display: block; image-rendering: pixelated; }
-  .qr figcaption { font-size: 13px; line-height: 1.4; color: #7a7a7a; text-align: left; }
-  .qr figcaption a { color: var(--strong); }
-  .teaser { background: var(--band); padding: 28px 0; }
-  .teaser-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border-radius: 6px; overflow: hidden; }
-  .teaser-grid video { border-radius: 0; }
-  video.demo { width: 100%; aspect-ratio: 1280 / 800; border-radius: 8px; background: #111; box-shadow: 0 8px 28px rgba(0,0,0,.12); }
-  .demo-note { text-align: center; font-size: 14px; color: #7a7a7a; margin: 10px 0 0; }
-  .tldr { text-align: center; font-size: 20px; font-weight: 400; line-height: 1.55; color: var(--text); max-width: 900px; margin: 0 auto; padding: 30px 20px 10px; }
-  .tldr b { color: var(--strong); }
+  .teaser { background: var(--ink); padding: 32px 0; }
+  video.demo { width: 100%; aspect-ratio: 1280 / 800; border-radius: var(--radius); background: #111; }
+  .demo-note { text-align: center; font-size: 14px; color: #e4ded0; margin: 12px 0 0; }
+  .tldr { text-align: center; font-size: 20px; font-weight: 400; line-height: 1.55; color: var(--ink-2); max-width: 900px; margin: 0 auto;
+          padding: 36px 20px 10px; letter-spacing: -.01em; }
+  .tldr b { color: var(--ink); font-weight: 650; }
   section.section { padding: 34px 0 10px; }
-  h2.title { color: var(--strong); font-size: 32px; font-weight: 600; margin: 0 0 16px; line-height: 1.2; }
-  h3.title { color: var(--strong); font-size: 22px; font-weight: 600; margin: 28px 0 10px; }
-  h4.title { color: var(--strong); font-size: 16px; font-weight: 700; margin: 18px 0 8px; }
+  h2.title { color: var(--ink); font-size: clamp(28px, 4vw, 36px); font-weight: 700; margin: 0 0 16px; line-height: 1.1; letter-spacing: -.045em; }
+  h3.title { color: var(--ink); font-size: 22px; font-weight: 650; margin: 28px 0 10px; letter-spacing: -.03em; }
+  h4.title { color: var(--ink); font-size: 16px; font-weight: 650; margin: 18px 0 8px; letter-spacing: -.01em; }
   .content p { margin: 0 0 14px; text-align: justify; }
-  .content b { color: var(--strong); }
-  video { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #222; border-radius: 4px; }
-  .figure { background: var(--band); border-radius: 10px; padding: 18px; margin: 6px 0 16px; }
+  .content b { color: var(--ink); font-weight: 650; }
+  video { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #222; border-radius: 2px; }
+  .figure { background: var(--white); border: 1px solid var(--rule); border-radius: var(--radius); padding: 18px; margin: 6px 0 16px; }
   .figure svg { width: 100%; height: auto; display: block; }
-  .rollouts { background: var(--band); border-radius: 10px; padding: 10px 10px 12px; margin: 8px 0 16px; display: grid; gap: 10px; }
+  .rollouts { background: var(--white); border: 1px solid var(--rule); border-radius: var(--radius); padding: 10px 10px 12px; margin: 8px 0 16px; display: grid; gap: 10px; }
   .rollouts.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .rollouts.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .rollouts.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
-  .gallery figure { display: flex; flex-direction: column; justify-content: flex-end; }
-  .gallery figcaption { font-size: 13px; line-height: 1.3; }
-  .gallery figcaption span { display: block; font-size: 12px; color: #7a7a7a; }
   .rollouts figure { margin: 0; text-align: center; }
-  .rollouts figcaption { font-size: 15px; margin-bottom: 6px; color: var(--strong); }
-  @media (max-width: 760px) { .teaser-grid, .rollouts.cols-3, .rollouts.cols-4, .rollouts.cols-5 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
-  table.results { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 15px; }
-  table.results th, table.results td { border-bottom: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
-  table.results th { color: var(--strong); font-weight: 600; background: #fafafa; }
-  table.results td.num { white-space: nowrap; color: var(--strong); font-weight: 600; }
-  pre { background: var(--band); padding: 18px 20px; border-radius: 6px; overflow-x: auto; font-size: 14px; line-height: 1.5; color: var(--strong); margin: 0; }
+  .rollouts figcaption { font-size: 14px; margin-bottom: 6px; color: var(--ink); }
+  @media (max-width: 760px) { .rollouts.cols-3, .rollouts.cols-4 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  table.results { width: 100%; border-collapse: collapse; margin: 8px 0 16px; font-size: 15px; background: var(--white); border: 1px solid var(--rule); }
+  table.results th, table.results td { border-bottom: 1px solid var(--rule); padding: 10px 12px; text-align: left; vertical-align: top; }
+  table.results th { color: var(--ink); font-weight: 650; background: var(--sun-wash); }
+  table.results td.num { white-space: nowrap; color: var(--ink); font-weight: 650; }
+  pre { background: var(--ink); padding: 18px 20px; border-radius: var(--radius); overflow-x: auto; font-size: 14px; line-height: 1.5; color: #f5f3ee; margin: 0; }
   code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-  .chapters { position: sticky; top: 0; z-index: 10; background: rgba(255, 255, 255, .94); backdrop-filter: blur(6px);
-              border-bottom: 1px solid var(--line); margin-top: 18px; }
+  .chapters { position: sticky; top: 0; z-index: 10; background: rgb(248 246 241 / 94%); backdrop-filter: blur(6px);
+              border-top: 2px solid var(--ink); border-bottom: 1px solid var(--rule); margin-top: 22px; }
   .chapters .container { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; padding-top: 10px; padding-bottom: 10px; }
-  .chapters a { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; color: var(--strong); font-size: 15px; }
-  .chapters a:hover { background: var(--band); text-decoration: none; }
-  .chapters a.on { background: #363636; color: #fff; }
-  .chapters .n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--band); color: var(--strong); font-size: 13px; font-weight: 600; }
-  .chapters a.on .n { background: #fff; color: #363636; }
+  .chapters a { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: var(--radius); color: var(--ink);
+                font-size: 15px; font-weight: 500; text-decoration: none; }
+  .chapters a:hover { background: var(--sun-wash); }
+  .chapters a.on { background: var(--sun); font-weight: 650; }
+  .chapters .n { display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--rule); border-radius: 2px;
+                 color: var(--ink); font-size: 12px; font-weight: 650; }
+  .chapters a[href="#collect"] .n { background: var(--step-1); }
+  .chapters a[href="#train"] .n { background: var(--step-2); }
+  .chapters a[href="#test"] .n { background: var(--step-3); }
   section[id] { scroll-margin-top: 64px; }
-  .chapter { border-top: 1px solid var(--line); margin-top: 26px; }
-  .chapter-no { text-transform: uppercase; letter-spacing: .08em; font-size: 13px; font-weight: 600; color: #7a7a7a; margin: 0 0 4px; }
+  .chapter { border-top: 1px solid var(--rule); margin-top: 26px; }
+  .chapter-no { display: inline-block; font-size: 13px; font-weight: 650; color: #514323; margin: 0 0 10px; padding: 2px 10px;
+                border: 1px solid var(--rule); border-radius: 2px; }
+  #collect .chapter-no { background: var(--step-1); }
+  #train .chapter-no { background: var(--step-2); }
+  #test .chapter-no { background: var(--step-3); }
   .screens { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 10px 0 18px; }
   .screens.one { grid-template-columns: minmax(0, 1fr); max-width: 760px; margin-left: auto; margin-right: auto; }
   @media (max-width: 760px) { .screens { grid-template-columns: minmax(0, 1fr); } }
   .screen { margin: 0; }
-  .screen img { width: 100%; display: block; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
-  .screen figcaption { font-size: 14px; color: #7a7a7a; margin-top: 6px; text-align: center; }
-  .pairs { position: relative; background: var(--band); border-radius: 10px; padding: 14px 52px 12px; margin: 8px 0 18px; }
+  .screen img { width: 100%; display: block; border: 1px solid var(--rule); border-radius: var(--radius); }
+  .screen figcaption { font-size: 14px; color: var(--ink-3); margin-top: 6px; text-align: center; }
+  .pairs { position: relative; background: var(--white); border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px 56px 12px; margin: 8px 0 18px; }
   .pair-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none; }
   .pair-track::-webkit-scrollbar { display: none; }
   .pair-slide { flex: 0 0 100%; scroll-snap-align: start; }
-  .pair-title { text-align: center; margin: 0 0 8px; color: var(--strong); }
+  .pair-title { text-align: center; margin: 0 0 8px; color: var(--ink); }
   .pair-videos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   .pair-videos figure { margin: 0; }
-  .pair-videos figcaption { font-size: 14px; margin-bottom: 6px; color: var(--text); min-height: 2.6em; }
-  .pair-videos .tag { display: inline-block; margin-right: 8px; padding: 1px 9px; border-radius: 999px; background: #e6e6e6; color: var(--strong); font-size: 12px; font-weight: 600; }
-  .pair-videos .tag.changed { background: #363636; color: #fff; }
-  .pair-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; border-radius: 50%; border: 0; background: #363636; color: #fff; font-size: 24px; line-height: 1; cursor: pointer; }
-  .pair-nav:hover { background: #222; } .pair-nav:disabled { opacity: .3; cursor: default; }
+  .pair-videos figcaption { font-size: 14px; margin-bottom: 6px; color: var(--ink-2); min-height: 2.6em; }
+  .pair-videos .tag { display: inline-block; margin-right: 8px; padding: 1px 9px; border: 1px solid var(--rule); border-radius: 2px;
+                      background: var(--paper); color: var(--ink); font-size: 12px; font-weight: 650; }
+  .pair-videos .tag.changed { background: var(--sun); border-color: var(--sun); }
+  .pair-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border: 0; border-radius: var(--radius);
+              background: var(--sun); color: var(--ink); font-size: 24px; line-height: 1; cursor: pointer; }
+  .pair-nav:hover { background: var(--sun-hover); } .pair-nav:disabled { opacity: .35; cursor: default; }
   .pair-nav.prev { left: 8px; } .pair-nav.next { right: 8px; }
   .pair-dots { display: flex; gap: 6px; justify-content: center; margin-top: 12px; }
-  .pair-dots button { width: 9px; height: 9px; padding: 0; border-radius: 50%; border: 0; background: #c8c8c8; cursor: pointer; }
-  .pair-dots button.on { background: #363636; }
+  .pair-dots button { width: 9px; height: 9px; padding: 0; border-radius: 50%; border: 0; background: var(--rule); cursor: pointer; }
+  .pair-dots button.on { background: var(--ink); }
   @media (max-width: 760px) { .pairs { padding: 12px 10px; } .pair-nav { display: none; } .pair-videos { grid-template-columns: minmax(0, 1fr); } }
   .points { margin: 4px 0 16px; padding-left: 20px; } .points li { margin: 6px 0; }
-  .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 6px 0 10px; }
+  .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 6px 0 10px; background: var(--rule);
+           border: 1px solid var(--rule); border-top: 2px solid var(--ink); }
   @media (max-width: 860px) { .steps { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
-  .step { background: var(--band); border-radius: 10px; padding: 14px 16px; }
+  .step { background: var(--white); padding: 14px 16px; }
   .step p { margin: 0; font-size: 15px; text-align: left; }
-  .step .step-no { font-weight: 600; color: var(--strong); margin-bottom: 6px; }
-  footer { margin-top: 40px; padding: 30px 0 48px; background: #fafafa; font-size: 14px; color: #7a7a7a; }
-  footer p { margin: 0 0 8px; } footer h5 { margin: 16px 0 6px; font-size: 15px; color: var(--strong); }
+  .step .step-no { font-weight: 650; color: var(--ink); margin-bottom: 6px; }
+  footer { margin-top: 40px; padding: 30px 0 48px; background: var(--white); border-top: 1px solid var(--rule); font-size: 14px; color: var(--ink-3); }
+  footer p { margin: 0 0 8px; } footer h5 { margin: 16px 0 6px; font-size: 15px; color: var(--ink); }
+  footer a { color: var(--ink-2); }
 </style>
 </head>
 <body>
 
 <section class="hero">
   <div class="container">
-    <img class="logo" src="assets/icon.svg" alt="Sweet Dream icon: a sleeping cloud">
+    <div class="geometry" aria-hidden="true"></div>
     <h1 class="publication-title">Sweet Dream:<br>Diverse Data for Custom Dream&#8209;1 Fine&#8209;Tuning</h1>
-    <p class="note" style="margin-top: 14px">Built on Dream-1 and the Dream Labs API</p>
     <div class="link-blocks">
       <a class="button" href="https://github.com/2btlFe/Sweet-Dream">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
@@ -124,11 +133,6 @@
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.72 3.22a.75.75 0 011.06 1.06L2.06 8l3.72 3.72a.75.75 0 11-1.06 1.06L.47 8.53a.75.75 0 010-1.06l4.25-4.25zm6.56 0a.75.75 0 10-1.06 1.06L13.94 8l-3.72 3.72a.75.75 0 101.06 1.06l4.25-4.25a.75.75 0 000-1.06l-4.25-4.25z"/></svg>
         Dream Labs API</a>
     </div>
-    <figure class="qr">
-      <a href="assets/qr-project-page.png" download="sweet-dream-qr.png"><img src="assets/qr-project-page.svg" alt="QR code for https://2btlfe.github.io/Sweet-Dream/"></a>
-      <figcaption>Scan to open this page<br><a href="assets/qr-project-page.png" download="sweet-dream-qr.png">PNG</a> ·
-        <a href="assets/qr-project-page.svg" download="sweet-dream-qr.svg">SVG</a></figcaption>
-    </figure>
   </div>
 </section>
 
@@ -162,29 +166,29 @@
     <div class="figure">
       <svg viewBox="0 0 1000 300" role="img" aria-labelledby="pipeTitle">
         <title id="pipeTitle">Pipeline: seeded scenes, Dream-1 runs with failure monitor and recovery, success rules, dataset, fine-tune, test</title>
-        <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#363636"/></marker></defs>
-        <g font-family="Noto Sans, sans-serif" font-size="17" fill="#363636" text-anchor="middle">
-          <rect x="10" y="40" width="160" height="96" rx="12" fill="#fff" stroke="#dbdbdb"/>
-          <text x="90" y="80" font-weight="600">Seeded scenes</text><text x="90" y="104" font-size="14" fill="#7a7a7a">layout, camera,</text><text x="90" y="122" font-size="14" fill="#7a7a7a">light, room</text>
-          <rect x="215" y="40" width="190" height="96" rx="12" fill="#fff4ea" stroke="#f3cfa6"/>
-          <text x="310" y="80" font-weight="600">Dream-1 runs</text><text x="310" y="104" font-size="14" fill="#7a7a7a">single or batch,</text><text x="310" y="122" font-size="14" fill="#7a7a7a">up to 4 at once</text>
-          <rect x="215" y="190" width="190" height="96" rx="12" fill="#f5f2fe" stroke="#d7cdf1"/>
-          <text x="310" y="228" font-weight="600">Failure monitor</text><text x="310" y="252" font-size="14" fill="#7a7a7a">→ rule-based</text><text x="310" y="270" font-size="14" fill="#7a7a7a">recovery script</text>
-          <rect x="450" y="40" width="160" height="96" rx="12" fill="#fff" stroke="#dbdbdb"/>
-          <text x="530" y="80" font-weight="600">Success rules</text><text x="530" y="104" font-size="14" fill="#7a7a7a">+ hand labels,</text><text x="530" y="122" font-size="14" fill="#7a7a7a">pick the runs</text>
-          <rect x="655" y="40" width="150" height="96" rx="12" fill="#fff" stroke="#dbdbdb"/>
-          <text x="730" y="80" font-weight="600">Dataset</text><text x="730" y="104" font-size="14" fill="#7a7a7a">LeRobot v2.1,</text><text x="730" y="122" font-size="14" fill="#7a7a7a">checked</text>
-          <rect x="850" y="40" width="140" height="96" rx="12" fill="#363636"/>
-          <text x="920" y="80" font-weight="600" fill="#fff">Fine-tune</text><text x="920" y="104" font-size="14" fill="#dbdbdb">upload, train</text><text x="920" y="122" font-size="14" fill="#dbdbdb">on Dream Labs</text>
-          <rect x="850" y="190" width="140" height="96" rx="12" fill="#eefbf1" stroke="#c3f2cc"/>
-          <text x="920" y="230" font-weight="600">Test</text><text x="920" y="254" font-size="14" fill="#7a7a7a">same scenes,</text><text x="920" y="272" font-size="14" fill="#7a7a7a">vs Dream-1</text>
+        <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#25241f"/></marker></defs>
+        <g font-family="Inter, sans-serif" font-size="17" fill="#25241f" text-anchor="middle">
+          <rect x="10" y="40" width="160" height="96" rx="4" fill="#fffefa" stroke="#d5d0c4"/>
+          <text x="90" y="80" font-weight="600">Seeded scenes</text><text x="90" y="104" font-size="14" fill="#635f53">layout, camera,</text><text x="90" y="122" font-size="14" fill="#635f53">light, room</text>
+          <rect x="215" y="40" width="190" height="96" rx="4" fill="#fcf8ee" stroke="#d5d0c4"/>
+          <text x="310" y="80" font-weight="600">Dream-1 runs</text><text x="310" y="104" font-size="14" fill="#635f53">single or batch,</text><text x="310" y="122" font-size="14" fill="#635f53">up to 4 at once</text>
+          <rect x="215" y="190" width="190" height="96" rx="4" fill="#fff8df" stroke="#eed889"/>
+          <text x="310" y="228" font-weight="600">Failure monitor</text><text x="310" y="252" font-size="14" fill="#635f53">→ rule-based</text><text x="310" y="270" font-size="14" fill="#635f53">recovery script</text>
+          <rect x="450" y="40" width="160" height="96" rx="4" fill="#fffefa" stroke="#d5d0c4"/>
+          <text x="530" y="80" font-weight="600">Success rules</text><text x="530" y="104" font-size="14" fill="#635f53">+ hand labels,</text><text x="530" y="122" font-size="14" fill="#635f53">pick the runs</text>
+          <rect x="655" y="40" width="150" height="96" rx="4" fill="#fffefa" stroke="#d5d0c4"/>
+          <text x="730" y="80" font-weight="600">Dataset</text><text x="730" y="104" font-size="14" fill="#635f53">LeRobot v2.1,</text><text x="730" y="122" font-size="14" fill="#635f53">checked</text>
+          <rect x="850" y="40" width="140" height="96" rx="4" fill="#edf497" stroke="#d5d0c4"/>
+          <text x="920" y="80" font-weight="600">Fine-tune</text><text x="920" y="104" font-size="14" fill="#635f53">upload, train</text><text x="920" y="122" font-size="14" fill="#635f53">on Dream Labs</text>
+          <rect x="850" y="190" width="140" height="96" rx="4" fill="#ead45f" stroke="#d5bd45"/>
+          <text x="920" y="230" font-weight="600">Test</text><text x="920" y="254" font-size="14" fill="#635f53">same scenes,</text><text x="920" y="272" font-size="14" fill="#635f53">vs Dream-1</text>
         </g>
-        <g stroke="#363636" stroke-width="2.4" fill="none" marker-end="url(#arrow)">
+        <g stroke="#25241f" stroke-width="2.4" fill="none" marker-end="url(#arrow)">
           <path d="M172 88H211"/><path d="M407 88H446"/><path d="M612 88H651"/><path d="M807 88H846"/><path d="M920 138V186"/>
           <path d="M290 138V186" stroke-dasharray="6 5"/><path d="M330 188V140" stroke-dasharray="6 5"/>
           <path d="M848 214H396V140" stroke-dasharray="6 5"/>
         </g>
-        <g font-family="Noto Sans, sans-serif" font-size="13" fill="#7a7a7a">
+        <g font-family="Inter, sans-serif" font-size="13" fill="#635f53">
           <text x="236" y="166">fails</text><text x="338" y="166">recovers</text><text x="560" y="206">the new model goes back into the runs</text>
         </g>
       </svg>
