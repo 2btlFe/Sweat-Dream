@@ -111,9 +111,11 @@ def main():
                                            "height": min(780, SIZE["height"] - max(0, box["y"] - 12))})
 
         # 4. Collect: a batch, with its settings.
-        # The batch settings are in the setup's third step, Run settings.
+        # The batch settings are in the setup's third step, Run settings: two steps on with the arrow.
         page.evaluate("() => window.scrollTo(0, 0)")
-        page.click("#stageNav button:nth-child(3)")
+        for _ in range(2):
+            page.click("#nextStage")
+        page.wait_for_function("() => document.getElementById('stageTitle').textContent.startsWith('Step 3')")
         page.click("#modeBatch")
         page.evaluate("() => { const w = document.getElementById('wizard'); window.scrollTo(0, w.getBoundingClientRect().top + scrollY - 24); }")
         shot("04-collect-batch", 1200)
