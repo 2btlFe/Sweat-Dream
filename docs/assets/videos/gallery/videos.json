@@ -13,7 +13,9 @@
     },
     "described": "light 1.6×, front view",
     "mode": "rule-based only",
-    "result": "success"
+    "result": "success",
+    "default_file": "01-default-seed41093.mp4",
+    "default_run": "20261122-113618-2776"
   },
   {
     "file": "02-apple-bowl-sunny-apartment-seed228517.mp4",
@@ -29,7 +31,9 @@
     },
     "described": "light 2×, left diagonal",
     "mode": "rule-based only",
-    "result": "success"
+    "result": "success",
+    "default_file": "02-default-seed228517.mp4",
+    "default_run": "20261122-113619-cf15"
   },
   {
     "file": "03-banana-bowl-cottage-seed390442.mp4",
@@ -45,7 +49,9 @@
     },
     "described": "light 0.5×, right diagonal",
     "mode": "rule-based only",
-    "result": "success"
+    "result": "success",
+    "default_file": "03-default-seed390442.mp4",
+    "default_run": "20261122-113620-08d3"
   },
   {
     "file": "04-banana-plate-walnut-study-seed517006.mp4",
@@ -62,7 +68,9 @@
     },
     "described": "light 0.4×, overhead, gray table",
     "mode": "rule-based only",
-    "result": "success"
+    "result": "success",
+    "default_file": "04-default-seed517006.mp4",
+    "default_run": "20261122-113621-b56d"
   },
   {
     "file": "05-apple-bowl-evening-den-seed604381.mp4",
@@ -78,7 +86,9 @@
     },
     "described": "light 0.3×, FOV +15°",
     "mode": "rule-based only",
-    "result": "success"
+    "result": "success",
+    "default_file": "05-default-seed604381.mp4",
+    "default_run": "20261122-113645-c70b"
   },
   {
     "file": "06-banana-bowl-yam-tabletop-seed712950.mp4",
@@ -95,7 +105,9 @@
     },
     "described": "light 1×, tilt -20°, pan +20°, gray table",
     "mode": "rule-based only",
-    "result": "success"
+    "result": "success",
+    "default_file": "06-default-seed712950.mp4",
+    "default_run": "20261122-113646-4e1f"
   },
   {
     "file": "07-banana-plate-kitchen-seed803190.mp4",
@@ -111,7 +123,9 @@
     },
     "described": "light 1×, roll -12°, blur 4px",
     "mode": "rule-based only",
-    "result": "success"
+    "result": "success",
+    "default_file": "07-default-seed803190.mp4",
+    "default_run": "20261122-113648-fd69"
   },
   {
     "file": "08-apple-bowl-cottage-seed915264.mp4",
@@ -128,7 +142,9 @@
     },
     "described": "light 1.8×, overhead, roll +15°",
     "mode": "rule-based only",
-    "result": "success"
+    "result": "success",
+    "default_file": "08-default-seed915264.mp4",
+    "default_run": "20261122-113649-368c"
   },
   {
     "file": "09-banana-bowl-sunny-apartment-seed133771.mp4",
@@ -146,7 +162,9 @@
     },
     "described": "light 0.7×, front view, FOV -15°, gray table",
     "mode": "rule-based only",
-    "result": "success"
+    "result": "success",
+    "default_file": "09-default-seed133771.mp4",
+    "default_run": "20261122-113712-1f40"
   },
   {
     "file": "10-banana-plate-walnut-study-seed268840.mp4",
@@ -163,6 +181,8 @@
     },
     "described": "light 1.4×, left diagonal, raised 8 cm",
     "mode": "rule-based only",
-    "result": "success"
+    "result": "success",
+    "default_file": "10-default-seed268840.mp4",
+    "default_run": "20261122-113713-9208"
   }
 ]

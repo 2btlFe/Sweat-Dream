@@ -73,6 +73,23 @@
   .screen { margin: 0; }
   .screen img { width: 100%; display: block; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
   .screen figcaption { font-size: 14px; color: #7a7a7a; margin-top: 6px; text-align: center; }
+  .pairs { position: relative; background: var(--band); border-radius: 10px; padding: 14px 52px 12px; margin: 8px 0 18px; }
+  .pair-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none; }
+  .pair-track::-webkit-scrollbar { display: none; }
+  .pair-slide { flex: 0 0 100%; scroll-snap-align: start; }
+  .pair-title { text-align: center; margin: 0 0 8px; color: var(--strong); }
+  .pair-videos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .pair-videos figure { margin: 0; }
+  .pair-videos figcaption { font-size: 14px; margin-bottom: 6px; color: var(--text); min-height: 2.6em; }
+  .pair-videos .tag { display: inline-block; margin-right: 8px; padding: 1px 9px; border-radius: 999px; background: #e6e6e6; color: var(--strong); font-size: 12px; font-weight: 600; }
+  .pair-videos .tag.changed { background: #363636; color: #fff; }
+  .pair-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 38px; height: 38px; border-radius: 50%; border: 0; background: #363636; color: #fff; font-size: 24px; line-height: 1; cursor: pointer; }
+  .pair-nav:hover { background: #222; } .pair-nav:disabled { opacity: .3; cursor: default; }
+  .pair-nav.prev { left: 8px; } .pair-nav.next { right: 8px; }
+  .pair-dots { display: flex; gap: 6px; justify-content: center; margin-top: 12px; }
+  .pair-dots button { width: 9px; height: 9px; padding: 0; border-radius: 50%; border: 0; background: #c8c8c8; cursor: pointer; }
+  .pair-dots button.on { background: #363636; }
+  @media (max-width: 760px) { .pairs { padding: 12px 10px; } .pair-nav { display: none; } .pair-videos { grid-template-columns: minmax(0, 1fr); } }
   .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 6px 0 10px; }
   @media (max-width: 860px) { .steps { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
   .step { background: var(--band); border-radius: 10px; padding: 14px 16px; }
@@ -199,21 +216,106 @@
       </tbody>
     </table>
 
-    <h4 class="title">Ten seeds, ten environments</h4>
-    <p>Each episode has its own seed and an environment set by hand: six rooms, light from 0.3× to 2×, five camera
-      viewpoints with tilt, pan, roll and field of view changes, a blurred camera, and a gray work surface. The
-      rule-based script finishes the task in all of them.</p>
-    <div class="rollouts cols-5 gallery">
-      <figure><figcaption>Banana → plate<span>Kitchen · seed 41093</span><span>light 1.6×, front view</span></figcaption><video src="assets/videos/gallery/01-banana-plate-kitchen-seed41093.mp4" autoplay muted loop playsinline></video></figure>
-      <figure><figcaption>Apple → bowl<span>Sunny apartment · seed 228517</span><span>light 2×, left diagonal</span></figcaption><video src="assets/videos/gallery/02-apple-bowl-sunny-apartment-seed228517.mp4" autoplay muted loop playsinline></video></figure>
-      <figure><figcaption>Banana → bowl<span>Cottage · seed 390442</span><span>light 0.5×, right diagonal</span></figcaption><video src="assets/videos/gallery/03-banana-bowl-cottage-seed390442.mp4" autoplay muted loop playsinline></video></figure>
-      <figure><figcaption>Banana → plate<span>Walnut study · seed 517006</span><span>light 0.4×, overhead, gray table</span></figcaption><video src="assets/videos/gallery/04-banana-plate-walnut-study-seed517006.mp4" autoplay muted loop playsinline></video></figure>
-      <figure><figcaption>Apple → bowl<span>Evening den · seed 604381</span><span>light 0.3×, FOV +15°</span></figcaption><video src="assets/videos/gallery/05-apple-bowl-evening-den-seed604381.mp4" autoplay muted loop playsinline></video></figure>
-      <figure><figcaption>Banana → bowl<span>YAM tabletop · seed 712950</span><span>light 1×, tilt -20°, pan +20°, gray table</span></figcaption><video src="assets/videos/gallery/06-banana-bowl-yam-tabletop-seed712950.mp4" autoplay muted loop playsinline></video></figure>
-      <figure><figcaption>Banana → plate<span>Kitchen · seed 803190</span><span>light 1×, roll -12°, blur 4px</span></figcaption><video src="assets/videos/gallery/07-banana-plate-kitchen-seed803190.mp4" autoplay muted loop playsinline></video></figure>
-      <figure><figcaption>Apple → bowl<span>Cottage · seed 915264</span><span>light 1.8×, overhead, roll +15°</span></figcaption><video src="assets/videos/gallery/08-apple-bowl-cottage-seed915264.mp4" autoplay muted loop playsinline></video></figure>
-      <figure><figcaption>Banana → bowl<span>Sunny apartment · seed 133771</span><span>light 0.7×, front view, FOV -15°, gray table</span></figcaption><video src="assets/videos/gallery/09-banana-bowl-sunny-apartment-seed133771.mp4" autoplay muted loop playsinline></video></figure>
-      <figure><figcaption>Banana → plate<span>Walnut study · seed 268840</span><span>light 1.4×, left diagonal, raised 8 cm</span></figcaption><video src="assets/videos/gallery/10-banana-plate-walnut-study-seed268840.mp4" autoplay muted loop playsinline></video></figure>
+    <h4 class="title">Same seed, a different environment</h4>
+    <p>Each slide plays the same task from the same seed twice: on the left in the default scene, on the right with the
+      environment changed by hand (room, light from 0.3× to 2×, camera viewpoint, tilt, pan, roll and field of view, blur,
+      the work surface). The rule-based script succeeds in both. Use the arrows or swipe for the next one.</p>
+    <div class="pairs" id="pairs">
+      <button class="pair-nav prev" type="button" aria-label="Previous">‹</button>
+      <div class="pair-track" tabindex="0" aria-label="Default and changed scenes, ten seeds">
+        <div class="pair-slide" data-i="1">
+          <p class="pair-title"><b>Banana → plate</b> · seed 41093</p>
+          <div class="pair-videos">
+            <figure><figcaption><span class="tag">Default scene</span>YAM tabletop, default light and camera</figcaption>
+              <video data-src="assets/videos/gallery/01-default-seed41093.mp4" muted loop playsinline preload="none"></video></figure>
+            <figure><figcaption><span class="tag changed">Changed scene</span>Kitchen · light 1.6×, front view</figcaption>
+              <video data-src="assets/videos/gallery/01-banana-plate-kitchen-seed41093.mp4" muted loop playsinline preload="none"></video></figure>
+          </div>
+        </div>
+        <div class="pair-slide" data-i="2">
+          <p class="pair-title"><b>Apple → bowl</b> · seed 228517</p>
+          <div class="pair-videos">
+            <figure><figcaption><span class="tag">Default scene</span>YAM tabletop, default light and camera</figcaption>
+              <video data-src="assets/videos/gallery/02-default-seed228517.mp4" muted loop playsinline preload="none"></video></figure>
+            <figure><figcaption><span class="tag changed">Changed scene</span>Sunny apartment · light 2×, left diagonal</figcaption>
+              <video data-src="assets/videos/gallery/02-apple-bowl-sunny-apartment-seed228517.mp4" muted loop playsinline preload="none"></video></figure>
+          </div>
+        </div>
+        <div class="pair-slide" data-i="3">
+          <p class="pair-title"><b>Banana → bowl</b> · seed 390442</p>
+          <div class="pair-videos">
+            <figure><figcaption><span class="tag">Default scene</span>YAM tabletop, default light and camera</figcaption>
+              <video data-src="assets/videos/gallery/03-default-seed390442.mp4" muted loop playsinline preload="none"></video></figure>
+            <figure><figcaption><span class="tag changed">Changed scene</span>Cottage · light 0.5×, right diagonal</figcaption>
+              <video data-src="assets/videos/gallery/03-banana-bowl-cottage-seed390442.mp4" muted loop playsinline preload="none"></video></figure>
+          </div>
+        </div>
+        <div class="pair-slide" data-i="4">
+          <p class="pair-title"><b>Banana → plate</b> · seed 517006</p>
+          <div class="pair-videos">
+            <figure><figcaption><span class="tag">Default scene</span>YAM tabletop, default light and camera</figcaption>
+              <video data-src="assets/videos/gallery/04-default-seed517006.mp4" muted loop playsinline preload="none"></video></figure>
+            <figure><figcaption><span class="tag changed">Changed scene</span>Walnut study · light 0.4×, overhead, gray table</figcaption>
+              <video data-src="assets/videos/gallery/04-banana-plate-walnut-study-seed517006.mp4" muted loop playsinline preload="none"></video></figure>
+          </div>
+        </div>
+        <div class="pair-slide" data-i="5">
+          <p class="pair-title"><b>Apple → bowl</b> · seed 604381</p>
+          <div class="pair-videos">
+            <figure><figcaption><span class="tag">Default scene</span>YAM tabletop, default light and camera</figcaption>
+              <video data-src="assets/videos/gallery/05-default-seed604381.mp4" muted loop playsinline preload="none"></video></figure>
+            <figure><figcaption><span class="tag changed">Changed scene</span>Evening den · light 0.3×, FOV +15°</figcaption>
+              <video data-src="assets/videos/gallery/05-apple-bowl-evening-den-seed604381.mp4" muted loop playsinline preload="none"></video></figure>
+          </div>
+        </div>
+        <div class="pair-slide" data-i="6">
+          <p class="pair-title"><b>Banana → bowl</b> · seed 712950</p>
+          <div class="pair-videos">
+            <figure><figcaption><span class="tag">Default scene</span>YAM tabletop, default light and camera</figcaption>
+              <video data-src="assets/videos/gallery/06-default-seed712950.mp4" muted loop playsinline preload="none"></video></figure>
+            <figure><figcaption><span class="tag changed">Changed scene</span>YAM tabletop · light 1×, tilt -20°, pan +20°, gray table</figcaption>
+              <video data-src="assets/videos/gallery/06-banana-bowl-yam-tabletop-seed712950.mp4" muted loop playsinline preload="none"></video></figure>
+          </div>
+        </div>
+        <div class="pair-slide" data-i="7">
+          <p class="pair-title"><b>Banana → plate</b> · seed 803190</p>
+          <div class="pair-videos">
+            <figure><figcaption><span class="tag">Default scene</span>YAM tabletop, default light and camera</figcaption>
+              <video data-src="assets/videos/gallery/07-default-seed803190.mp4" muted loop playsinline preload="none"></video></figure>
+            <figure><figcaption><span class="tag changed">Changed scene</span>Kitchen · light 1×, roll -12°, blur 4px</figcaption>
+              <video data-src="assets/videos/gallery/07-banana-plate-kitchen-seed803190.mp4" muted loop playsinline preload="none"></video></figure>
+          </div>
+        </div>
+        <div class="pair-slide" data-i="8">
+          <p class="pair-title"><b>Apple → bowl</b> · seed 915264</p>
+          <div class="pair-videos">
+            <figure><figcaption><span class="tag">Default scene</span>YAM tabletop, default light and camera</figcaption>
+              <video data-src="assets/videos/gallery/08-default-seed915264.mp4" muted loop playsinline preload="none"></video></figure>
+            <figure><figcaption><span class="tag changed">Changed scene</span>Cottage · light 1.8×, overhead, roll +15°</figcaption>
+              <video data-src="assets/videos/gallery/08-apple-bowl-cottage-seed915264.mp4" muted loop playsinline preload="none"></video></figure>
+          </div>
+        </div>
+        <div class="pair-slide" data-i="9">
+          <p class="pair-title"><b>Banana → bowl</b> · seed 133771</p>
+          <div class="pair-videos">
+            <figure><figcaption><span class="tag">Default scene</span>YAM tabletop, default light and camera</figcaption>
+              <video data-src="assets/videos/gallery/09-default-seed133771.mp4" muted loop playsinline preload="none"></video></figure>
+            <figure><figcaption><span class="tag changed">Changed scene</span>Sunny apartment · light 0.7×, front view, FOV -15°, gray table</figcaption>
+              <video data-src="assets/videos/gallery/09-banana-bowl-sunny-apartment-seed133771.mp4" muted loop playsinline preload="none"></video></figure>
+          </div>
+        </div>
+        <div class="pair-slide" data-i="10">
+          <p class="pair-title"><b>Banana → plate</b> · seed 268840</p>
+          <div class="pair-videos">
+            <figure><figcaption><span class="tag">Default scene</span>YAM tabletop, default light and camera</figcaption>
+              <video data-src="assets/videos/gallery/10-default-seed268840.mp4" muted loop playsinline preload="none"></video></figure>
+            <figure><figcaption><span class="tag changed">Changed scene</span>Walnut study · light 1.4×, left diagonal, raised 8 cm</figcaption>
+              <video data-src="assets/videos/gallery/10-banana-plate-walnut-study-seed268840.mp4" muted loop playsinline preload="none"></video></figure>
+          </div>
+        </div>
+      </div>
+      <button class="pair-nav next" type="button" aria-label="Next">›</button>
+      <div class="pair-dots" role="tablist"></div>
     </div>
     <h4 class="title">Two rooms, varied camera and light</h4>
     <div class="rollouts cols-4">
@@ -317,6 +419,28 @@
     <p>We thank <a href="https://www.nota.ai">Nota AI GmbH</a> and <a href="https://dreamlabs.ai">Dream Labs</a> for their support of this project.</p>
   </div>
 </footer>
+<script>
+// Chapter 1's slider: one slide per seed, the default scene on the left and the changed one on the right. Only the slide
+// on screen loads and plays its two videos, started together.
+(() => {
+  const root = document.getElementById("pairs"); if (!root) return;
+  const track = root.querySelector(".pair-track"), slides = [...root.querySelectorAll(".pair-slide")];
+  const dots = root.querySelector(".pair-dots"), prev = root.querySelector(".prev"), next = root.querySelector(".next");
+  slides.forEach((_, i) => { const b = document.createElement("button"); b.type = "button"; b.setAttribute("aria-label", `Seed ${i + 1}`); b.onclick = () => go(i); dots.append(b); });
+  let current = -1;
+  function show(i) {
+    if (i === current) return; current = i;
+    slides.forEach((s, k) => s.querySelectorAll("video").forEach(v => { if (k === i) { if (!v.src) v.src = v.dataset.src; v.currentTime = 0; v.play().catch(() => {}); } else v.pause(); }));
+    [...dots.children].forEach((d, k) => d.classList.toggle("on", k === i));
+    prev.disabled = i === 0; next.disabled = i === slides.length - 1;
+  }
+  const go = i => track.scrollTo({ left: Math.max(0, Math.min(slides.length - 1, i)) * track.clientWidth });
+  prev.onclick = () => go(current - 1); next.onclick = () => go(current + 1);
+  track.addEventListener("keydown", e => { if (e.key === "ArrowRight") go(current + 1); if (e.key === "ArrowLeft") go(current - 1); });
+  track.addEventListener("scroll", () => show(Math.round(track.scrollLeft / track.clientWidth)), { passive: true });
+  new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting && current < 0) show(0); }), { threshold: .2 }).observe(root);
+})();
+</script>
 <script>
 // The chapter bar marks the chapter on screen.
 const links = [...document.querySelectorAll(".chapters a")];
