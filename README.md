@@ -14,28 +14,65 @@
 
 ---
 
-Dream-1 from [Dream Labs](https://dreamlabs.ai) is a robot foundation model that can be prompted with a task and
-fine-tuned on your own episodes. Fine-tuning is only as good as the data: episodes must be successes, varied, and in
-the right format. **Sweet Dream** is a local web app that runs the whole loop in a MuJoCo simulation of the YAM
-two-arm robot:
+**Every failure becomes training data.**
 
-| Step | Page | What it does |
-| --- | --- | --- |
-| 1 | **Collect Custom Dataset!** (`/collect`) | Run Dream-1 once or in batches over seeded scenes. A failure monitor hands a failed episode to a rule-based recovery script, so failures become successes. Success rules label every run; you can relabel by hand, pick runs, and save them as a dataset in the Dream Labs format (LeRobot v2.1). |
-| 2 | **Train Custom Model!** (`/train`) | Upload a saved dataset to Dream Labs and fine-tune Dream-1 on it, with the price shown before you start. |
-| 3 | **Test Custom Model!** (`/test`) | Run your fine-tuned model in the same scenes and compare it with Dream-1. |
+[Dream-1](https://dreamlabs.ai) from Dream Labs is a robot foundation model you can prompt with a task and fine-tune
+on your own episodes. A fine-tune is only as good as its data: the episodes must succeed, vary, and come in the right
+format. **Sweet Dream** is a local web app that runs the whole loop, from collecting data with Dream-1 to testing your
+own fine-tuned model, on the YAM two-arm robot in a MuJoCo scene.
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### 1. Collect
+
+**Collect Custom Dataset!** · `/collect`
+
+<img src="docs/assets/screens/03-collect.png" width="100%" alt="Collect page">
+
+- **At scale.** One batch seed varies the lighting, layout, camera angle and room for every episode.
+- **Failure recovery.** A failed run is finished by a rule-based script, or by you dragging the trajectory from just
+  before the failure.
+- **Labeled and saved.** Success rules label every run; relabel by hand and save the runs as a Dream Labs dataset
+  (LeRobot v2.1).
+
+</td>
+<td width="33%" valign="top">
+
+### 2. Train
+
+**Train Custom Model!** · `/train`
+
+<img src="docs/assets/screens/06-train.png" width="100%" alt="Train page">
+
+- **Upload.** Send a saved dataset to Dream Labs, or import one as a ZIP.
+- **Set up and see the price.** Pick the steps, data mix and learning rate, and see the price before you start.
+- **Fine-tune.** Fine-tune Dream-1 on your own data.
+
+</td>
+<td width="33%" valign="top">
+
+### 3. Test
+
+**Test Custom Model!** · `/test`
+
+<img src="docs/assets/screens/08-test.png" width="100%" alt="Test page">
+
+- **Your eval set.** Run your fine-tuned model on your own test set of seeded scenes.
+- **Compare.** Run Dream-1 in the same scenes and compare the two.
+
+</td>
+</tr>
+</table>
 
 ## Screenshots
 
-| Start · sign in | Start · pick a section |
+| **Start** · Sign in with your Dream API key | **1. Collect** · A batch: its run settings and runs |
 | --- | --- |
-| ![Start page: sign in with the Dream API key](docs/assets/screens/01-start.png) | ![Sections: Collect, Train, Test](docs/assets/screens/02-sections.png) |
-| **1. Collect** · the setup in four steps, beside the camera feeds | **1. Collect** · Run settings for a batch, and the runs |
-| ![Collect page: setup steps and camera feeds](docs/assets/screens/03-collect.png) | ![Collect page: Run settings for a batch](docs/assets/screens/04-collect-batch.png) |
-| **1. Collect** · a run's video, verdict and label | **2. Train** · upload a saved dataset or import a ZIP |
-| ![A run's detail](docs/assets/screens/05-collect-run.png) | ![Train page: datasets](docs/assets/screens/06-train.png) |
-| **2. Train** · pick the dataset, steps, data mix and learning rate, and see the price | **3. Test** · run a fine-tune on its own |
-| ![Train page: training form](docs/assets/screens/07-train-model.png) | ![Test page](docs/assets/screens/08-test.png) |
+| ![Start: sign in](docs/assets/screens/01-start.png) | ![Collect: a batch](docs/assets/screens/04-collect-batch.png) |
+| **1. Collect** · A run: its video, verdict and label | **2. Train** · Pick the dataset, steps, data mix and learning rate, and see the price |
+| ![Collect: a run](docs/assets/screens/05-collect-run.png) | ![Train: training form](docs/assets/screens/07-train-model.png) |
 
 ## Highlights
 
@@ -101,6 +138,15 @@ Sweet Dream is licensed under the [Apache License 2.0](LICENSE); see [NOTICE](NO
 - Dream Labs, Dream-1 and the Dream Labs cloud mark (from which the Sweet Dream icon is drawn) are Dream Labs' names
   and marks, not covered by this license. Sweet Dream is not made or endorsed by Dream Labs.
 
+## Team
+
+- [Se Yeon Kim](https://www.linkedin.com/in/se-yeon-k-440760126/)
+- [DaEun Lee](https://www.linkedin.com/in/daeun-lee-b41b0133a/)
+- [Eunbin Lee](https://www.linkedin.com/in/eunbinlee/)
+- [Seogyoung Hwang](https://www.linkedin.com/in/seogyounghwang/)
+- [Yoonseo Lee](https://www.linkedin.com/in/yoonseo-lee-65307b330/)
+- [ByeongCheol Lee](https://www.linkedin.com/in/byeong-cheol-lee-637311202/)
+
 ## Acknowledgements
 
-We thank [Nota AI GmbH](https://www.nota.ai) and [Dream Labs](https://dreamlabs.ai) for their support of this project.
+We thank [Dream Labs](https://dreamlabs.ai) for its support of this project.
