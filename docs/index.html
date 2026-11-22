@@ -121,6 +121,50 @@
   footer { margin-top: 40px; padding: 30px 0 48px; background: var(--white); border-top: 1px solid var(--rule); font-size: 14px; color: var(--ink-3); }
   footer p { margin: 0 0 8px; } footer h5 { margin: 16px 0 6px; font-size: 15px; color: var(--ink); }
   footer a { color: var(--ink-2); }
+  /* Method overview (from the "Sweet Dream v3 - Editable Method" slide): five cards in three columns, with arrows. */
+  .method { display: grid; grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr) 34px minmax(0, 1fr);
+            grid-template-rows: auto 64px auto; align-items: stretch; color: #26251f; }
+  .m-card { background: #faf8f1; border-radius: 6px; padding: 12px 14px 14px; min-width: 0; }
+  .m-card h4 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 17px; font-weight: 700; letter-spacing: -.02em; color: #26251f; }
+  .m-no { display: inline-grid; place-items: center; min-width: 30px; height: 26px; padding: 0 5px; background: #ffe65b; font-size: 14px; font-weight: 700; }
+  .m-task { margin: -2px 0 6px !important; font-size: 12.5px; text-align: left !important; }
+  .m-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .m-pair figure { margin: 0; }
+  .m-pair img { width: 100%; aspect-ratio: 404 / 228; object-fit: cover; display: block; }
+  .m-pair figcaption { margin-top: 6px; font-size: 13px; font-weight: 700; }
+  .m-c1a { grid-area: 1 / 1; } .m-c1b { grid-area: 3 / 1; }
+  .m-c2 { grid-area: 1 / 3 / 4 / 4; display: flex; flex-direction: column; }
+  .m-c3a { grid-area: 1 / 5; } .m-c3b { grid-area: 3 / 5; }
+  .m-arrow { position: relative; display: grid; place-items: center; }
+  .m-arrow::before { content: ""; background: #393832; }
+  .m-arrow::after { content: ""; position: absolute; border: 8px solid transparent; }
+  .m-arrow.right::before { width: 20px; height: 5px; margin-right: 8px; }
+  .m-arrow.right::after { right: 1px; border-left: 11px solid #393832; border-right: 0; }
+  .m-arrow.down::before { width: 5px; height: 40px; margin-bottom: 8px; }
+  .m-arrow.down::after { bottom: 4px; border-top: 11px solid #393832; border-bottom: 0; }
+  .m-arrow.down span { position: absolute; left: calc(50% + 18px); top: 50%; transform: translateY(-60%); font-size: 14px; white-space: nowrap; }
+  .m-a1 { grid-area: 1 / 2; } .m-a2 { grid-area: 3 / 2; } .m-a3 { grid-area: 1 / 4; }
+  .m-down1 { grid-area: 2 / 1; } .m-down3 { grid-area: 2 / 5; }
+  .m-rule { margin: 4px 0 12px !important; font-size: 15px; text-align: left !important; }
+  .m-runs { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .m-runs li { display: flex; justify-content: space-between; max-width: 220px; padding: 8px 14px; background: #fff; font-size: 15px; }
+  .m-runs .pass { color: #24764a; font-weight: 700; } .m-runs .fail { color: #a6413f; font-weight: 700; }
+  .m-c2 .m-arrow.down { height: 56px; }
+  .m-verified { margin-top: auto; background: #ffe65b; padding: 14px 16px; }
+  .m-verified b { display: block; font-size: 20px; letter-spacing: -.02em; }
+  .m-verified span { font-size: 14px; }
+  .m-ft { margin: 10px 0 0 !important; font-size: 15px; text-align: left !important; }
+  .m-ft-arrow { margin: 4px 0 4px 40px; width: 0; height: 0; border: 7px solid transparent; border-top: 10px solid #393832; border-bottom: 0; }
+  .m-ft-out { margin: 0 !important; font-size: 19px; font-weight: 700; letter-spacing: -.02em; text-align: left !important; }
+  @media (max-width: 760px) {
+    .method { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; gap: 0; }
+    .method > * { grid-area: auto !important; }
+    .m-arrow.right { height: 34px; } .m-arrow.right::before { width: 5px; height: 16px; margin: 0 0 8px; }
+    .m-arrow.right::after { right: auto; bottom: 2px; border: 8px solid transparent; border-top: 11px solid #393832; border-bottom: 0; }
+    .m-down1, .m-down3 { height: 52px; }
+    .m-a2 { display: none; }
+    .m-c2 .m-verified { margin-top: 0; }
+  }
 </style>
 </head>
 <body>
@@ -178,34 +222,52 @@
       <figure class="screen"><div class="gif-soon" role="img" aria-label="Apple task: Dream-1 base and our fine-tune side by side, coming soon">Base vs ours<br><small>coming soon</small></div><figcaption><b>Base vs ours:</b> Dream-1 and our fine-tune on the same apple scene</figcaption></figure>
     </div>
     <div class="figure">
-      <svg viewBox="0 0 1000 300" role="img" aria-labelledby="pipeTitle">
-        <title id="pipeTitle">Pipeline: seeded scenes, Dream-1 runs with failure monitor and recovery, success rules, dataset, fine-tune, test</title>
-        <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#25241f"/></marker></defs>
-        <g font-family="Inter, sans-serif" font-size="17" fill="#25241f" text-anchor="middle">
-          <rect x="10" y="40" width="160" height="96" rx="4" fill="#fffefa" stroke="#d5d0c4"/>
-          <text x="90" y="80" font-weight="600">Seeded scenes</text><text x="90" y="104" font-size="14" fill="#635f53">layout, camera,</text><text x="90" y="122" font-size="14" fill="#635f53">light, room</text>
-          <rect x="215" y="40" width="190" height="96" rx="4" fill="#fcf8ee" stroke="#d5d0c4"/>
-          <text x="310" y="80" font-weight="600">Dream-1 runs</text><text x="310" y="104" font-size="14" fill="#635f53">single or batch,</text><text x="310" y="122" font-size="14" fill="#635f53">up to 4 at once</text>
-          <rect x="215" y="190" width="190" height="96" rx="4" fill="#fff8df" stroke="#eed889"/>
-          <text x="310" y="228" font-weight="600">Failure monitor</text><text x="310" y="252" font-size="14" fill="#635f53">→ rule-based</text><text x="310" y="270" font-size="14" fill="#635f53">recovery script</text>
-          <rect x="450" y="40" width="160" height="96" rx="4" fill="#fffefa" stroke="#d5d0c4"/>
-          <text x="530" y="80" font-weight="600">Success rules</text><text x="530" y="104" font-size="14" fill="#635f53">+ hand labels,</text><text x="530" y="122" font-size="14" fill="#635f53">pick the runs</text>
-          <rect x="655" y="40" width="150" height="96" rx="4" fill="#fffefa" stroke="#d5d0c4"/>
-          <text x="730" y="80" font-weight="600">Dataset</text><text x="730" y="104" font-size="14" fill="#635f53">LeRobot v2.1,</text><text x="730" y="122" font-size="14" fill="#635f53">checked</text>
-          <rect x="850" y="40" width="140" height="96" rx="4" fill="#edf497" stroke="#d5d0c4"/>
-          <text x="920" y="80" font-weight="600">Fine-tune</text><text x="920" y="104" font-size="14" fill="#635f53">upload, train</text><text x="920" y="122" font-size="14" fill="#635f53">on Dream Labs</text>
-          <rect x="850" y="190" width="140" height="96" rx="4" fill="#ead45f" stroke="#d5bd45"/>
-          <text x="920" y="230" font-weight="600">Test</text><text x="920" y="254" font-size="14" fill="#635f53">same scenes,</text><text x="920" y="272" font-size="14" fill="#635f53">vs Dream-1</text>
-        </g>
-        <g stroke="#25241f" stroke-width="2.4" fill="none" marker-end="url(#arrow)">
-          <path d="M172 88H211"/><path d="M407 88H446"/><path d="M612 88H651"/><path d="M807 88H846"/><path d="M920 138V186"/>
-          <path d="M290 138V186" stroke-dasharray="6 5"/><path d="M330 188V140" stroke-dasharray="6 5"/>
-          <path d="M848 214H396V140" stroke-dasharray="6 5"/>
-        </g>
-        <g font-family="Inter, sans-serif" font-size="13" fill="#635f53">
-          <text x="236" y="166">fails</text><text x="338" y="166">recovers</text><text x="560" y="206">the new model goes back into the runs</text>
-        </g>
-      </svg>
+      <div class="method" role="group" aria-label="Method: vary the scene, recover a run, keep verified runs, fine-tune Dream-1, test on matched seeds">
+        <section class="m-card m-c1a">
+          <h4><span class="m-no">01</span>Vary the scene</h4>
+          <p class="m-task">Task: put the banana on the plate</p>
+          <div class="m-pair">
+            <figure><img src="assets/method/vary-seed860222.png" alt="The banana task in a wooden-table room, seed 860222" loading="lazy"><figcaption>Seed 860222</figcaption></figure>
+            <figure><img src="assets/method/vary-seed479444.png" alt="The banana task on the YAM tabletop, seed 479444" loading="lazy"><figcaption>Seed 479444</figcaption></figure>
+          </div>
+        </section>
+        <div class="m-arrow down m-down1" aria-hidden="true"><span>If stuck</span></div>
+        <section class="m-card m-c1b">
+          <h4><span class="m-no">02</span>Recover a run</h4>
+          <div class="m-pair">
+            <figure><img src="assets/method/recover-dream1-stalls.png" alt="Dream-1 is controlling the arms and stalls" loading="lazy"><figcaption>Dream-1 stalls</figcaption></figure>
+            <figure><img src="assets/method/recover-human-takeover.png" alt="A human took over with T and finishes the task" loading="lazy"><figcaption>Human takeover</figcaption></figure>
+          </div>
+        </section>
+        <div class="m-arrow right m-a1" aria-hidden="true"></div>
+        <div class="m-arrow right m-a2" aria-hidden="true"></div>
+        <section class="m-card m-c2">
+          <h4><span class="m-no">03</span>Keep verified runs</h4>
+          <p class="m-rule">Apply the task’s success rules</p>
+          <ul class="m-runs">
+            <li>Run 01 <span class="pass">PASS</span></li>
+            <li>Run 02 <span class="fail">FAIL</span></li>
+            <li>Run 03 <span class="pass">PASS</span></li>
+          </ul>
+          <div class="m-arrow down" aria-hidden="true"></div>
+          <div class="m-verified"><b>Verified dataset</b><span>Successful + recovered runs</span></div>
+        </section>
+        <div class="m-arrow right m-a3" aria-hidden="true"></div>
+        <section class="m-card m-c3a">
+          <h4><span class="m-no">04</span>Fine-tune Dream-1</h4>
+          <p class="m-ft">Verified demonstrations</p>
+          <div class="m-ft-arrow" aria-hidden="true"></div>
+          <p class="m-ft-out">Fine-tuned Dream-1</p>
+        </section>
+        <div class="m-arrow down m-down3" aria-hidden="true"></div>
+        <section class="m-card m-c3b">
+          <h4><span class="m-no">05</span>Test on matched seeds</h4>
+          <div class="m-pair">
+            <figure><img src="assets/method/vary-seed860222.png" alt="Base Dream-1 on the matched seed" loading="lazy"><figcaption>Base Dream-1</figcaption></figure>
+            <figure><img src="assets/method/vary-seed860222.png" alt="Fine-tuned Dream-1 on the same seed" loading="lazy"><figcaption>Fine-tuned Dream-1</figcaption></figure>
+          </div>
+        </section>
+      </div>
     </div>
     <p><b>A fine-tuned Dream-1 is only as good as the data behind it</b>, and good robot data is slow to collect: same
       scenes, failed runs thrown away, success checked by hand. Sweet Dream turns the YAM simulator into a data factory,
@@ -244,11 +306,12 @@
       <figure class="screen"><img src="assets/screens/05-collect-run.png" alt="Review a recorded run alongside the run list" loading="lazy"><figcaption>Review a recorded run alongside the run list</figcaption></figure>
     </div>
 
-    <h4 class="title">Same seed, a different environment</h4>
-    <p>Same task and seed: the default scene on the left, a changed one on the right. Use the arrows or swipe.</p>
+    <h3 class="title">Diverse environments</h3>
+    <p>One task, many environments: each slide puts the default scene on the left and a changed environment on the right,
+      with another room, brighter or dimmer light, a moved or tilted camera, blur or a different table. Use the arrows or swipe.</p>
     <div class="pairs" id="pairs">
       <button class="pair-nav prev" type="button" aria-label="Previous">‹</button>
-      <div class="pair-track" tabindex="0" aria-label="Default and changed scenes, ten seeds">
+      <div class="pair-track" tabindex="0" aria-label="Default and changed environments, ten pairs">
         <div class="pair-slide" data-i="1">
           <p class="pair-title"><b>Banana → plate</b> · seed 41093</p>
           <div class="pair-videos">
@@ -466,7 +529,7 @@
   const root = document.getElementById("pairs"); if (!root) return;
   const track = root.querySelector(".pair-track"), slides = [...root.querySelectorAll(".pair-slide")];
   const dots = root.querySelector(".pair-dots"), prev = root.querySelector(".prev"), next = root.querySelector(".next");
-  slides.forEach((_, i) => { const b = document.createElement("button"); b.type = "button"; b.setAttribute("aria-label", `Seed ${i + 1}`); b.onclick = () => go(i); dots.append(b); });
+  slides.forEach((_, i) => { const b = document.createElement("button"); b.type = "button"; b.setAttribute("aria-label", `Environment ${i + 1}`); b.onclick = () => go(i); dots.append(b); });
   let current = -1;
   function show(i) {
     if (i === current) return; current = i;
