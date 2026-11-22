@@ -6,7 +6,7 @@
 <title>Sweet Dream · Train Custom Model</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bitcount+Single&family=Figtree:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <script>
   const selectedTheme = new URLSearchParams(location.search).get("theme");
   if (selectedTheme === "soft" || selectedTheme === "bauhaus") {
@@ -19,28 +19,56 @@
 <link rel="stylesheet" href="/theme.css">
 <link rel="icon" type="image/svg+xml" href="/icon.svg">
 <style>
-  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
-         max-width: 1200px; margin: 0 auto; padding: 18px clamp(16px, 3vw, 40px); border-bottom: 1px solid var(--line-soft); }
-  .top .name { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; text-decoration: none; color: var(--ink);
-               display: inline-flex; align-items: center; gap: 8px; }
-  .top .name .logo { width: 40px; height: 40px; }
-  .account { display: flex; align-items: center; gap: 12px; font-size: 15px; }
-  main { max-width: 1200px; margin: 0 auto; padding: 32px clamp(16px, 3vw, 40px) 72px; }
-  .back { font-size: 14px; color: var(--ink-3); text-decoration: none; }
-  .back:hover { color: var(--ink); }
-  .intro { margin-bottom: 28px; }
-  .intro .section-title { margin-top: 12px; }
-  .intro .tagline { max-width: 760px; }
-  section.step { margin-top: 20px; }
-  section.step .lead { margin: 0 0 18px; max-width: 820px; }
+  main { max-width: 1440px; margin: 0 auto; padding: 28px clamp(16px, 4vw, 56px) 40px; }
+  .page-head { margin-bottom: 18px; }
+  .topline { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+             margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+  .back { display: inline-block; font-size: 13px; color: var(--ink-3); text-decoration: none; }
+  .back:hover { color: var(--ochre); }
+  .account { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-3); }
+  .page-head h1 { margin: 0; font-size: clamp(32px, 4.5vw, 48px); line-height: 1.05; letter-spacing: -.04em; font-weight: 700; }
+  .page-head .sub { margin: 8px 0 0; color: var(--ink-3); }
+  .train-progress { display: grid; grid-template-columns: auto repeat(3, minmax(0, 1fr)) auto; gap: 4px; align-items: stretch; padding: 4px; border: 1px solid var(--rule); border-radius: 16px; background: #f3f2ef; }
+  .progress-step { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px; border-radius: 11px; color: var(--ink); text-decoration: none; }
+  .progress-step[aria-current="step"] { background: white; box-shadow: 0 1px 4px #0002; }
+  .progress-step .number { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 50%; color: var(--ink-2); font-size: 12px; }
+  .progress-step[aria-current="step"] .number { background: var(--ink); color: white; }
+  .train-progress .step-arrow { align-self: center; padding: 0; width: 32px; height: 36px; background: transparent; color: var(--ink); border: 0; }
+  .step-arrow:disabled { opacity: .3; }
+  section.step[hidden] { display: none; }
+  @media (max-width: 620px) { .train-progress .number, .train-progress small { display: none; } .progress-step { justify-content: center; padding: 6px 0; } }
+  .progress-step .progress-copy { min-width: 0; display: grid; gap: 1px; }
+  .progress-step strong { font-size: 13px; line-height: 1.2; }
+  .progress-step small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-3); font-size: 11px; }
+  .progress-step:hover { border-color: var(--stage-color); }
+  .progress-step:focus-visible { outline: 2px solid var(--ochre); outline-offset: 2px; }
+  .stage-upload { --stage-color: #e8bd66; }
+  .stage-train { --stage-color: #93b9e6; }
+  .stage-models { --stage-color: #9fd3ae; }
+  section.step { margin-top: 14px; padding: 18px 20px; background: var(--white); border: 1px solid var(--rule);
+                 border-top: 3px solid var(--stage-color); border-radius: 18px; box-shadow: var(--soft-shadow); }
+  section.step.grey { background: var(--white); }
+  section.step h2 { margin: 0 0 12px; font-size: 18px; font-weight: 650; line-height: 1.25; letter-spacing: -.01em; }
+  section.step .eyebrow { margin: 0 0 8px; color: var(--ink-3); font: 600 12px/1.3 var(--font); letter-spacing: 0; }
+  section.step .lead { margin: 0 0 12px; max-width: 820px; }
   .step-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
   .hidden-row td { opacity: .55; }
-  .row-actions { display: flex; gap: 6px; margin-top: 8px; }
+  .dataset-name { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .row-actions { display: flex; gap: 6px; flex: none; }
   button.link { height: auto; padding: 0; border: 0; background: none; color: var(--ink-3); font-size: 13px; text-decoration: underline; text-underline-offset: 2px; }
   button.link:hover { background: none; color: var(--ink); }
+  .site button:not(.link) { min-height: 36px; padding: 7px 12px; background: var(--white); border: 1px solid var(--rule);
+                           color: var(--ink); font-size: 13px; font-weight: 500; }
+  .site button:not(.link):hover:not(:disabled) { background: #eeebe2; border-color: var(--rule); }
+  .site button.dark { background: var(--sun); border-color: var(--sun); font-weight: 650; }
+  .site button.dark:hover:not(:disabled) { background: var(--sun-hover); border-color: var(--sun-hover); }
+  .site button:disabled { opacity: .45; }
+  .site label, .site .field-label { color: var(--ink-3); font-size: 12px; font-weight: 550; }
+  .site .share-choice { margin: 0; color: var(--ink); }
+  .site input:not([type="radio"]):not([type="file"]), .site select { height: 40px; background: var(--white); border-color: var(--rule); font-size: 14px; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   th { text-align: left; font-weight: 500; color: var(--ink-3); padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-  td { padding: 12px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  td { padding: 9px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
   tr:last-child td { border-bottom: 0; }
   td .sub { display: block; color: var(--ink-3); font-size: 13px; margin-top: 2px; }
   .table-wrap { overflow-x: auto; background: var(--white); border: 1px solid var(--line-soft); border-radius: 12px; }
@@ -51,28 +79,36 @@
   .chip.ok { background: var(--grass-wash); color: var(--grass-text); }
   .chip.busy { background: #fdf3c4; color: #7a5c00; }
   .chip.bad { background: var(--sherbert-wash); color: var(--error); }
-  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; }
-  @media (max-width: 760px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 20px; align-items: start; }
+  .grid-column { display: grid; gap: 12px; min-width: 0; }
+  @media (max-width: 620px) { .grid { grid-template-columns: minmax(0, 1fr); } }
   select { width: 100%; height: 48px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--white); color: var(--ink); font: inherit; }
   #dataset { appearance: none; padding-right: 48px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%235a5a5a' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 22px center; }
-  .share-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .share-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+  .mix-options { --choice-color: #bb8d38; --choice-wash: #fff3d7; }
+  .schedule-options { --choice-color: #6a9ed5; --choice-wash: #eaf3ff; }
   .field-label { display: block; margin-bottom: 8px; font-size: 14px; font-weight: 500; color: var(--ink-2); }
   .share-choice { position: relative; display: block; margin: 0; cursor: pointer; }
   .share-choice input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-  .share-card { display: block; min-height: 76px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--white); }
-  .share-card strong { display: block; font-size: 15px; }
-  .share-card small { display: block; margin-top: 5px; color: var(--ink-3); font-size: 12px; }
-  .share-choice input:checked + .share-card { border-color: var(--ink); background: var(--clay); box-shadow: inset 0 0 0 1px var(--ink); }
+  .share-card { display: block; min-height: 66px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--white); }
+  .share-card strong { display: block; font-size: 13px; line-height: 1.3; }
+  .share-card small { display: block; margin-top: 4px; color: var(--ink-3); font-size: 11px; line-height: 1.3; }
+  .share-choice input:checked + .share-card { border-color: var(--choice-color); background: var(--choice-wash); box-shadow: inset 0 0 0 1px var(--choice-color); }
   .share-choice input:focus-visible + .share-card { outline: 3px solid var(--creamsicle-deep); outline-offset: 2px; }
   @media (max-width: 520px) { .share-options { grid-template-columns: 1fr; } }
-  .hint { font-size: 13px; color: var(--ink-3); margin: 6px 0 0; }
-  .price { margin-top: 22px; padding: 16px 18px; border-radius: 12px; background: var(--creamsicle-wash); border: 1px solid rgba(255, 159, 77, .35); }
+  .hint { font-size: 12px; color: var(--ink-3); margin: 5px 0 0; }
+  .train-checkout { display: grid; grid-template-columns: minmax(0, 1fr); align-items: end; gap: 12px; }
+  .price { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px 18px; margin: 0; padding: 11px 14px;
+           border-radius: 12px; background: var(--sun-wash); border: 1px solid color-mix(in srgb, var(--sun) 35%, transparent); }
   .price .eyebrow { margin: 0 0 8px; }
-  .price b { display: block; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; }
+  .price b { display: block; font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
   .price .note { display: block; margin-top: 2px; }
-  .credits { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255, 159, 77, .35); }
+  .credits { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-left: 14px; border-left: 1px solid rgba(255, 159, 77, .35); }
   .credits .hint { margin: 0; }
   .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 16px; }
+  .train-checkout .actions { margin: 0; justify-content: flex-end; }
+  #startTrain { min-height: 44px; white-space: nowrap; }
+  @media (max-width: 620px) { .train-checkout { grid-template-columns: 1fr; } .train-checkout .actions { justify-content: stretch; } #startTrain { width: 100%; } .credits { width: 100%; padding: 8px 0 0; border-left: 0; border-top: 1px solid rgba(255, 159, 77, .35); } }
   .note { font-size: 14px; color: var(--ink-3); }
   .error { margin-top: 14px; }
   .empty { padding: 18px; color: var(--ink-3); font-size: 14px; }
@@ -84,26 +120,28 @@
   dialog li { margin: 4px 0; }
   .progress { height: 6px; border-radius: 999px; background: var(--grey-2); overflow: hidden; margin-top: 6px; max-width: 220px; }
   .progress span { display: block; height: 100%; background: var(--creamsicle-deep); }
-  .jobs-card { background: #f5fcf6; border: 0; box-shadow: 0 2px 4px rgba(23, 100, 58, .06), 0 12px 30px rgba(23, 100, 58, .08); }
 </style>
 </head>
 <body class="site">
-<header class="top">
-  <a class="name" href="/sections"><img class="logo" src="/icon.svg" alt=""><span><span class="sweet">Sweet</span> Dream</span></a>
-  <div class="account">
-    <span class="muted">Key <b id="keyHint">…</b></span>
-    <button type="button" class="outline" id="signOut">Sign out</button>
-  </div>
-</header>
 <main>
-  <div class="intro">
-    <a class="back" href="/sections">← Sweet Dream · Sections</a>
-    <h1 class="section-title">Train Custom Model!</h1>
-    <p class="tagline">Upload a dataset you collected to Dream Labs, then fine-tune Dream-1 on it. Uploading is free; training is charged.</p>
-  </div>
+  <header class="page-head">
+    <div class="topline">
+      <a class="back" href="/sections">← Sweet Dream · Sections</a>
+      <div class="account"><span>Signed in · key <b id="keyHint">…</b></span><button type="button" class="outline" id="signOut">Sign out</button></div>
+    </div>
+    <h1>Train Custom Model!</h1>
+    <p class="sub">Upload a dataset you collected to Dream Labs, then fine-tune Dream-1 on it. Uploading is free; training is charged.</p>
+  </header>
+  <nav class="train-progress" aria-label="Training steps">
+    <button type="button" class="step-arrow" id="previousStep" aria-label="Previous step">←</button>
+    <a class="progress-step stage-upload" href="#uploadTitle" id="uploadProgress" data-state="waiting"><span class="number">1</span><span class="progress-copy"><strong>Dataset</strong><small id="uploadProgressText">Checking datasets…</small></span></a>
+    <a class="progress-step stage-train" href="#trainTitle" id="trainProgress" data-state="waiting"><span class="number">2</span><span class="progress-copy"><strong>Configure</strong><small id="trainProgressText">Choose training settings</small></span></a>
+    <a class="progress-step stage-models" href="#jobsTitle" id="jobsProgress" data-state="waiting"><span class="number">3</span><span class="progress-copy"><strong>Models</strong><small id="jobsProgressText">Checking jobs…</small></span></a>
+    <button type="button" class="step-arrow" id="nextStep" aria-label="Next step">→</button>
+  </nav>
   <div class="error" id="pageError" role="alert" hidden></div>
 
-  <section class="dl-card step" aria-labelledby="uploadTitle">
+  <section class="dl-card step stage-upload" aria-labelledby="uploadTitle">
     <div class="step-head">
       <div><p class="eyebrow">Step 1 · Upload</p><h2 id="uploadTitle">Upload a dataset</h2></div>
       <div class="actions" style="margin-top: 0">
@@ -122,15 +160,16 @@
     </div>
   </section>
 
-  <section class="dl-card grey step" aria-labelledby="trainTitle">
+  <section class="dl-card grey step stage-train" aria-labelledby="trainTitle">
     <p class="eyebrow">Step 2 · Train</p>
     <h2 id="trainTitle">Train a model</h2>
     <p class="lead muted small">Pick a processed dataset on Dream Labs and how long to train. The model gets the name <code>dream-1-ft:&lt;account&gt;-&lt;name&gt;</code>.</p>
     <div class="grid">
-      <div>
-        <label for="dataset">Dataset on Dream Labs</label>
-        <select id="dataset"></select>
-        <p class="hint" id="datasetHint"></p>
+      <div class="grid-column">
+        <div>
+          <label for="dataset">Dataset on Dream Labs</label>
+          <select id="dataset"></select>
+          <p class="hint" id="datasetHint"></p>
       </div>
       <div>
         <label for="suffix">Name your new model</label>
@@ -142,32 +181,48 @@
         <input id="steps" type="number" min="500" max="10000" step="100" value="1000">
         <p class="hint">A multiple of 100 from 500 to 10,000. About 7 to 8 hours for 1,000 steps.</p>
       </div>
+      </div>
+      <div class="grid-column">
+        <div>
+          <div id="shareLabel" class="field-label">Training data mix</div>
+          <div class="share-options mix-options" role="radiogroup" aria-labelledby="shareLabel">
+            <label class="share-choice"><input type="radio" name="baseShare" value="0.5" checked>
+              <span class="share-card"><strong>Balanced mix</strong><small>50% my data · 50% Dream-1</small></span></label>
+            <label class="share-choice"><input type="radio" name="baseShare" value="0">
+              <span class="share-card"><strong>My data only</strong><small>100% my data</small></span></label>
+          </div>
+          <p class="hint">Dream-1 share: 0.5 or 0.0. The mixed data stays on Dream Labs.</p>
+      </div>
       <div>
-        <div id="shareLabel" class="field-label">Training data mix</div>
-        <div class="share-options" role="radiogroup" aria-labelledby="shareLabel">
-          <label class="share-choice"><input type="radio" name="baseShare" value="0.5" checked>
-            <span class="share-card"><strong>Balanced mix</strong><small>50% my data · 50% Dream-1</small></span></label>
-          <label class="share-choice"><input type="radio" name="baseShare" value="0">
-            <span class="share-card"><strong>My data only</strong><small>100% my data</small></span></label>
+        <div id="learningRateLabel" class="field-label">Learning rate schedule</div>
+        <div class="share-options schedule-options" role="radiogroup" aria-labelledby="learningRateLabel">
+          <label class="share-choice"><input type="radio" name="lrSchedule" value="constant" checked>
+            <span class="share-card"><strong>Constant</strong><small>Keep the learning rate steady</small></span></label>
+          <label class="share-choice"><input type="radio" name="lrSchedule" value="cosine">
+            <span class="share-card"><strong>Cosine</strong><small>Gradually lower it to zero</small></span></label>
         </div>
-        <p class="hint">Dream-1 share: 0.5 or 0.0. The mixed data stays on Dream Labs.</p>
       </div>
-    </div>
-    <div class="price" aria-label="Estimated billing">
-      <p class="eyebrow">Estimated billing</p>
-      <b id="price">$0</b>
-      <span class="note" id="priceNote"></span>
-      <div class="credits">
-        <span class="hint">Available credits are shown in</span>
-        <a href="https://platform.dreamlabs.ai/billing" target="_blank" rel="noopener noreferrer">Dream Labs Billing ↗</a>
+        <div class="train-checkout">
+          <div class="price" aria-label="Estimated billing">
+            <div class="price-main">
+              <p class="eyebrow">Estimated billing</p>
+              <b id="price">$0</b>
+              <span class="note" id="priceNote"></span>
+            </div>
+            <div class="credits">
+              <span class="hint">Available credits are shown in</span>
+              <a href="https://platform.dreamlabs.ai/billing" target="_blank" rel="noopener noreferrer">Dream Labs Billing ↗</a>
+            </div>
+          </div>
+          <div class="actions">
+            <button type="button" class="dark" id="startTrain" disabled>Start training…</button>
+          </div>
+        </div>
       </div>
-    </div>
-    <div class="actions">
-      <button type="button" class="dark" id="startTrain" disabled>Start training…</button>
     </div>
   </section>
 
-  <section class="dl-card jobs-card step" aria-labelledby="jobsTitle">
+  <section class="dl-card step stage-models" aria-labelledby="jobsTitle">
     <p class="eyebrow">Step 3 · Models</p>
     <h2 id="jobsTitle">Your training jobs</h2>
     <p class="lead muted small">Read from Dream Labs every 30 seconds, so they are here again after a restart. A finished job's model can be tested in Step 3.</p>
@@ -243,7 +298,7 @@ function renderLocal() {
     }
     const tasks = d.tasks.length ? d.tasks.join(", ") : "";
     const toggle = `<div class="row-actions"><button type="button" class="link" data-hide="${esc(d.folder)}" data-hidden="${d.hidden ? 0 : 1}">${d.hidden ? "Unhide" : "Hide"}</button></div>`;
-    return `<tr class="${d.hidden ? "hidden-row" : ""}"><td><b>${esc(d.folder.replace(/^\d{8}-\d{6}-/, ""))}</b><span class="sub">${esc(when(d.created_at))} · ${esc(tasks)}</span>${toggle}</td>
+    return `<tr class="${d.hidden ? "hidden-row" : ""}"><td><div class="dataset-name"><b>${esc(d.folder.replace(/^\d{8}-\d{6}-/, ""))}</b>${toggle}</div><span class="sub">${esc(when(d.created_at))} · ${esc(tasks)}</span></td>
       <td>${d.episodes ?? "—"}<span class="sub">${d.frames ?? "?"} frames</span></td><td>${cell}</td></tr>`;
   }).join("");
 }
@@ -273,6 +328,22 @@ function updatePrice() {
   $("suffixHint").textContent = !$("suffix").value ? "Enter a name to start training. Lowercase letters, numbers and hyphens only."
     : !suffixOk ? "Use lowercase letters, numbers and hyphens (up to 40 characters)."
     : "This name will appear in your model ID.";
+  updateProgress();
+}
+
+function updateProgress() {
+  const processed = state?.account?.datasets?.filter(d => d.status === "processed").length || 0;
+  const local = state?.local?.filter(d => !d.hidden).length || 0;
+  const jobs = state?.account?.jobs?.length || 0;
+  const ready = !$("startTrain").disabled;
+  $("uploadProgress").dataset.state = processed ? "ready" : "waiting";
+  $("uploadProgressText").textContent = processed ? `${processed} dataset${processed === 1 ? "" : "s"} ready`
+    : local ? "Upload a saved dataset" : "Collect a dataset";
+  $("trainProgress").dataset.state = ready ? "ready" : "waiting";
+  $("trainProgressText").textContent = ready ? "Ready to train"
+    : !$("dataset").value ? "Choose a dataset" : !$("suffix").value ? "Name your model" : "Check training settings";
+  $("jobsProgress").dataset.state = jobs ? "ready" : "waiting";
+  $("jobsProgressText").textContent = jobs ? `${jobs} job${jobs === 1 ? "" : "s"} tracked` : "No jobs yet";
 }
 
 function renderJobs() {
@@ -294,7 +365,7 @@ async function load() {
     state = await api("/api/train");
     $("pageError").hidden = !state.account_error;
     $("pageError").textContent = state.account_error ? "Dream Labs could not be read: " + state.account_error : "";
-    renderLocal(); renderTrain(); renderJobs();
+    renderLocal(); renderTrain(); renderJobs(); updateProgress();
   } catch (err) {
     if (err.message !== "Signed out") { $("pageError").hidden = false; $("pageError").textContent = err.message; }
   }
@@ -350,18 +421,20 @@ $("suffix").addEventListener("input", () => { $("suffix").value = $("suffix").va
 
 $("startTrain").onclick = () => {
   const steps = Number($("steps").value), per = state.account.price_per_step, share = Number(document.querySelector('input[name="baseShare"]:checked').value);
+  const schedule = document.querySelector('input[name="lrSchedule"]:checked').value;
   $("confirmText").innerHTML = `Fine-tune Dream-1 on <b>${esc($("dataset").value)}</b> for <b>${steps.toLocaleString("en-US")} steps</b> as <code>${esc($("suffix").value)}</code>`
-    + ` (base_share=${share.toFixed(1)}: ${share ? "half your data, half Dream-1 general data" : "your data only"}). Estimated price: <b>$${(steps * per).toFixed(2)}</b>.`;
+    + ` (base_share=${share.toFixed(1)}: ${share ? "half your data, half Dream-1 general data" : "your data only"}; ${schedule} learning rate schedule). Estimated price: <b>$${(steps * per).toFixed(2)}</b>.`;
   $("confirmYes").textContent = `Start · $${(steps * per).toFixed(2)}`;
   $("confirm").showModal();
 };
 $("confirmNo").onclick = () => $("confirm").close();
 $("confirmYes").onclick = async () => {
   const steps = Number($("steps").value), share = Number(document.querySelector('input[name="baseShare"]:checked').value);
+  const schedule = document.querySelector('input[name="lrSchedule"]:checked').value;
   $("confirmYes").disabled = true;
   try {
     await api("/api/train/start", { dataset: $("dataset").value, suffix: $("suffix").value, steps,
-                                    price: Math.round(steps * state.account.price_per_step * 100) / 100, lr_schedule: "constant", base_share: share });
+                                    price: Math.round(steps * state.account.price_per_step * 100) / 100, lr_schedule: schedule, base_share: share });
     $("confirm").close();
     $("suffix").value = "";
   } catch (err) {
@@ -378,6 +451,34 @@ api("/api/status").then(s => {
   load();
 }).catch(() => load());
 $("signOut").onclick = async () => { await api("/api/key", { key: "" }).catch(() => {}); location.href = "/"; };
+
+const stepLinks = Array.from(document.querySelectorAll(".train-progress a"));
+let currentStep;
+function showStep(index) {
+  currentStep = index;
+  stepLinks.forEach((link, i) => {
+    document.querySelector(link.hash).closest("section").hidden = i !== index;
+    if (i === index) link.setAttribute("aria-current", "step");
+    else link.removeAttribute("aria-current");
+  });
+  $("previousStep").disabled = index === 0;
+  $("nextStep").disabled = index === stepLinks.length - 1;
+}
+function openStep(index) {
+  history.pushState(null, "", stepLinks[index].hash);
+  showStep(index);
+}
+function restoreStep() {
+  showStep(Math.max(0, stepLinks.findIndex(link => link.hash === location.hash)));
+}
+stepLinks.forEach((link, index) => link.addEventListener("click", event => {
+  event.preventDefault();
+  if (index !== currentStep) openStep(index);
+}));
+$("previousStep").onclick = () => openStep(currentStep - 1);
+$("nextStep").onclick = () => openStep(currentStep + 1);
+window.addEventListener("popstate", restoreStep);
+restoreStep();
 </script>
 </body>
 </html>
