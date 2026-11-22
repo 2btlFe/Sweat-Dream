@@ -3,7 +3,8 @@
 </p>
 
 <h1 align="center">Sweet Dream</h1>
-<p align="center"><b>Clean Data, Better Dream</b>: collect clean robot data in simulation, fine-tune Dream-1 on it, and test the result.</p>
+<p align="center"><b>Diverse Data for Custom Dream-1 Fine-Tuning</b></p>
+<p align="center">Collect diverse robot data in simulation, fine-tune a custom Dream-1 on it, and test the result.</p>
 <p align="center">
   <a href="https://2btlfe.github.io/Sweet-Dream/">Project page</a> ·
   <a href="docs/USAGE.md">Usage guide</a> ·
@@ -22,6 +23,18 @@ two-arm robot:
 | 1 | **Collect Custom Dataset!** (`/collect`) | Run Dream-1 once or in batches over seeded scenes. A failure monitor hands a failed episode to a rule-based recovery script, so failures become successes. Success rules label every run; you can relabel by hand, pick runs, and save them as a dataset in the Dream Labs format (LeRobot v2.1). |
 | 2 | **Train Custom Model!** (`/train`) | Upload a saved dataset to Dream Labs and fine-tune Dream-1 on it, with the price shown before you start. |
 | 3 | **Test Custom Model!** (`/test`) | Run your fine-tuned model in the same scenes and compare it with Dream-1. |
+
+## Screenshots
+
+| Sign in | Pick a section |
+| --- | --- |
+| ![Start page: sign in with the Dream API key](docs/assets/screens/01-start.png) | ![Sections: Collect, Train, Test](docs/assets/screens/02-sections.png) |
+| **1. Collect Custom Dataset**: run setup, model and camera view | **1. Collect**: a run's video, verdict and settings |
+| ![Collect page](docs/assets/screens/03-collect.png) | ![A run's detail](docs/assets/screens/04-collect-run.png) |
+| **2. Train Custom Model**: upload saved datasets | **2. Train**: pick steps and see the price |
+| ![Train page: datasets](docs/assets/screens/06-train.png) | ![Train page: training form](docs/assets/screens/07-train-model.png) |
+| **3. Test Custom Model**: run a fine-tune on its own | **1. Collect**: a batch with its settings and the runs |
+| ![Test page](docs/assets/screens/08-test.png) | ![Batch settings](docs/assets/screens/05-collect-batch.png) |
 
 ## Highlights
 

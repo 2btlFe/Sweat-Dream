@@ -21,6 +21,8 @@ python3 -m venv ~/dream-env
    [platform.dreamlabs.ai/api-keys](https://platform.dreamlabs.ai/api-keys).)
 3. Pick a section: **Collect Custom Dataset!**, **Train Custom Model!** or **Test Custom Model!**
 
+<img src="assets/screens/01-start.png" width="49%" alt="Start page"> <img src="assets/screens/02-sections.png" width="49%" alt="Sections">
+
 The key stays in the server's memory only. **Sign out** (top right) removes it; restarting the server does too, so you
 sign in again after a restart.
 
@@ -29,6 +31,8 @@ sign in again after a restart.
 ## 2. Collect Custom Dataset
 
 Run the robot in the simulator, check which runs succeeded, and save the good ones as a dataset.
+
+![Collect page: model, run setup and camera view](assets/screens/03-collect.png)
 
 ### Set up a run
 
@@ -58,6 +62,8 @@ Press **Run**. Each run is saved in `runs/`, and its recording (cameras, arm sta
 
 Switch to **Batch** and choose:
 
+![Batch settings and the run list](assets/screens/05-collect-batch.png)
+
 - **Each episode**: Data collection, Rule-based only, Dream-1 only, or **Original** (the baseline: always the default
   scene and settings).
 - **Episodes** and **Seconds each**.
@@ -74,6 +80,9 @@ The page shows progress, successes and the camera of each running episode. **Sto
 - The **Runs** list shows every run with its result: **SUCCESS**, **FAILURE** or **INVALID** (an error or a stopped
   run). The filter shows one batch at a time.
 - Click a run to see its video, why it passed or failed, and how it was set up.
+
+  <img src="assets/screens/04-collect-run.png" width="60%" alt="A run's detail">
+
 - Disagree with the result? Set it yourself with **Success / Failure / Invalid** (keys `1 / 2 / 3`; `0` gives it back
   to the rules). Your label always wins. `J / K` move to the next / previous run.
 - **Success rules** (Advanced) sets what counts as success, per task type. See [Success rules](#success-rules).
@@ -113,6 +122,8 @@ asks first, and a run that is going is never deleted.
 
 Fine-tune Dream-1 on a dataset you saved, without leaving the app. It uses the key you signed in with.
 
+<img src="assets/screens/06-train.png" width="49%" alt="Train page: datasets"> <img src="assets/screens/07-train-model.png" width="49%" alt="Train page: training form">
+
 | Step | What you do | Cost |
 | --- | --- | --- |
 | **1. Upload** | Every saved dataset is listed. Give it a name and press **Upload**. It is checked first. | Free |
@@ -130,6 +141,8 @@ credits on the Dream Labs [Billing](https://platform.dreamlabs.ai/billing) page.
 ## 4. Test Custom Model
 
 Run a model by itself, with no rescue script, to see how good it really is.
+
+![Test page](assets/screens/08-test.png)
 
 1. In the **Model** bar, pick your fine-tune. (The first run of a new model may wait a few minutes while it starts.)
 2. Run it once or as a batch. Use **Eval set (50)** to compare it with Dream-1 on the same starts.
@@ -186,6 +199,7 @@ Runs made here show up in the app's Runs list too.
 | `recorder.py`, `lerobot_export.py` | Recordings, and the Dream Labs dataset format |
 | `train.py` | Upload and fine-tuning through the Dream Labs API |
 | `batch.py` | Batches from the command line |
+| `tools/screenshots.py` | Captures the pages for these docs (`docs/assets/screens/`), with the key and account hidden |
 
 ---
 

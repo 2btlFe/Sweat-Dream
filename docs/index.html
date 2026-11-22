@@ -67,6 +67,12 @@
   section[id] { scroll-margin-top: 64px; }
   .chapter { border-top: 1px solid var(--line); margin-top: 26px; }
   .chapter-no { text-transform: uppercase; letter-spacing: .08em; font-size: 13px; font-weight: 600; color: #7a7a7a; margin: 0 0 4px; }
+  .screens { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 10px 0 18px; }
+  .screens.one { grid-template-columns: minmax(0, 1fr); max-width: 760px; margin-left: auto; margin-right: auto; }
+  @media (max-width: 760px) { .screens { grid-template-columns: minmax(0, 1fr); } }
+  .screen { margin: 0; }
+  .screen img { width: 100%; display: block; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+  .screen figcaption { font-size: 14px; color: #7a7a7a; margin-top: 6px; text-align: center; }
   .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 6px 0 10px; }
   @media (max-width: 860px) { .steps { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
   .step { background: var(--band); border-radius: 10px; padding: 14px 16px; }
@@ -179,6 +185,10 @@
       scenes drawn on the camera picture), which a person's label overrides. Picked runs are saved as one
       <b>LeRobot v2.1</b> dataset with the YAM embodiment (right arm first, joints in radians, grippers 0 to 1, three
       cameras at 5 fps) and checked with Dream Labs' own validator.</p>
+    <div class="screens">
+      <figure class="screen"><img src="assets/screens/03-collect.png" alt="The Collect page: model, run setup and the camera view" loading="lazy"><figcaption>The Collect page: model, run setup and the camera view</figcaption></figure>
+      <figure class="screen"><img src="assets/screens/05-collect-batch.png" alt="A batch: episodes, seeds, scene per episode, and the runs" loading="lazy"><figcaption>A batch: episodes, seeds, scene per episode, and the runs</figcaption></figure>
+    </div>
     <h3 class="title">Results</h3>
     <table class="results">
       <thead><tr><th>Setting</th><th>Episodes</th><th>Success</th></tr></thead>
@@ -228,6 +238,10 @@
     <h2 class="title">Train Custom Model</h2>
     <p>The Train page fine-tunes Dream-1 on a collected dataset through the Dream Labs API, with the key you signed in
       with; nothing has to be done on the Dream Labs website.</p>
+    <div class="screens">
+      <figure class="screen"><img src="assets/screens/06-train.png" alt="Step 1: upload a saved dataset" loading="lazy"><figcaption>Step 1: upload a saved dataset</figcaption></figure>
+      <figure class="screen"><img src="assets/screens/07-train-model.png" alt="Step 2: pick the steps and see the price" loading="lazy"><figcaption>Step 2: pick the steps and see the price</figcaption></figure>
+    </div>
     <div class="steps">
       <div class="step"><p class="step-no">1 · Upload</p><p>Every dataset saved in the Dream Labs format is listed. <b>Upload</b>
         checks it locally, registers the robot once (<code>yam-sim</code>) and uploads it under a name. Free.</p></div>
@@ -256,6 +270,9 @@
       counted in the run's time).</p>
     <p>Runs and batches use the same seeded scenes as collection, including the fixed <b>evaluation set of 50 seeds</b>, so
       a fine-tuned model and Dream-1 can be compared start for start.</p>
+    <div class="screens one">
+      <figure class="screen"><img src="assets/screens/08-test.png" alt="The Test page: pick a fine-tune in the Model bar and run it alone" loading="lazy"><figcaption>The Test page: pick a fine-tune in the Model bar and run it alone</figcaption></figure>
+    </div>
     <h3 class="title">Results</h3>
     <p>The comparison of our fine-tuned model with Dream-1 on the evaluation seeds will be added here.</p>
   </div>
