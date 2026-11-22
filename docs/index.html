@@ -26,9 +26,15 @@
   .button { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px; border-radius: 999px; background: #363636; color: #fff; font-size: 16px; }
   .button:hover { background: #2f2f2f; text-decoration: none; }
   .button svg { width: 16px; height: 16px; fill: currentColor; }
+  .qr { display: inline-flex; align-items: center; gap: 10px; margin: 16px 0 0; padding: 6px 14px 6px 6px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+  .qr img { width: 76px; height: 76px; display: block; image-rendering: pixelated; }
+  .qr figcaption { font-size: 13px; line-height: 1.4; color: #7a7a7a; text-align: left; }
+  .qr figcaption a { color: var(--strong); }
   .teaser { background: var(--band); padding: 28px 0; }
   .teaser-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border-radius: 6px; overflow: hidden; }
   .teaser-grid video { border-radius: 0; }
+  video.demo { width: 100%; aspect-ratio: 1280 / 800; border-radius: 8px; background: #111; box-shadow: 0 8px 28px rgba(0,0,0,.12); }
+  .demo-note { text-align: center; font-size: 14px; color: #7a7a7a; margin: 10px 0 0; }
   .tldr { text-align: center; font-size: 20px; font-weight: 400; line-height: 1.55; color: var(--text); max-width: 900px; margin: 0 auto; padding: 30px 20px 10px; }
   .tldr b { color: var(--strong); }
   section.section { padding: 34px 0 10px; }
@@ -118,16 +124,18 @@
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.72 3.22a.75.75 0 011.06 1.06L2.06 8l3.72 3.72a.75.75 0 11-1.06 1.06L.47 8.53a.75.75 0 010-1.06l4.25-4.25zm6.56 0a.75.75 0 10-1.06 1.06L13.94 8l-3.72 3.72a.75.75 0 101.06 1.06l4.25-4.25a.75.75 0 000-1.06l-4.25-4.25z"/></svg>
         Dream Labs API</a>
     </div>
+    <figure class="qr">
+      <a href="assets/qr-project-page.png" download="sweet-dream-qr.png"><img src="assets/qr-project-page.svg" alt="QR code for https://2btlfe.github.io/Sweet-Dream/"></a>
+      <figcaption>Scan to open this page<br><a href="assets/qr-project-page.png" download="sweet-dream-qr.png">PNG</a> ·
+        <a href="assets/qr-project-page.svg" download="sweet-dream-qr.svg">SVG</a></figcaption>
+    </figure>
   </div>
 </section>
 
-<section class="teaser">
+<section class="teaser" id="demo">
   <div class="container">
-    <div class="teaser-grid">
-      <video src="assets/videos/gallery/02-apple-bowl-sunny-apartment-seed228517.mp4" autoplay muted loop playsinline></video>
-      <video src="assets/videos/gallery/05-apple-bowl-evening-den-seed604381.mp4" autoplay muted loop playsinline></video>
-      <video src="assets/videos/gallery/08-apple-bowl-cottage-seed915264.mp4" autoplay muted loop playsinline></video>
-    </div>
+    <video class="demo" src="assets/videos/demo.mp4" poster="assets/videos/demo-poster.jpg" controls playsinline preload="metadata"></video>
+    <p class="demo-note">A 90-second tour of Sweet Dream, with narration: sign in, collect a run, save a dataset, train, test.</p>
   </div>
 </section>
 
@@ -140,6 +148,7 @@
 
 <nav class="chapters" aria-label="Chapters">
   <div class="container">
+    <a href="#demo">Demo</a>
     <a href="#overview">Overview</a>
     <a href="#collect"><span class="n">1</span>Collect Custom Dataset</a>
     <a href="#train"><span class="n">2</span>Train Custom Model</a>
@@ -330,22 +339,16 @@
   <div class="container content">
     <p class="chapter-no">Chapter 2</p>
     <h2 class="title">Train Custom Model</h2>
-    <p>The Train page fine-tunes Dream-1 on a collected dataset through the Dream Labs API, with the key you signed in
-      with; nothing has to be done on the Dream Labs website.</p>
+    <p>Fine-tune Dream-1 on a collected dataset from the app, with the key you signed in with.</p>
     <div class="screens">
       <figure class="screen"><img src="assets/screens/06-train.png" alt="Step 1: upload a saved dataset" loading="lazy"><figcaption>Step 1: upload a saved dataset</figcaption></figure>
       <figure class="screen"><img src="assets/screens/07-train-model.png" alt="Step 2: pick the steps and see the price" loading="lazy"><figcaption>Step 2: pick the steps and see the price</figcaption></figure>
     </div>
     <div class="steps">
-      <div class="step"><p class="step-no">1 · Upload</p><p>Every dataset saved in the Dream Labs format is listed. <b>Upload</b>
-        checks it locally, registers the robot once (<code>yam-sim</code>) and uploads it under a name. Free.</p></div>
-      <div class="step"><p class="step-no">2 · Process</p><p>Dream Labs prepares the dataset for training; the page follows it from
-        <i>waiting</i> to <i>processing</i> to <i>processed</i>, a few minutes for 50 episodes. Free.</p></div>
-      <div class="step"><p class="step-no">3 · Train</p><p>Pick a processed dataset, a model name, 500 to 10,000 steps, the training
-        data (mixed with Dream Labs data, or yours only) and the learning-rate schedule. The price shows as you choose and is
-        confirmed before the job starts; a queued job cannot be cancelled.</p></div>
-      <div class="step"><p class="step-no">4 · Follow</p><p>Jobs are read back from Dream Labs every 30 seconds (phase, step, loss);
-        a finished job publishes the model <code>dream-1-ft:&lt;account&gt;-&lt;name&gt;</code>.</p></div>
+      <div class="step"><p class="step-no">1 · Upload</p><p>Pick a saved dataset and upload it. Free.</p></div>
+      <div class="step"><p class="step-no">2 · Process</p><p>Dream Labs prepares it in a few minutes. Free.</p></div>
+      <div class="step"><p class="step-no">3 · Train</p><p>Choose the steps and see the price. Once started, it can't be cancelled.</p></div>
+      <div class="step"><p class="step-no">4 · Follow</p><p>Watch the progress; the finished model appears here.</p></div>
     </div>
     <h3 class="title">Results</h3>
     <p>Our banana dataset, <b>50 unique seeds and 5,078 frames</b> in two rooms, passed the Dream Labs validator and was

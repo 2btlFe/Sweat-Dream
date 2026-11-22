@@ -60,7 +60,7 @@ html[data-theme="soft"] {
   --ink: #34322c;
   --ink-3: #6a6457;
   --rule: #e7e0d3;
-  --radius: 14px;
+  --radius: 4px;
   --soft-shadow: 0 12px 36px rgb(74 58 27 / 7%);
 }
 html[data-theme="soft"] body {
@@ -103,7 +103,7 @@ html[data-theme="soft"] .geometry::after { content: none; }
 html[data-theme="soft"] .site .login {
   padding: clamp(20px, 6vw, 32px);
   border: 1px solid var(--rule);
-  border-radius: 22px;
+  border-radius: 4px;
   box-shadow: var(--soft-shadow);
 }
 html[data-theme="soft"] .site .top { border-bottom-color: var(--rule); }
@@ -111,7 +111,7 @@ html[data-theme="soft"] .site main .intro h1 { letter-spacing: -.045em; }
 html[data-theme="soft"] .cards { gap: 14px; border-top: 0; }
 html[data-theme="soft"] .cards .card {
   border: 1px solid var(--rule);
-  border-radius: 20px;
+  border-radius: 4px;
   box-shadow: var(--soft-shadow);
 }
 html[data-theme="soft"] .cards .card::before { content: none; }
@@ -119,14 +119,17 @@ html[data-theme="soft"] .cards .collect { background: #fffbec; }
 html[data-theme="soft"] .cards .collect:hover { background: var(--sun-wash); }
 html[data-theme="soft"] .workspace > .col > .panel {
   border: 1px solid var(--rule);
-  border-radius: 20px;
+  border-radius: 4px;
   box-shadow: var(--soft-shadow);
 }
 html[data-theme="soft"] .workspace :is(.task-card, .ood fieldset) {
   background: #fbf9f4;
-  border-radius: 14px;
+  border-radius: 4px;
 }
 html[data-theme="soft"] :is(dialog, .toggle, .live-frame) { border-radius: var(--radius); }
+/* Buttons and switches stay square-cornered in the soft theme too (the panels and cards keep their rounding). */
+html[data-theme="soft"] :is(button, .button, .toggle) { border-radius: 4px; }
+html[data-theme="soft"] .toggle button { border-radius: 0; }
 
 /* Palette aliases used by the training screen. */
 :root {
@@ -152,4 +155,4 @@ html[data-theme="soft"] :is(dialog, .toggle, .live-frame) { border-radius: var(-
 .dl-card h2 { font-size: 22.4px; font-weight: 500; letter-spacing: -0.045em; line-height: 1.1; margin: 0 0 6px; }
 .section-title { font-size: clamp(32px, 4.4vw, 41px); font-weight: 400; letter-spacing: -0.028em; line-height: 1.02; margin: 0; }
 
-html[data-theme="soft"] .dl-card { border-radius: 20px; box-shadow: var(--soft-shadow); }
+html[data-theme="soft"] .dl-card { border-radius: 4px; box-shadow: var(--soft-shadow); }

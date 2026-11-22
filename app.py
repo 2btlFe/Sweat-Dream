@@ -1540,7 +1540,7 @@ class Handler(BaseHTTPRequestHandler):
             if BATCH.running():
                 return self.send_json({"error": "A batch is running."}, 409)
             task = (read_json(RUNS / episode / "meta.json", {}) or read_json(EPISODES / episode / "meta.json", {})
-                    or {}).get("task") or "put apple into the bowl"
+                    or {}).get("task") or "Put the apple into the bowl"
             RUNNER.stop_and_wait()  # Resume replaces a run that is going (its recording is saved first)
             try:
                 seconds = min(900, max(10, int(float(body.get("seconds") or 60))))
