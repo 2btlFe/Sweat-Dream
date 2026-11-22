@@ -138,6 +138,15 @@ Sweet Dream is licensed under the [Apache License 2.0](LICENSE); see [NOTICE](NO
 - Dream Labs, Dream-1 and the Dream Labs cloud mark (from which the Sweet Dream icon is drawn) are Dream Labs' names
   and marks, not covered by this license. Sweet Dream is not made or endorsed by Dream Labs.
 
+## Team
+
+- [Se Yeon Kim](https://www.linkedin.com/in/se-yeon-k-440760126/)
+- [DaEun Lee](https://www.linkedin.com/in/daeun-lee-b41b0133a/)
+- [Eunbin Lee](https://www.linkedin.com/in/eunbinlee/)
+- [Seogyoung Hwang](https://www.linkedin.com/in/seogyounghwang/)
+- [Yoonseo Lee](https://www.linkedin.com/in/yoonseo-lee-65307b330/)
+- [ByeongCheol Lee](https://www.linkedin.com/in/byeong-cheol-lee-637311202/)
+
 ## Acknowledgements
 
-We thank [Nota AI GmbH](https://www.nota.ai) and [Dream Labs](https://dreamlabs.ai) for their support of this project.
+We thank [Dream Labs](https://dreamlabs.ai) for its support of this project.
