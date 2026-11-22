@@ -71,6 +71,7 @@ LIVE = WORK / "live.jpg"
 STOP = WORK / "stop"
 TELEOP_STATE = WORK / "teleop.json"
 EPISODES = HERE / "episodes"  # KSY's recordings (recorder.py), one per run id
+BATCHES = HERE / "batches"  # one folder per batch: its settings, results and episodes (Batch._open_folder)
 DATASETS = HERE / "datasets"  # datasets saved from the page: chosen runs, their recordings and a manifest
 MODES = ("collect", "script", "test", "human", "plain")  # script: rule-based only (sim.py --script-only), no Dream-1
 NO_KEY_MODES = ("human", "script")  # runs that do not call Dream-1 (a human-only run calls it only after T)
@@ -819,6 +820,7 @@ class Batch:
             raise RuntimeError("Sign in with your API key first (the start page).")
         workers = max(1, min(MAX_WORKERS, int(workers), len(seeds)))
         self.stop_requested, self.next, self.active = False, 0, {}
+        self.file_lock, self.filed = threading.Lock(), []
         self.info = {"id": "b" + datetime.now().strftime("%Y%m%d-%H%M%S"), "tasks": tasks, "total": len(seeds),
                      "seconds": seconds, "seeds": seeds, "seed": seeds[0], "split": split, "ood": changes,
                      "ood_random": random_names, "rules": current_rules(), "robot": list(robot), "mode": mode,
@@ -827,6 +829,7 @@ class Batch:
                      "model": MODEL["value"], "done": 0, "counts": {"success": 0, "failure": 0, "invalid": 0},
                      "started": time.time(), "ended": None, "current": None, "active": [], "stopped_reason": None,
                      "durations": [], "invalid_in_a_row": 0}
+        self.info["folder"] = self._open_folder()
         self.thread = threading.Thread(target=self._supervise, daemon=True)
         self.thread.start()
 
@@ -856,6 +859,64 @@ class Batch:
         finally:
             info["current"], info["active"] = None, []
             info["ended"] = time.time()
+            self._write_summary()
+
+    # Each batch keeps its own folder, batches/<batch id>-<model>-<test set or seed>/: batch.json (the settings, and
+    # each finished episode with its label) and, as each episode ends, its runs/<id>/ and episodes/<id>/ (videos) as
+    # hard links (no extra disk, and they stay when the run is deleted from the list).
+    def _open_folder(self):
+        info = self.info
+        model = re.sub(r"^.*[:/]", "", info["model"] or "") or "model"
+        where = (info["testset"]["name"] if info.get("testset") else "original" if info.get("original")
+                 else f"seed{info['batch_seed']}" if info.get("batch_seed") is not None else "seeds")
+        mode = "" if info["mode"] == "plain" else f"-{info['mode']}"
+        name = re.sub(r"[^A-Za-z0-9._-]+", "-", f"{info['id']}-{model}-{where}{mode}").strip("-")[:120]
+        folder = BATCHES / name
+        folder.mkdir(parents=True, exist_ok=True)
+        self.folder = folder
+        self._write_summary()
+        return folder.relative_to(HERE).as_posix()
+
+    def _file_episode(self, index, run_id, seed, verdict):
+        """Put a finished episode in the batch's folder and record it in batch.json."""
+        try:
+            for source, kind in ((RUNS / run_id, "runs"), (EPISODES / run_id, "episodes")):
+                if source.is_dir() and not (self.folder / kind / run_id).exists():
+                    (self.folder / kind).mkdir(exist_ok=True)
+                    link_tree(source, self.folder / kind / run_id)
+        except OSError as error:
+            print(f"Batch folder: could not keep {run_id}: {error}", flush=True)
+        with self.file_lock:
+            self.filed.append({"index": index + 1, "run": run_id, "seed": seed, "label": verdict["label"],
+                               "reason": verdict["reason"], "recorded": (EPISODES / run_id).is_dir()})
+        self._write_summary()
+
+    def _write_summary(self):
+        info = getattr(self, "info", None)
+        folder = getattr(self, "folder", None)
+        if not info or folder is None:
+            return
+        with self.file_lock:
+            episodes = sorted(self.filed, key=lambda e: e["index"])
+            counts = {label: sum(e["label"] == label for e in episodes) for label in ("success", "failure", "invalid")}
+            valid = counts["success"] + counts["failure"]
+            summary = {
+                "batch": info["id"], "model": info["model"], "mode": info["mode"],
+                "testset": info.get("testset"), "batch_seed": info.get("batch_seed"),
+                "tasks": info["tasks"], "seconds": info["seconds"], "total": info["total"], "seeds": info["seeds"],
+                "scene_settings": info["ood"], "random_settings": info["ood_random"], "vary_scene": info["vary_scene"],
+                "robot": info["robot"], "workers": info["workers"], "collection": info["collection"],
+                "rules": info["rules"],
+                "started_at": datetime.fromtimestamp(info["started"]).isoformat(timespec="seconds"),
+                "ended_at": datetime.fromtimestamp(info["ended"]).isoformat(timespec="seconds") if info["ended"] else None,
+                "stopped_reason": info["stopped_reason"],
+                "done": len(episodes), "counts": counts,
+                "success_rate_of_valid": round(counts["success"] / valid, 4) if valid else None,
+                "episodes": episodes,
+                "layout": {"runs/<id>/": "meta.json, trajectory.json, label.json, last.jpg",
+                           "episodes/<id>/": "top/left/right.mp4, steps.npz, events.json, meta.json (recorded runs)"},
+            }
+            write_json(folder / "batch.json", summary)
 
     def _spawn(self, i, run_id, stop_file):
         """Start episode i's sim.py (no camera view or control state; its output goes to a log file)."""
@@ -949,6 +1010,7 @@ class Batch:
                     info["stopped_reason"] = f"Run error: {str(meta.get('error') or '')[:160]}"
                 elif info["invalid_in_a_row"] >= 3 and not info["stopped_reason"]:
                     info["stopped_reason"] = "Three invalid episodes in a row."
+            self._file_episode(i, run_id, seed, verdict)
             stop_file.unlink(missing_ok=True)
             live_frame(run_id).unlink(missing_ok=True)
 
@@ -1440,7 +1502,10 @@ class Handler(BaseHTTPRequestHandler):
                 if split == "testset":  # exactly the test set's starts, task, judge, time limit and scene settings
                     testset = load_testset(body.get("testset"))
                     tasks = parse_task_list([{"prompt": testset["task"], "judge": testset["judge"]}], FULL_TABLE)
-                    seeds, count, seconds = testset["seeds"], len(testset["seeds"]), testset["seconds"]
+                    seeds, count = testset["seeds"], len(testset["seeds"])
+                    # The time limit is the test set's unless the page asks for another (kept in each run's meta).
+                    seconds = (min(300, max(10, int(float(body["seconds"])))) if body.get("seconds")
+                               else testset["seconds"])
                     changes = ood.validate(testset["scene_settings"])
                     random_names, vary = testset["ood_random"], False
                     seed_web.seeding_args({"ood_random": random_names}, ood.FIELDS)
